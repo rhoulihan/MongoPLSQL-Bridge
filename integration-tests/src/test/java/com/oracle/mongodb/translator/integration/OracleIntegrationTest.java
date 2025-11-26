@@ -72,7 +72,11 @@ class OracleIntegrationTest {
                 INSERT INTO orders (data) VALUES
                 ('{"orderId": 3, "status": "completed", "amount": 150}')
             """);
-            connection.commit();
+
+            // Only commit if auto-commit is disabled
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
         }
 
         translator = AggregationTranslator.create(
