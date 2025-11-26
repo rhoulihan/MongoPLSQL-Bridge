@@ -19,19 +19,23 @@ public enum AccumulatorOp {
     MIN("MIN", "$min"),
     MAX("MAX", "$max"),
     FIRST("FIRST_VALUE", "$first"),
-    LAST("LAST_VALUE", "$last");
+    LAST("LAST_VALUE", "$last"),
+    PUSH("JSON_ARRAYAGG", "$push"),
+    ADD_TO_SET("JSON_ARRAYAGG", "$addToSet");
 
     private static final Map<String, AccumulatorOp> MONGO_LOOKUP;
 
     static {
-        MONGO_LOOKUP = Map.of(
-            "$sum", SUM,
-            "$avg", AVG,
-            "$count", COUNT,
-            "$min", MIN,
-            "$max", MAX,
-            "$first", FIRST,
-            "$last", LAST
+        MONGO_LOOKUP = Map.ofEntries(
+            Map.entry("$sum", SUM),
+            Map.entry("$avg", AVG),
+            Map.entry("$count", COUNT),
+            Map.entry("$min", MIN),
+            Map.entry("$max", MAX),
+            Map.entry("$first", FIRST),
+            Map.entry("$last", LAST),
+            Map.entry("$push", PUSH),
+            Map.entry("$addToSet", ADD_TO_SET)
         );
     }
 

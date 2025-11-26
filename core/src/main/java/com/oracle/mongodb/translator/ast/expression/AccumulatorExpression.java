@@ -79,6 +79,20 @@ public final class AccumulatorExpression implements Expression {
     }
 
     /**
+     * Creates a $push accumulator expression.
+     */
+    public static AccumulatorExpression push(Expression argument) {
+        return new AccumulatorExpression(AccumulatorOp.PUSH, argument);
+    }
+
+    /**
+     * Creates an $addToSet accumulator expression.
+     */
+    public static AccumulatorExpression addToSet(Expression argument) {
+        return new AccumulatorExpression(AccumulatorOp.ADD_TO_SET, argument);
+    }
+
+    /**
      * Returns the accumulator operator.
      */
     public AccumulatorOp getOp() {
@@ -103,6 +117,20 @@ public final class AccumulatorExpression implements Expression {
             // For simplicity, we output basic aggregate - optimization can improve later
             ctx.sql(op.getSqlFunction());
             ctx.sql("(");
+            if (argument != null) {
+                ctx.visit(argument);
+            }
+            ctx.sql(")");
+        } else if (op == AccumulatorOp.PUSH) {
+            // JSON_ARRAYAGG for $push - collects all values into array
+            ctx.sql("JSON_ARRAYAGG(");
+            if (argument != null) {
+                ctx.visit(argument);
+            }
+            ctx.sql(")");
+        } else if (op == AccumulatorOp.ADD_TO_SET) {
+            // JSON_ARRAYAGG with DISTINCT for $addToSet - collects unique values
+            ctx.sql("JSON_ARRAYAGG(DISTINCT ");
             if (argument != null) {
                 ctx.visit(argument);
             }

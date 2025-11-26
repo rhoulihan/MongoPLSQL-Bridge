@@ -9,7 +9,9 @@ import com.oracle.mongodb.translator.ast.AstNode;
 import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -20,22 +22,31 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     private static final Pattern SIMPLE_IDENTIFIER =
         Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
+    private static final String DEFAULT_BASE_ALIAS = "base";
+
     private final StringBuilder sql = new StringBuilder();
     private final List<Object> bindVariables = new ArrayList<>();
+    private final Map<String, Integer> tableAliasCounters = new HashMap<>();
     private final boolean inlineValues;
     private final OracleDialect dialect;
+    private final String baseTableAlias;
 
     public DefaultSqlGenerationContext() {
-        this(false, Oracle26aiDialect.INSTANCE);
+        this(false, Oracle26aiDialect.INSTANCE, DEFAULT_BASE_ALIAS);
     }
 
     public DefaultSqlGenerationContext(boolean inlineValues) {
-        this(inlineValues, Oracle26aiDialect.INSTANCE);
+        this(inlineValues, Oracle26aiDialect.INSTANCE, DEFAULT_BASE_ALIAS);
     }
 
     public DefaultSqlGenerationContext(boolean inlineValues, OracleDialect dialect) {
+        this(inlineValues, dialect, DEFAULT_BASE_ALIAS);
+    }
+
+    public DefaultSqlGenerationContext(boolean inlineValues, OracleDialect dialect, String baseTableAlias) {
         this.inlineValues = inlineValues;
         this.dialect = dialect != null ? dialect : Oracle26aiDialect.INSTANCE;
+        this.baseTableAlias = baseTableAlias != null ? baseTableAlias : DEFAULT_BASE_ALIAS;
     }
 
     @Override
@@ -85,6 +96,22 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     @Override
     public List<Object> getBindVariables() {
         return List.copyOf(bindVariables);
+    }
+
+    @Override
+    public String generateTableAlias(String tableName) {
+        int count = tableAliasCounters.compute(tableName, (k, v) -> v == null ? 1 : v + 1);
+        return tableName + "_" + count;
+    }
+
+    @Override
+    public String getBaseTableAlias() {
+        return baseTableAlias;
+    }
+
+    @Override
+    public SqlGenerationContext createNestedContext() {
+        return new DefaultSqlGenerationContext(inlineValues, dialect, baseTableAlias);
     }
 
     private String formatInlineValue(Object value) {

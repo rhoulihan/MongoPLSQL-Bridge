@@ -56,6 +56,20 @@ public final class Pipeline implements AstNode {
     }
 
     /**
+     * Creates a pipeline for a specific collection with a list of stages.
+     */
+    public static Pipeline of(String collectionName, List<Stage> stages) {
+        return new Pipeline(collectionName, stages);
+    }
+
+    /**
+     * Returns the collection name (alias for getCollectionName).
+     */
+    public String getCollection() {
+        return collectionName;
+    }
+
+    /**
      * Returns a new pipeline with the given stage added.
      */
     public Pipeline addStage(Stage stage) {

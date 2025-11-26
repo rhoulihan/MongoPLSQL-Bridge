@@ -22,7 +22,9 @@ class AccumulatorOpTest {
         "$min, MIN",
         "$max, MAX",
         "$first, FIRST_VALUE",
-        "$last, LAST_VALUE"
+        "$last, LAST_VALUE",
+        "$push, JSON_ARRAYAGG",
+        "$addToSet, JSON_ARRAYAGG"
     })
     void shouldMapMongoToSql(String mongoOp, String sqlFunc) {
         AccumulatorOp op = AccumulatorOp.fromMongo(mongoOp);
@@ -50,6 +52,14 @@ class AccumulatorOpTest {
         assertThat(AccumulatorOp.isAccumulator("$count")).isTrue();
         assertThat(AccumulatorOp.isAccumulator("$min")).isTrue();
         assertThat(AccumulatorOp.isAccumulator("$max")).isTrue();
+        assertThat(AccumulatorOp.isAccumulator("$push")).isTrue();
+        assertThat(AccumulatorOp.isAccumulator("$addToSet")).isTrue();
+    }
+
+    @Test
+    void shouldReturnPushAndAddToSetMongoOperators() {
+        assertThat(AccumulatorOp.PUSH.getMongoOperator()).isEqualTo("$push");
+        assertThat(AccumulatorOp.ADD_TO_SET.getMongoOperator()).isEqualTo("$addToSet");
     }
 
     @Test

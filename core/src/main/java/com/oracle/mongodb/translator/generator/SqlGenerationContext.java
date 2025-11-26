@@ -53,4 +53,29 @@ public interface SqlGenerationContext {
      * Returns the collected bind variables.
      */
     List<Object> getBindVariables();
+
+    /**
+     * Generates a unique table alias for the given table name.
+     * Used primarily for $lookup joins to ensure unique aliases.
+     *
+     * @param tableName the base table name
+     * @return a unique alias (e.g., "inventory_1", "inventory_2")
+     */
+    String generateTableAlias(String tableName);
+
+    /**
+     * Returns the alias for the base (main) table in the query.
+     * Default is "base" but may be configured differently.
+     *
+     * @return the base table alias
+     */
+    String getBaseTableAlias();
+
+    /**
+     * Creates a nested context for rendering sub-expressions.
+     * The nested context shares the same settings but has its own SQL buffer.
+     *
+     * @return a new nested context
+     */
+    SqlGenerationContext createNestedContext();
 }

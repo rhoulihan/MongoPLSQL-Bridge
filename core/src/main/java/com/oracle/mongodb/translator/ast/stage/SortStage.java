@@ -19,6 +19,7 @@ import java.util.Objects;
 public final class SortStage implements Stage {
 
     private final List<SortField> sortFields;
+    private final Integer limitHint;
 
     /**
      * Creates a sort stage with the given sort fields.
@@ -26,9 +27,36 @@ public final class SortStage implements Stage {
      * @param sortFields the fields to sort by, in order
      */
     public SortStage(List<SortField> sortFields) {
+        this(sortFields, null);
+    }
+
+    /**
+     * Creates a sort stage with the given sort fields and optional limit hint.
+     *
+     * @param sortFields the fields to sort by, in order
+     * @param limitHint optional limit hint for Top-N optimization
+     */
+    public SortStage(List<SortField> sortFields, Integer limitHint) {
         this.sortFields = sortFields != null
             ? new ArrayList<>(sortFields)
             : new ArrayList<>();
+        this.limitHint = limitHint;
+    }
+
+    /**
+     * Creates a sort stage from a Map specification (convenience method).
+     *
+     * @param sortSpec map of field names to sort direction (1 for ASC, -1 for DESC)
+     */
+    public SortStage(java.util.Map<String, Integer> sortSpec) {
+        this.sortFields = new ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> entry : sortSpec.entrySet()) {
+            this.sortFields.add(new SortField(
+                FieldPathExpression.of(entry.getKey()),
+                SortDirection.fromMongo(entry.getValue())
+            ));
+        }
+        this.limitHint = null;
     }
 
     /**
@@ -36,6 +64,20 @@ public final class SortStage implements Stage {
      */
     public List<SortField> getSortFields() {
         return Collections.unmodifiableList(sortFields);
+    }
+
+    /**
+     * Returns the limit hint for Top-N optimization, or null if none.
+     */
+    public Integer getLimitHint() {
+        return limitHint;
+    }
+
+    /**
+     * Creates a copy of this sort stage with the specified limit hint.
+     */
+    public SortStage withLimitHint(Integer limit) {
+        return new SortStage(this.sortFields, limit);
     }
 
     @Override

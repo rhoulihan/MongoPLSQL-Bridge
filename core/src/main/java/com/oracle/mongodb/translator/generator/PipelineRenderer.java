@@ -11,12 +11,15 @@ import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
+import com.oracle.mongodb.translator.ast.stage.LookupStage;
 import com.oracle.mongodb.translator.ast.stage.MatchStage;
 import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.SkipStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.Stage;
+import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +30,8 @@ import java.util.List;
  * with the correct clause ordering:
  * <pre>
  * SELECT ...
- * FROM table
+ * FROM table [alias]
+ * [LEFT OUTER JOIN ...]
  * WHERE ...
  * GROUP BY ...
  * ORDER BY ...
@@ -57,7 +61,10 @@ public final class PipelineRenderer {
         renderSelectClause(components, ctx);
 
         // Render FROM clause
-        renderFromClause(ctx);
+        renderFromClause(components, ctx);
+
+        // Render JOIN clauses ($lookup stages)
+        renderJoinClauses(components, ctx);
 
         // Render WHERE clause (combined $match stages)
         renderWhereClause(components, ctx);
@@ -91,6 +98,12 @@ public final class PipelineRenderer {
                 components.skipStage = skip;
             } else if (stage instanceof LimitStage limit) {
                 components.limitStage = limit;
+            } else if (stage instanceof LookupStage lookup) {
+                components.lookupStages.add(lookup);
+            } else if (stage instanceof UnwindStage unwind) {
+                components.unwindStages.add(unwind);
+            } else if (stage instanceof AddFieldsStage addFields) {
+                components.addFieldsStages.add(addFields);
             }
             // For unknown stages, we skip them (they won't be rendered)
         }
@@ -110,6 +123,18 @@ public final class PipelineRenderer {
         } else {
             // Default: select all data
             ctx.sql(config.dataColumnName());
+        }
+
+        // $addFields adds computed columns to the existing SELECT
+        renderAddFieldsClauses(components, ctx);
+    }
+
+    private void renderAddFieldsClauses(PipelineComponents components, SqlGenerationContext ctx) {
+        for (AddFieldsStage addFields : components.addFieldsStages) {
+            if (!addFields.getFields().isEmpty()) {
+                ctx.sql(", ");
+                ctx.visit(addFields);
+            }
         }
     }
 
@@ -168,9 +193,28 @@ public final class PipelineRenderer {
         }
     }
 
-    private void renderFromClause(SqlGenerationContext ctx) {
+    private void renderFromClause(PipelineComponents components, SqlGenerationContext ctx) {
         ctx.sql(" FROM ");
         ctx.sql(config.qualifiedTableName());
+
+        // Add alias if we have joins or unwinds (to disambiguate table references)
+        if (!components.lookupStages.isEmpty() || !components.unwindStages.isEmpty()) {
+            ctx.sql(" ");
+            ctx.sql(ctx.getBaseTableAlias());
+        }
+
+        // Render unwind stages as cross joins with JSON_TABLE
+        for (UnwindStage unwind : components.unwindStages) {
+            ctx.sql(", ");
+            ctx.visit(unwind);
+        }
+    }
+
+    private void renderJoinClauses(PipelineComponents components, SqlGenerationContext ctx) {
+        for (LookupStage lookup : components.lookupStages) {
+            ctx.sql(" ");
+            ctx.visit(lookup);
+        }
     }
 
     private void renderWhereClause(PipelineComponents components, SqlGenerationContext ctx) {
@@ -248,6 +292,9 @@ public final class PipelineRenderer {
      */
     private static class PipelineComponents {
         List<MatchStage> matchStages = new ArrayList<>();
+        List<LookupStage> lookupStages = new ArrayList<>();
+        List<UnwindStage> unwindStages = new ArrayList<>();
+        List<AddFieldsStage> addFieldsStages = new ArrayList<>();
         GroupStage groupStage;
         ProjectStage projectStage;
         SortStage sortStage;

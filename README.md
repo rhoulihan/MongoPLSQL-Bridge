@@ -12,7 +12,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 3 Complete** - All Tier 1 operators implemented and validated.
+**Phase 4 In Progress** - Tier 2-3 operators and optimization implemented.
 
 ### Implemented Operators
 
@@ -20,30 +20,39 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 - `$match` - WHERE clause with JSON_VALUE/JSON_EXISTS
 - `$group` - GROUP BY with aggregate functions
 - `$project` - SELECT with field selection/computation
-- `$sort` - ORDER BY clause
+- `$sort` - ORDER BY clause (with Top-N optimization)
 - `$limit` - FETCH FIRST n ROWS ONLY
 - `$skip` - OFFSET n ROWS
+- `$lookup` - LEFT OUTER JOIN
+- `$unwind` - JSON_TABLE with NESTED PATH
+- `$addFields`/`$set` - Computed columns
 
 **Expression Operators:**
 - Comparison: `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`
 - Logical: `$and`, `$or`, `$not`, `$nor`
 - Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`
 - Conditional: `$cond`, `$ifNull`
+- String: `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`
+- Date: `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear`
+- Array: `$arrayElemAt`, `$size`, `$first`, `$last`
 
 **Accumulator Operators:**
-- `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`
+- `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet`
+
+**Pipeline Optimization:**
+- Predicate pushdown (moves `$match` early)
+- Sort-limit combination (Oracle Top-N optimization)
+- Configurable optimization chain
 
 ### Validation Status
 
 All 39 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-### Next Phase (Tier 2-4)
+### Next Phase (Tier 4)
 
-- `$lookup` - LEFT OUTER JOIN
-- `$unwind` - JSON_TABLE NESTED PATH
-- `$addFields`/`$set` - Computed columns
-- String/Date/Array operators
-- Pipeline optimization
+- `$facet`, `$bucket`, `$bucketAuto` stages
+- `$merge`, `$out`, `$unionWith` stages
+- `$graphLookup`, `$setWindowFields` (stubs)
 
 ## Requirements
 
@@ -115,12 +124,14 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | `$match` | ✅ Implemented | WHERE clause with JSON_VALUE/JSON_EXISTS |
 | `$group` | ✅ Implemented | GROUP BY with aggregate functions |
 | `$project` | ✅ Implemented | SELECT with field selection/computation |
-| `$sort` | ✅ Implemented | ORDER BY clause |
+| `$sort` | ✅ Implemented | ORDER BY clause (with Top-N optimization) |
 | `$limit` | ✅ Implemented | FETCH FIRST n ROWS ONLY |
 | `$skip` | ✅ Implemented | OFFSET n ROWS |
-| `$lookup` | ⏳ Planned | LEFT OUTER JOIN |
-| `$unwind` | ⏳ Planned | JSON_TABLE with NESTED PATH |
-| `$addFields` | ⏳ Planned | Computed columns |
+| `$lookup` | ✅ Implemented | LEFT OUTER JOIN |
+| `$unwind` | ✅ Implemented | JSON_TABLE with NESTED PATH |
+| `$addFields`/`$set` | ✅ Implemented | Computed columns |
+| `$facet` | ⏳ Planned | Multiple subqueries |
+| `$bucket` | ⏳ Planned | CASE expressions |
 
 ### Expression Operators
 
@@ -130,8 +141,9 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | Logical | `$and`, `$or`, `$not`, `$nor` | ✅ Implemented |
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` | ✅ Implemented |
 | Conditional | `$cond`, `$ifNull` | ✅ Implemented |
-| String | `$concat`, `$toLower`, `$toUpper` | ⏳ Planned |
-| Date | `$year`, `$month`, `$dayOfMonth` | ⏳ Planned |
+| String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP` | ✅ Implemented |
+| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` | ✅ Implemented |
+| Array | `$arrayElemAt`, `$size`, `$first`, `$last` | ✅ Implemented |
 
 ### Accumulator Operators
 
@@ -144,7 +156,8 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | `$max` | ✅ Implemented | `MAX()` |
 | `$first` | ✅ Implemented | `FIRST_VALUE()` |
 | `$last` | ✅ Implemented | `LAST_VALUE()` |
-| `$push` | ⏳ Planned | `JSON_ARRAYAGG()` |
+| `$push` | ✅ Implemented | `JSON_ARRAYAGG()` |
+| `$addToSet` | ✅ Implemented | `JSON_ARRAYAGG(DISTINCT)` |
 
 ## Configuration Options
 

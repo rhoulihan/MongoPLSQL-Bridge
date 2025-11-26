@@ -124,4 +124,52 @@ class AccumulatorExpressionTest {
         var expr = AccumulatorExpression.sum(FieldPathExpression.of("amount"));
         assertThat(expr.toString()).contains("$sum");
     }
+
+    @Test
+    void shouldRenderPush() {
+        var expr = AccumulatorExpression.push(FieldPathExpression.of("name"));
+
+        expr.render(context);
+
+        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(JSON_VALUE(data, '$.name'))");
+    }
+
+    @Test
+    void shouldRenderPushWithNestedField() {
+        var expr = AccumulatorExpression.push(FieldPathExpression.of("order.item"));
+
+        expr.render(context);
+
+        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(JSON_VALUE(data, '$.order.item'))");
+    }
+
+    @Test
+    void shouldRenderAddToSet() {
+        var expr = AccumulatorExpression.addToSet(FieldPathExpression.of("category"));
+
+        expr.render(context);
+
+        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(DISTINCT JSON_VALUE(data, '$.category'))");
+    }
+
+    @Test
+    void shouldRenderAddToSetWithNestedField() {
+        var expr = AccumulatorExpression.addToSet(FieldPathExpression.of("metadata.tag"));
+
+        expr.render(context);
+
+        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(DISTINCT JSON_VALUE(data, '$.metadata.tag'))");
+    }
+
+    @Test
+    void shouldReturnPushOp() {
+        var expr = AccumulatorExpression.push(FieldPathExpression.of("name"));
+        assertThat(expr.getOp()).isEqualTo(AccumulatorOp.PUSH);
+    }
+
+    @Test
+    void shouldReturnAddToSetOp() {
+        var expr = AccumulatorExpression.addToSet(FieldPathExpression.of("name"));
+        assertThat(expr.getOp()).isEqualTo(AccumulatorOp.ADD_TO_SET);
+    }
 }

@@ -7,9 +7,12 @@ package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
+import com.oracle.mongodb.translator.ast.stage.LookupStage;
 import com.oracle.mongodb.translator.ast.stage.MatchStage;
 import com.oracle.mongodb.translator.ast.stage.SkipStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage;
+import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortField;
 import org.bson.Document;
@@ -50,6 +53,19 @@ public final class StageParserRegistry {
 
         // $sort stage - order documents
         register("$sort", this::parseSortStage);
+
+        // $lookup stage - join with another collection
+        LookupStageParser lookupParser = new LookupStageParser();
+        register("$lookup", value -> lookupParser.parse((Document) value));
+
+        // $unwind stage - deconstruct array field
+        UnwindStageParser unwindParser = new UnwindStageParser();
+        register("$unwind", unwindParser::parse);
+
+        // $addFields and $set stages - add computed fields
+        AddFieldsStageParser addFieldsParser = new AddFieldsStageParser();
+        register("$addFields", value -> addFieldsParser.parse((Document) value));
+        register("$set", value -> addFieldsParser.parse((Document) value));
     }
 
     private SortStage parseSortStage(Object value) {
