@@ -10,9 +10,20 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 - Leverage Oracle's JSON Collection features with familiar MongoDB syntax
 - Gradually migrate from MongoDB to Oracle without rewriting application logic
 
-## Features
+## Current Status
 
-- **Tier 1 Operators** (Core): `$match`, `$group`, `$project`, `$sort`, `$limit`, `$skip`
+**Phase 2 Complete** - Core infrastructure is in place. Currently implementing Tier 1 operators.
+
+### Implemented
+- `$limit` - Translates to `FETCH FIRST n ROWS ONLY`
+- `$skip` - Translates to `OFFSET n ROWS`
+- Core AST infrastructure
+- Pipeline parser framework
+- Public API (AggregationTranslator, TranslationResult)
+
+### Planned Features
+
+- **Tier 1 Operators** (Core): `$match`, `$group`, `$project`, `$sort`
 - **Tier 2 Operators** (Common): `$lookup`, `$unwind`, `$addFields`, `$count`
 - **Expressions**: Comparison, logical, arithmetic, conditional, date, string, array
 - **Accumulators**: `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`
@@ -51,18 +62,15 @@ import org.bson.Document;
 
 // Configure the translator
 var config = OracleConfiguration.builder()
-    .connection(oracleConnection)
     .collectionName("orders")
     .build();
 
 var translator = AggregationTranslator.create(config);
 
-// Define a MongoDB aggregation pipeline
+// Define a MongoDB aggregation pipeline (currently supports $limit and $skip)
 var pipeline = List.of(
-    Document.parse("{\"$match\": {\"status\": \"completed\"}}"),
-    Document.parse("{\"$group\": {\"_id\": \"$customerId\", \"total\": {\"$sum\": \"$amount\"}}}"),
-    Document.parse("{\"$sort\": {\"total\": -1}}"),
-    Document.parse("{\"$limit\": 10}")
+    Document.parse("{\"$skip\": 10}"),
+    Document.parse("{\"$limit\": 5}")
 );
 
 // Translate to Oracle SQL
@@ -70,13 +78,7 @@ var result = translator.translate(pipeline);
 
 System.out.println(result.sql());
 // Output:
-// SELECT JSON_VALUE(data, '$.customerId') AS _id,
-//        SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS total
-// FROM orders
-// WHERE JSON_VALUE(data, '$.status') = :1
-// GROUP BY JSON_VALUE(data, '$.customerId')
-// ORDER BY total DESC
-// FETCH FIRST 10 ROWS ONLY
+// SELECT data FROM orders OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY
 
 // Execute against Oracle
 try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
@@ -88,46 +90,24 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 }
 ```
 
-### Using the MongoCollection Facade
-
-```java
-import com.oracle.mongodb.translator.api.MongoCollection;
-
-var collection = MongoCollection.create(config);
-
-// Execute directly and get documents back
-List<Document> results = collection.aggregate(pipeline);
-
-// Or stream for large result sets
-collection.aggregateAsStream(pipeline)
-    .forEach(doc -> System.out.println(doc.toJson()));
-
-// Get the SQL without executing
-TranslationResult explained = collection.explain(pipeline);
-```
-
-## Supported Operators
+## Supported Operators (Current)
 
 ### Stage Operators
 
 | Operator | Support Level | Notes |
 |----------|--------------|-------|
-| `$match` | Full | WHERE clause with JSON_VALUE/JSON_EXISTS |
-| `$group` | Full | GROUP BY with aggregate functions |
-| `$project` | Full | SELECT with field selection/computation |
-| `$sort` | Full | ORDER BY clause |
-| `$limit` | Full | FETCH FIRST n ROWS ONLY |
-| `$skip` | Full | OFFSET n ROWS |
-| `$lookup` | Full | LEFT OUTER JOIN |
-| `$unwind` | Full | JSON_TABLE with NESTED PATH |
-| `$addFields` | Full | Computed columns |
-| `$count` | Full | SELECT COUNT(*) |
-| `$facet` | Partial | Multiple CTEs |
-| `$bucket` | Full | CASE-based grouping |
-| `$unionWith` | Full | UNION ALL |
-| `$graphLookup` | Emulated | Recursive CTE |
+| `$limit` | **Implemented** | FETCH FIRST n ROWS ONLY |
+| `$skip` | **Implemented** | OFFSET n ROWS |
+| `$match` | Planned | WHERE clause with JSON_VALUE/JSON_EXISTS |
+| `$group` | Planned | GROUP BY with aggregate functions |
+| `$project` | Planned | SELECT with field selection/computation |
+| `$sort` | Planned | ORDER BY clause |
+| `$lookup` | Planned | LEFT OUTER JOIN |
+| `$unwind` | Planned | JSON_TABLE with NESTED PATH |
+| `$addFields` | Planned | Computed columns |
+| `$count` | Planned | SELECT COUNT(*) |
 
-### Expression Operators
+### Expression Operators (Planned)
 
 | Category | Operators |
 |----------|-----------|
@@ -135,11 +115,8 @@ TranslationResult explained = collection.explain(pipeline);
 | Logical | `$and`, `$or`, `$not`, `$nor` |
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` |
 | Conditional | `$cond`, `$ifNull`, `$switch` |
-| String | `$concat`, `$toLower`, `$toUpper`, `$substr` |
-| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second` |
-| Array | `$arrayElemAt`, `$size`, `$filter`, `$in` |
 
-### Accumulator Operators
+### Accumulator Operators (Planned)
 
 | Operator | Oracle Equivalent |
 |----------|------------------|
@@ -148,10 +125,6 @@ TranslationResult explained = collection.explain(pipeline);
 | `$min` | `MIN()` |
 | `$max` | `MAX()` |
 | `$count` | `COUNT(*)` |
-| `$first` | `FIRST_VALUE()` |
-| `$last` | `LAST_VALUE()` |
-| `$push` | `JSON_ARRAYAGG()` |
-| `$addToSet` | `JSON_ARRAYAGG(DISTINCT)` |
 
 ## Configuration Options
 
@@ -160,11 +133,12 @@ var options = TranslationOptions.builder()
     .inlineBindVariables(false)  // Use bind variables (default)
     .prettyPrint(true)           // Format generated SQL
     .includeHints(true)          // Add Oracle optimizer hints
-    .targetDialect(OracleDialectVersion.ORACLE_26AI)
     .strictMode(false)           // Fail on unsupported operators
+    .dataColumnName("data")      // Name of JSON column (default: "data")
     .build();
 
-var result = translator.translate(pipeline, options);
+var translator = AggregationTranslator.create(config, options);
+var result = translator.translate(pipeline);
 ```
 
 ## Development Setup
@@ -179,8 +153,8 @@ var result = translator.translate(pipeline, options);
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/mongo-oracle-translator.git
-   cd mongo-oracle-translator
+   git clone https://github.com/rhoulihan/MongoPLSQL-Bridge.git
+   cd MongoPLSQL-Bridge
    ```
 
 2. **Start Oracle database:**
@@ -201,8 +175,8 @@ var result = translator.translate(pipeline, options);
 
 5. **Run tests:**
    ```bash
-   ./gradlew test                    # Unit tests
-   ./gradlew :integration-tests:test # Integration tests
+   ./gradlew test                                        # Unit tests
+   ./gradlew :integration-tests:test -PrunIntegrationTests  # Integration tests (requires Docker)
    ```
 
 ### Pre-commit Hooks (Recommended)
@@ -291,5 +265,5 @@ This project is licensed under the Universal Permissive License (UPL), Version 1
 ## Support
 
 - [Documentation](docs/)
-- [Issue Tracker](https://github.com/yourusername/mongo-oracle-translator/issues)
-- [Discussions](https://github.com/yourusername/mongo-oracle-translator/discussions)
+- [Issue Tracker](https://github.com/rhoulihan/MongoPLSQL-Bridge/issues)
+- [Implementation Status](docs/IMPLEMENTATION_STATUS.md)

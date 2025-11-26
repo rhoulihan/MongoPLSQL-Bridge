@@ -29,6 +29,10 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
         this(false, Oracle26aiDialect.INSTANCE);
     }
 
+    public DefaultSqlGenerationContext(boolean inlineValues) {
+        this(inlineValues, Oracle26aiDialect.INSTANCE);
+    }
+
     public DefaultSqlGenerationContext(boolean inlineValues, OracleDialect dialect) {
         this.inlineValues = inlineValues;
         this.dialect = dialect != null ? dialect : Oracle26aiDialect.INSTANCE;
