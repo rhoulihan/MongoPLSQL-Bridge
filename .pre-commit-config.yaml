@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+
+  - repo: local
+    hooks:
+      - id: checkstyle
+        name: Checkstyle
+        entry: ./gradlew checkstyleMain checkstyleTest --no-daemon -q
+        language: system
+        pass_filenames: false
+        types: [java]
+        stages: [commit]
+
+      - id: spotbugs
+        name: SpotBugs Security Check
+        entry: ./gradlew :core:spotbugsMain --no-daemon -q
+        language: system
+        pass_filenames: false
+        types: [java]
+        stages: [commit]
+
+      - id: unit-tests
+        name: Unit Tests
+        entry: ./gradlew :core:test --no-daemon -q
+        language: system
+        pass_filenames: false
+        types: [java]
+        stages: [commit]

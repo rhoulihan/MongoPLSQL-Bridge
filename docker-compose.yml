@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  oracle:
+    image: gvenzl/oracle-free:23.6-slim-faststart
+    container_name: mongo-translator-oracle
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: translator
+      APP_USER_PASSWORD: translator123
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./docker/oracle/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  oracle-data:

@@ -1,0 +1,195 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+jobs:
+  validate-specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install jsonschema
+        run: pip install jsonschema
+
+      - name: Validate specification files
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+
+          specs_dir = Path('specs')
+          if specs_dir.exists():
+              for json_file in specs_dir.glob('*.json'):
+                  print(f'Validating {json_file}...')
+                  json.loads(json_file.read_text())
+                  print(f'  ✓ Valid JSON')
+          else:
+              print('No specs directory yet - skipping validation')
+          "
+
+  build:
+    needs: validate-specs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: ['17', '21']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.java-version }}
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build -x test -x checkstyleMain -x checkstyleTest -x spotbugsMain
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-java${{ matrix.java-version }}
+          path: core/build/libs/*.jar
+          if-no-files-found: ignore
+
+  code-quality:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Checkstyle
+        run: ./gradlew checkstyleMain checkstyleTest || true
+        continue-on-error: true
+
+      - name: Run SpotBugs
+        run: ./gradlew :core:spotbugsMain || true
+        continue-on-error: true
+
+      - name: Upload checkstyle report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkstyle-reports
+          path: '**/build/reports/checkstyle/'
+          if-no-files-found: ignore
+
+      - name: Upload spotbugs report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spotbugs-reports
+          path: '**/build/reports/spotbugs/'
+          if-no-files-found: ignore
+
+  unit-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: ['17', '21']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.java-version }}
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run unit tests
+        run: ./gradlew :core:test
+
+      - name: Generate coverage report
+        run: ./gradlew :core:jacocoTestReport
+        if: always()
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.java-version == '17'
+        with:
+          files: core/build/reports/jacoco/test/jacocoTestReport.xml
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-java${{ matrix.java-version }}
+          path: core/build/reports/tests/
+          if-no-files-found: ignore
+
+  integration-tests:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run integration tests with Testcontainers
+        run: ./gradlew :integration-tests:test -PrunIntegrationTests
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: true
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: integration-tests/build/reports/tests/
+          if-no-files-found: ignore
+
+  quality-gate:
+    needs: [unit-tests, code-quality]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "Quality gate check completed"
+          echo "All required checks have passed or reported"

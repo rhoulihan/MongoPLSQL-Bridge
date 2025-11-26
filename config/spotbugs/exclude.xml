@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude generated code -->
+    <Match>
+        <Package name="~com\.oracle\.mongodb\.translator\.generated\..*"/>
+    </Match>
+
+    <!-- Exclude test classes from certain checks -->
+    <Match>
+        <Class name="~.*Test$"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <!-- Allow method naming flexibility in tests -->
+    <Match>
+        <Class name="~.*Test$"/>
+        <Bug pattern="NM_METHOD_NAMING_CONVENTION"/>
+    </Match>
+</FindBugsFilter>
