@@ -1,0 +1,116 @@
+/*
+ * Copyright (c) 2024 Oracle and/or its affiliates.
+ * Licensed under the Universal Permissive License v 1.0 as shown at
+ * https://oss.oracle.com/licenses/upl/
+ */
+package com.oracle.mongodb.translator.ast.stage;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
+import com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection;
+import com.oracle.mongodb.translator.ast.stage.SortStage.SortField;
+import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class SortStageTest {
+
+    private DefaultSqlGenerationContext context;
+
+    @BeforeEach
+    void setUp() {
+        context = new DefaultSqlGenerationContext();
+    }
+
+    @Test
+    void shouldRenderSingleFieldAscending() {
+        // { $sort: { name: 1 } }
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("name"), SortDirection.ASC)
+        );
+        var stage = new SortStage(sortFields);
+
+        stage.render(context);
+
+        assertThat(context.toSql()).isEqualTo("ORDER BY JSON_VALUE(data, '$.name')");
+    }
+
+    @Test
+    void shouldRenderSingleFieldDescending() {
+        // { $sort: { createdAt: -1 } }
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("createdAt"), SortDirection.DESC)
+        );
+        var stage = new SortStage(sortFields);
+
+        stage.render(context);
+
+        assertThat(context.toSql()).isEqualTo("ORDER BY JSON_VALUE(data, '$.createdAt') DESC");
+    }
+
+    @Test
+    void shouldRenderMultipleFields() {
+        // { $sort: { status: 1, createdAt: -1 } }
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("status"), SortDirection.ASC),
+            new SortField(FieldPathExpression.of("createdAt"), SortDirection.DESC)
+        );
+        var stage = new SortStage(sortFields);
+
+        stage.render(context);
+
+        assertThat(context.toSql())
+            .isEqualTo("ORDER BY JSON_VALUE(data, '$.status'), JSON_VALUE(data, '$.createdAt') DESC");
+    }
+
+    @Test
+    void shouldRenderNumericFieldSort() {
+        // { $sort: { score: -1 } }
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("score", JsonReturnType.NUMBER), SortDirection.DESC)
+        );
+        var stage = new SortStage(sortFields);
+
+        stage.render(context);
+
+        assertThat(context.toSql())
+            .contains("RETURNING NUMBER")
+            .contains("DESC");
+    }
+
+    @Test
+    void shouldReturnOperatorName() {
+        var stage = new SortStage(List.of());
+
+        assertThat(stage.getOperatorName()).isEqualTo("$sort");
+    }
+
+    @Test
+    void shouldReturnSortFields() {
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("name"), SortDirection.ASC)
+        );
+        var stage = new SortStage(sortFields);
+
+        assertThat(stage.getSortFields()).hasSize(1);
+    }
+
+    @Test
+    void shouldProvideReadableToString() {
+        var sortFields = List.of(
+            new SortField(FieldPathExpression.of("name"), SortDirection.ASC)
+        );
+        var stage = new SortStage(sortFields);
+
+        assertThat(stage.toString()).contains("SortStage");
+    }
+
+    @Test
+    void shouldParseSortDirectionFromMongo() {
+        assertThat(SortDirection.fromMongo(1)).isEqualTo(SortDirection.ASC);
+        assertThat(SortDirection.fromMongo(-1)).isEqualTo(SortDirection.DESC);
+    }
+}
