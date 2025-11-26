@@ -10,7 +10,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 |-------|--------|------------------|---------------|
 | Phase 1: Project Initialization | ✅ Complete | 10/10 | 10 |
 | Phase 2: Core Infrastructure | ✅ Complete | 7/7 | 7 |
-| Phase 3: Tier 1 Operators | 🔄 In Progress | 11/13 | 13 |
+| Phase 3: Tier 1 Operators | ✅ Complete | 13/13 | 13 |
 | Phase 4: Tier 2-4 & Optimization | ⏳ Not Started | 0/18 | 18 |
 
 ## Detailed Ticket Status
@@ -42,7 +42,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-016 | Pipeline Parser Foundation | ✅ Done | PipelineParser, StageParserRegistry, StageParser |
 | IMPL-017 | Basic Integration Test Infrastructure | ✅ Done | Testcontainers OracleIntegrationTest |
 
-### Phase 3: Tier 1 Operators 🔄
+### Phase 3: Tier 1 Operators ✅
 
 | Ticket | Description | Status | Notes |
 |--------|-------------|--------|-------|
@@ -58,7 +58,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-027 | Arithmetic Expression Implementation | ✅ Done | $add, $subtract, $multiply, $divide, $mod |
 | IMPL-028 | Conditional Expression Implementation | ✅ Done | $cond, $ifNull |
 | IMPL-029 | Stage Parsers for Remaining Tier 1 | ✅ Done | $project, $sort parsers integrated in registry |
-| IMPL-030 | Pipeline Rendering Refactor | ⏳ Pending | Proper SQL combination |
+| IMPL-030 | Pipeline Rendering Refactor | ✅ Done | PipelineRenderer with proper SQL clause ordering |
 
 ### Phase 4: Tier 2-4 & Optimization ⏳
 
@@ -124,6 +124,7 @@ ast/
 generator/
 ├── SqlGenerationContext.java ✅
 ├── DefaultSqlGenerationContext.java ✅
+├── PipelineRenderer.java ✅
 └── dialect/
     ├── OracleDialect.java ✅
     └── Oracle26aiDialect.java ✅
@@ -178,7 +179,8 @@ ast/
     └── SortStageTest.java ✅
 
 generator/
-└── DefaultSqlGenerationContextTest.java ✅
+├── DefaultSqlGenerationContextTest.java ✅
+└── PipelineRendererTest.java ✅
 
 api/
 ├── AggregationTranslatorTest.java ✅
@@ -197,14 +199,51 @@ parser/
 
 ## Test Coverage
 
-Current test count: 244 test methods across 33 test files
+Current test count: 260 test methods across 34 test files
 All tests passing: ✅ Yes
+
+## Example Translations
+
+### Simple Match and Limit
+```javascript
+// MongoDB
+db.orders.aggregate([
+  { $match: { status: "active" } },
+  { $limit: 10 }
+])
+```
+```sql
+-- Oracle SQL
+SELECT data FROM orders
+WHERE JSON_VALUE(data, '$.status') = :1
+FETCH FIRST 10 ROWS ONLY
+```
+
+### Group with Aggregations
+```javascript
+// MongoDB
+db.orders.aggregate([
+  { $match: { status: "active" } },
+  { $group: { _id: "$category", total: { $sum: "$amount" } } },
+  { $sort: { total: -1 } },
+  { $limit: 5 }
+])
+```
+```sql
+-- Oracle SQL
+SELECT JSON_VALUE(data, '$.category') AS _id, SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS total
+FROM orders
+WHERE JSON_VALUE(data, '$.status') = :1
+GROUP BY JSON_VALUE(data, '$.category')
+ORDER BY JSON_VALUE(data, '$.total' RETURNING NUMBER) DESC
+FETCH FIRST 5 ROWS ONLY
+```
 
 ## Next Steps
 
-1. Complete Phase 3: IMPL-030 Pipeline Rendering Refactor
-2. Start Phase 4: Tier 2-4 Operators & Optimization
-3. IMPL-031: $lookup Stage Implementation
+1. Start Phase 4: Tier 2-4 Operators & Optimization
+2. IMPL-031: $lookup Stage Implementation (JOIN operations)
+3. IMPL-032: $unwind Stage Implementation (array expansion)
 
 ## Git Commits
 
@@ -213,3 +252,5 @@ All tests passing: ✅ Yes
 | d78a4e3 | Initial commit: Project setup and implementation plan | 2024-11-26 |
 | d94af84 | Add project infrastructure and core foundation classes | 2024-11-26 |
 | e65cb63 | Complete Phase 2: Core Infrastructure | 2024-11-26 |
+| be94c66 | Implement Phase 3: Tier 1 Operators (IMPL-018 to IMPL-029) | 2024-11-26 |
+| 2d8eb3d | Fix integration test commit handling for auto-commit mode | 2024-11-26 |
