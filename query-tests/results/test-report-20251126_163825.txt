@@ -1,0 +1,206 @@
+MongoPLSQL-Bridge Query Validation Test Report
+Generated: Wed Nov 26 16:38:25 CST 2025
+============================================================
+
+[CMP001] Equality match - string
+  Category: comparison
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[CMP002] Greater than - numeric
+  Category: comparison
+  Status: PASS
+  Details: MongoDB=5, Oracle=5 (expected 4, counts match)
+
+[CMP003] Greater than or equal - numeric
+  Category: comparison
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[CMP004] Less than - numeric
+  Category: comparison
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[CMP005] Less than or equal - numeric
+  Category: comparison
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[CMP006] Not equal - string
+  Category: comparison
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[CMP007] In array - string values
+  Category: comparison
+  Status: FAIL
+  Details: MongoDB=7, Oracle=5, Expected=7
+
+[CMP008] Not in array - string values
+  Category: comparison
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[LOG001] Logical AND - two conditions
+  Category: logical
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[LOG002] Logical AND - three conditions
+  Category: logical
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[LOG003] Logical OR - two conditions
+  Category: logical
+  Status: FAIL
+  Details: MongoDB=2, Oracle=5, Expected=2
+
+[LOG004] Logical OR with AND
+  Category: logical
+  Status: FAIL
+  Details: MongoDB=6, Oracle=5, Expected=6
+
+[LOG005] Logical NOT
+  Category: logical
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[AGG001] Group with count
+  Category: accumulator
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[AGG002] Group with sum
+  Category: accumulator
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[AGG003] Group with average
+  Category: accumulator
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[AGG004] Group with min
+  Category: accumulator
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[AGG005] Group with max
+  Category: accumulator
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[AGG006] Group with multiple accumulators
+  Category: accumulator
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[STG001] Limit results
+  Category: stage
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[STG002] Skip results
+  Category: stage
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[STG003] Skip and limit combined
+  Category: stage
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[STG004] Sort ascending
+  Category: stage
+  Status: FAIL
+  Details: MongoDB=10, Oracle=5, Expected=10
+
+[STG005] Sort descending
+  Category: stage
+  Status: FAIL
+  Details: MongoDB=7, Oracle=5, Expected=7
+
+[STG006] Sort with multiple fields
+  Category: stage
+  Status: FAIL
+  Details: MongoDB=10, Oracle=5, Expected=10
+
+[STG007] Project include fields
+  Category: stage
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[ARITH001] Addition in project
+  Category: arithmetic
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[ARITH002] Subtraction in project
+  Category: arithmetic
+  Status: FAIL
+  Details: MongoDB=7, Oracle=5, Expected=7
+
+[ARITH003] Multiplication in project
+  Category: arithmetic
+  Status: FAIL
+  Details: MongoDB=10, Oracle=5, Expected=10
+
+[ARITH004] Division in project
+  Category: arithmetic
+  Status: FAIL
+  Details: MongoDB=8, Oracle=5, Expected=8
+
+[ARITH005] Modulo in project
+  Category: arithmetic
+  Status: FAIL
+  Details: MongoDB=10, Oracle=5, Expected=10
+
+[COND001] Conditional with $cond
+  Category: conditional
+  Status: FAIL
+  Details: MongoDB=8, Oracle=5, Expected=8
+
+[COND002] IfNull handling
+  Category: conditional
+  Status: FAIL
+  Details: MongoDB=10, Oracle=5, Expected=10
+
+[COMPLEX001] Complex pipeline - match, group, sort
+  Category: complex
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+[COMPLEX002] Complex pipeline - filter, project, sort, limit
+  Category: complex
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[COMPLEX003] Complex pipeline - nested AND/OR
+  Category: complex
+  Status: PASS
+  Details: MongoDB=5, Oracle=5, Expected=5
+
+[EDGE001] Zero values in aggregation
+  Category: edge
+  Status: FAIL
+  Details: MongoDB=1, Oracle=5, Expected=1
+
+[EDGE002] Negative values in aggregation
+  Category: edge
+  Status: FAIL
+  Details: MongoDB=1, Oracle=5, Expected=1
+
+[EDGE003] Empty result set
+  Category: edge
+  Status: FAIL
+  Details: MongoDB=0, Oracle=5, Expected=0
+
+============================================================
+SUMMARY
+============================================================
+Total:  39
+Passed: 10
+Failed: 29
+Errors: 0

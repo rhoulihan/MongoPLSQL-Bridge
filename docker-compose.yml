@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # Oracle 23ai Free - for SQL/JSON translation target
   oracle:
     image: gvenzl/oracle-free:23.6-slim-faststart
     container_name: mongo-translator-oracle
@@ -19,6 +18,54 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+    networks:
+      - translator-network
+
+  # MongoDB 8.x - for aggregation pipeline source validation
+  mongodb:
+    image: mongo:8.0
+    container_name: mongo-translator-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: testdb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./docker/mongodb/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - translator-network
+
+  # MongoDB Express - Web-based MongoDB admin interface (optional)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-translator-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongodb:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - translator-network
+    profiles:
+      - tools
+
+networks:
+  translator-network:
+    driver: bridge
 
 volumes:
   oracle-data:
+  mongodb-data:

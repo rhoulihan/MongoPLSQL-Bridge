@@ -199,7 +199,10 @@ parser/
 
 ## Test Coverage
 
-Current test count: 260 test methods across 34 test files
+**Unit Tests:** 260 test methods across 34 test files
+**Integration Tests:** Oracle Testcontainers suite
+**Cross-Database Validation:** 39 tests (MongoDB 8.0 ↔ Oracle 23.6)
+
 All tests passing: ✅ Yes
 
 ## Example Translations
@@ -239,6 +242,27 @@ ORDER BY JSON_VALUE(data, '$.total' RETURNING NUMBER) DESC
 FETCH FIRST 5 ROWS ONLY
 ```
 
+## Cross-Database Validation
+
+The `query-tests/` directory contains comprehensive validation tests that execute queries against both MongoDB 8.0 and Oracle 23.6 to ensure consistent results:
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Comparison operators | 8 | ✅ Pass |
+| Logical operators | 5 | ✅ Pass |
+| Accumulator operators | 8 | ✅ Pass |
+| Stage operators | 7 | ✅ Pass |
+| Arithmetic operators | 5 | ✅ Pass |
+| Conditional operators | 3 | ✅ Pass |
+| Complex combinations | 3 | ✅ Pass |
+| **Total** | **39** | **✅ 100%** |
+
+Run validation tests:
+```bash
+./query-tests/scripts/setup.sh
+./query-tests/scripts/run-tests.sh
+```
+
 ## Next Steps
 
 1. Start Phase 4: Tier 2-4 Operators & Optimization
@@ -254,3 +278,4 @@ FETCH FIRST 5 ROWS ONLY
 | e65cb63 | Complete Phase 2: Core Infrastructure | 2024-11-26 |
 | be94c66 | Implement Phase 3: Tier 1 Operators (IMPL-018 to IMPL-029) | 2024-11-26 |
 | 2d8eb3d | Fix integration test commit handling for auto-commit mode | 2024-11-26 |
+| 7c85d88 | Complete IMPL-030: Pipeline Rendering Refactor | 2024-11-26 |

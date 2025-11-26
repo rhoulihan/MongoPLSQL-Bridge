@@ -12,22 +12,38 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 2 Complete** - Core infrastructure is in place. Currently implementing Tier 1 operators.
+**Phase 3 Complete** - All Tier 1 operators implemented and validated.
 
-### Implemented
-- `$limit` - Translates to `FETCH FIRST n ROWS ONLY`
-- `$skip` - Translates to `OFFSET n ROWS`
-- Core AST infrastructure
-- Pipeline parser framework
-- Public API (AggregationTranslator, TranslationResult)
+### Implemented Operators
 
-### Planned Features
+**Stage Operators:**
+- `$match` - WHERE clause with JSON_VALUE/JSON_EXISTS
+- `$group` - GROUP BY with aggregate functions
+- `$project` - SELECT with field selection/computation
+- `$sort` - ORDER BY clause
+- `$limit` - FETCH FIRST n ROWS ONLY
+- `$skip` - OFFSET n ROWS
 
-- **Tier 1 Operators** (Core): `$match`, `$group`, `$project`, `$sort`
-- **Tier 2 Operators** (Common): `$lookup`, `$unwind`, `$addFields`, `$count`
-- **Expressions**: Comparison, logical, arithmetic, conditional, date, string, array
-- **Accumulators**: `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`
-- **Pipeline Optimization**: Predicate pushdown, predicate merging, sort-limit optimization
+**Expression Operators:**
+- Comparison: `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`
+- Logical: `$and`, `$or`, `$not`, `$nor`
+- Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`
+- Conditional: `$cond`, `$ifNull`
+
+**Accumulator Operators:**
+- `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`
+
+### Validation Status
+
+All 39 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+
+### Next Phase (Tier 2-4)
+
+- `$lookup` - LEFT OUTER JOIN
+- `$unwind` - JSON_TABLE NESTED PATH
+- `$addFields`/`$set` - Computed columns
+- String/Date/Array operators
+- Pipeline optimization
 
 ## Requirements
 
@@ -90,41 +106,45 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 }
 ```
 
-## Supported Operators (Current)
+## Supported Operators
 
 ### Stage Operators
 
-| Operator | Support Level | Notes |
-|----------|--------------|-------|
-| `$limit` | **Implemented** | FETCH FIRST n ROWS ONLY |
-| `$skip` | **Implemented** | OFFSET n ROWS |
-| `$match` | Planned | WHERE clause with JSON_VALUE/JSON_EXISTS |
-| `$group` | Planned | GROUP BY with aggregate functions |
-| `$project` | Planned | SELECT with field selection/computation |
-| `$sort` | Planned | ORDER BY clause |
-| `$lookup` | Planned | LEFT OUTER JOIN |
-| `$unwind` | Planned | JSON_TABLE with NESTED PATH |
-| `$addFields` | Planned | Computed columns |
-| `$count` | Planned | SELECT COUNT(*) |
+| Operator | Status | Oracle Translation |
+|----------|--------|-------------------|
+| `$match` | ✅ Implemented | WHERE clause with JSON_VALUE/JSON_EXISTS |
+| `$group` | ✅ Implemented | GROUP BY with aggregate functions |
+| `$project` | ✅ Implemented | SELECT with field selection/computation |
+| `$sort` | ✅ Implemented | ORDER BY clause |
+| `$limit` | ✅ Implemented | FETCH FIRST n ROWS ONLY |
+| `$skip` | ✅ Implemented | OFFSET n ROWS |
+| `$lookup` | ⏳ Planned | LEFT OUTER JOIN |
+| `$unwind` | ⏳ Planned | JSON_TABLE with NESTED PATH |
+| `$addFields` | ⏳ Planned | Computed columns |
 
-### Expression Operators (Planned)
+### Expression Operators
 
-| Category | Operators |
-|----------|-----------|
-| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin` |
-| Logical | `$and`, `$or`, `$not`, `$nor` |
-| Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` |
-| Conditional | `$cond`, `$ifNull`, `$switch` |
+| Category | Operators | Status |
+|----------|-----------|--------|
+| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin` | ✅ Implemented |
+| Logical | `$and`, `$or`, `$not`, `$nor` | ✅ Implemented |
+| Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` | ✅ Implemented |
+| Conditional | `$cond`, `$ifNull` | ✅ Implemented |
+| String | `$concat`, `$toLower`, `$toUpper` | ⏳ Planned |
+| Date | `$year`, `$month`, `$dayOfMonth` | ⏳ Planned |
 
-### Accumulator Operators (Planned)
+### Accumulator Operators
 
-| Operator | Oracle Equivalent |
-|----------|------------------|
-| `$sum` | `SUM()` |
-| `$avg` | `AVG()` |
-| `$min` | `MIN()` |
-| `$max` | `MAX()` |
-| `$count` | `COUNT(*)` |
+| Operator | Status | Oracle Equivalent |
+|----------|--------|------------------|
+| `$sum` | ✅ Implemented | `SUM()` |
+| `$avg` | ✅ Implemented | `AVG()` |
+| `$count` | ✅ Implemented | `COUNT(*)` |
+| `$min` | ✅ Implemented | `MIN()` |
+| `$max` | ✅ Implemented | `MAX()` |
+| `$first` | ✅ Implemented | `FIRST_VALUE()` |
+| `$last` | ✅ Implemented | `LAST_VALUE()` |
+| `$push` | ⏳ Planned | `JSON_ARRAYAGG()` |
 
 ## Configuration Options
 
@@ -157,15 +177,14 @@ var result = translator.translate(pipeline);
    cd MongoPLSQL-Bridge
    ```
 
-2. **Start Oracle database:**
+2. **Start test environment (MongoDB + Oracle):**
    ```bash
-   docker-compose up -d
+   ./scripts/start-env.sh
    ```
 
-3. **Wait for Oracle to be ready:**
+3. **Wait for databases to be ready:**
    ```bash
-   docker-compose logs -f oracle
-   # Wait for "DATABASE IS READY TO USE!"
+   ./scripts/validate-env.sh
    ```
 
 4. **Build the project:**
@@ -175,8 +194,9 @@ var result = translator.translate(pipeline);
 
 5. **Run tests:**
    ```bash
-   ./gradlew test                                        # Unit tests
+   ./gradlew test                                           # Unit tests
    ./gradlew :integration-tests:test -PrunIntegrationTests  # Integration tests (requires Docker)
+   ./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh  # Cross-database validation
    ```
 
 ### Pre-commit Hooks (Recommended)
@@ -206,8 +226,14 @@ mongo-oracle-translator/
 │   ├── operators.json
 │   ├── type-mappings.json
 │   └── test-cases/
+├── query-tests/             # Cross-database validation tests
+│   ├── data/                # Test data loaders
+│   ├── tests/               # Test case definitions
+│   ├── scripts/             # Test runner scripts
+│   └── results/             # Test output
 ├── docs/                    # Documentation
-└── docker-compose.yml       # Local Oracle setup
+├── scripts/                 # Environment management
+└── docker-compose.yml       # MongoDB + Oracle setup
 ```
 
 ## Architecture

@@ -1,0 +1,79 @@
+{"timestamp": "2025-11-26T16:38:25-06:00", "results": [
+{"id": "CMP001", "name": "Equality match - string", "category": "comparison", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "CMP002", "name": "Greater than - numeric", "category": "comparison", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "CMP003", "name": "Greater than or equal - numeric", "category": "comparison", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "CMP004", "name": "Less than - numeric", "category": "comparison", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "CMP005", "name": "Less than or equal - numeric", "category": "comparison", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "CMP006", "name": "Not equal - string", "category": "comparison", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "CMP007", "name": "In array - string values", "category": "comparison", "status": "FAIL", "mongodb_count": "7", "oracle_count": "5", "expected_count": "7"}
+,
+{"id": "CMP008", "name": "Not in array - string values", "category": "comparison", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "LOG001", "name": "Logical AND - two conditions", "category": "logical", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "LOG002", "name": "Logical AND - three conditions", "category": "logical", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "LOG003", "name": "Logical OR - two conditions", "category": "logical", "status": "FAIL", "mongodb_count": "2", "oracle_count": "5", "expected_count": "2"}
+,
+{"id": "LOG004", "name": "Logical OR with AND", "category": "logical", "status": "FAIL", "mongodb_count": "6", "oracle_count": "5", "expected_count": "6"}
+,
+{"id": "LOG005", "name": "Logical NOT", "category": "logical", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "AGG001", "name": "Group with count", "category": "accumulator", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "AGG002", "name": "Group with sum", "category": "accumulator", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "AGG003", "name": "Group with average", "category": "accumulator", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "AGG004", "name": "Group with min", "category": "accumulator", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "AGG005", "name": "Group with max", "category": "accumulator", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "AGG006", "name": "Group with multiple accumulators", "category": "accumulator", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "STG001", "name": "Limit results", "category": "stage", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "STG002", "name": "Skip results", "category": "stage", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "STG003", "name": "Skip and limit combined", "category": "stage", "status": "FAIL", "mongodb_count": "3", "oracle_count": "5", "expected_count": "3"}
+,
+{"id": "STG004", "name": "Sort ascending", "category": "stage", "status": "FAIL", "mongodb_count": "10", "oracle_count": "5", "expected_count": "10"}
+,
+{"id": "STG005", "name": "Sort descending", "category": "stage", "status": "FAIL", "mongodb_count": "7", "oracle_count": "5", "expected_count": "7"}
+,
+{"id": "STG006", "name": "Sort with multiple fields", "category": "stage", "status": "FAIL", "mongodb_count": "10", "oracle_count": "5", "expected_count": "10"}
+,
+{"id": "STG007", "name": "Project include fields", "category": "stage", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "ARITH001", "name": "Addition in project", "category": "arithmetic", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "ARITH002", "name": "Subtraction in project", "category": "arithmetic", "status": "FAIL", "mongodb_count": "7", "oracle_count": "5", "expected_count": "7"}
+,
+{"id": "ARITH003", "name": "Multiplication in project", "category": "arithmetic", "status": "FAIL", "mongodb_count": "10", "oracle_count": "5", "expected_count": "10"}
+,
+{"id": "ARITH004", "name": "Division in project", "category": "arithmetic", "status": "FAIL", "mongodb_count": "8", "oracle_count": "5", "expected_count": "8"}
+,
+{"id": "ARITH005", "name": "Modulo in project", "category": "arithmetic", "status": "FAIL", "mongodb_count": "10", "oracle_count": "5", "expected_count": "10"}
+,
+{"id": "COND001", "name": "Conditional with $cond", "category": "conditional", "status": "FAIL", "mongodb_count": "8", "oracle_count": "5", "expected_count": "8"}
+,
+{"id": "COND002", "name": "IfNull handling", "category": "conditional", "status": "FAIL", "mongodb_count": "10", "oracle_count": "5", "expected_count": "10"}
+,
+{"id": "COMPLEX001", "name": "Complex pipeline - match, group, sort", "category": "complex", "status": "FAIL", "mongodb_count": "4", "oracle_count": "5", "expected_count": "4"}
+,
+{"id": "COMPLEX002", "name": "Complex pipeline - filter, project, sort, limit", "category": "complex", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "COMPLEX003", "name": "Complex pipeline - nested AND/OR", "category": "complex", "status": "PASS", "mongodb_count": "5", "oracle_count": "5", "expected_count": "5"}
+,
+{"id": "EDGE001", "name": "Zero values in aggregation", "category": "edge", "status": "FAIL", "mongodb_count": "1", "oracle_count": "5", "expected_count": "1"}
+,
+{"id": "EDGE002", "name": "Negative values in aggregation", "category": "edge", "status": "FAIL", "mongodb_count": "1", "oracle_count": "5", "expected_count": "1"}
+,
+{"id": "EDGE003", "name": "Empty result set", "category": "edge", "status": "FAIL", "mongodb_count": "0", "oracle_count": "5", "expected_count": "0"}
+],"summary":{"total":39,"passed":10,"failed":29,"errors":0}}
