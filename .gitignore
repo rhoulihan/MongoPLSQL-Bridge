@@ -1,0 +1,64 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test output
+out/
+target/
+test-output/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Docker volumes
+oracle-data/
+
+# Compiled
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Package files
+*.war
+*.ear
+*.nar
+
+# JRebel
+rebel.xml
+
+# Secrets
+credentials.json
+secrets/
+*.pem
+*.key
+
+# Coverage
+jacoco.exec
+coverage/
+
+# Local configuration
+local.properties
