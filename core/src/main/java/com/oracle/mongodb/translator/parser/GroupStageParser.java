@@ -7,6 +7,7 @@ package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
+import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
@@ -46,6 +47,8 @@ public final class GroupStageParser {
         return new GroupStage(idExpression, accumulators);
     }
 
+    private final ExpressionParser expressionParser = new ExpressionParser();
+
     private Expression parseIdExpression(Object idValue) {
         if (idValue == null) {
             return null; // Group all documents
@@ -60,20 +63,22 @@ public final class GroupStageParser {
             return LiteralExpression.of(strVal);
         }
 
-        if (idValue instanceof Document) {
-            // Complex _id expression (e.g., multiple fields)
-            // For now, support simple single-field reference in doc
-            Document idDoc = (Document) idValue;
-            if (idDoc.size() == 1) {
-                Map.Entry<String, Object> entry = idDoc.entrySet().iterator().next();
-                String key = entry.getKey();
-                Object val = entry.getValue();
-                if (val instanceof String strVal && strVal.startsWith("$")) {
-                    // { year: "$year" } - named grouping field
-                    return FieldPathExpression.of(strVal.substring(1));
-                }
+        if (idValue instanceof Document idDoc) {
+            // Complex _id expression - could be multiple fields or expressions
+            Map<String, Expression> fields = new LinkedHashMap<>();
+
+            for (Map.Entry<String, Object> entry : idDoc.entrySet()) {
+                String fieldName = entry.getKey();
+                Object fieldValue = entry.getValue();
+
+                // Parse each field value as an expression
+                Expression expr = expressionParser.parseValue(fieldValue);
+                fields.put(fieldName, expr);
             }
-            throw new IllegalArgumentException("Complex _id expressions not yet supported: " + idDoc);
+
+            // If single field, we could return a simple FieldPath, but for consistency
+            // and proper aliasing, use CompoundIdExpression even for single fields
+            return new CompoundIdExpression(fields);
         }
 
         // Literal value for _id
@@ -126,6 +131,11 @@ public final class GroupStageParser {
         if (argument instanceof Number) {
             // Literal number (e.g., { $sum: 1 } for counting)
             return LiteralExpression.of(argument);
+        }
+
+        if (argument instanceof Document) {
+            // Complex expression (e.g., { $cond: [...] }, { $multiply: [...] })
+            return expressionParser.parseValue(argument);
         }
 
         throw new IllegalArgumentException("Unsupported accumulator argument: " + argument);

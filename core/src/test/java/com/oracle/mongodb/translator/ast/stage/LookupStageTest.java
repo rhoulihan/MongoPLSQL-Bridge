@@ -23,7 +23,7 @@ class LookupStageTest {
 
     @Test
     void shouldCreateLookupWithAllFields() {
-        var stage = new LookupStage("inventory", "item", "sku", "inventory_docs");
+        var stage = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
 
         assertThat(stage.getFrom()).isEqualTo("inventory");
         assertThat(stage.getLocalField()).isEqualTo("item");
@@ -33,14 +33,14 @@ class LookupStageTest {
 
     @Test
     void shouldReturnOperatorName() {
-        var stage = new LookupStage("inventory", "item", "sku", "inventory_docs");
+        var stage = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
 
         assertThat(stage.getOperatorName()).isEqualTo("$lookup");
     }
 
     @Test
     void shouldRenderLeftOuterJoin() {
-        var stage = new LookupStage("inventory", "item", "sku", "inventory_docs");
+        var stage = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
 
         stage.render(context);
 
@@ -53,7 +53,7 @@ class LookupStageTest {
 
     @Test
     void shouldRenderJoinConditionWithJsonValue() {
-        var stage = new LookupStage("products", "productId", "_id", "product_info");
+        var stage = LookupStage.equality("products", "productId", "_id", "product_info");
 
         stage.render(context);
 
@@ -65,7 +65,7 @@ class LookupStageTest {
 
     @Test
     void shouldUseTableAlias() {
-        var stage = new LookupStage("categories", "categoryId", "id", "category");
+        var stage = LookupStage.equality("categories", "categoryId", "id", "category");
 
         stage.render(context);
 
@@ -75,7 +75,7 @@ class LookupStageTest {
 
     @Test
     void shouldHandleNestedFieldPath() {
-        var stage = new LookupStage("users", "metadata.userId", "profile.id", "user_data");
+        var stage = LookupStage.equality("users", "metadata.userId", "profile.id", "user_data");
 
         stage.render(context);
 
@@ -87,34 +87,34 @@ class LookupStageTest {
     @Test
     void shouldThrowOnNullFrom() {
         assertThatNullPointerException()
-            .isThrownBy(() -> new LookupStage(null, "item", "sku", "docs"))
+            .isThrownBy(() -> LookupStage.equality(null, "item", "sku", "docs"))
             .withMessageContaining("from");
     }
 
     @Test
     void shouldThrowOnNullLocalField() {
         assertThatNullPointerException()
-            .isThrownBy(() -> new LookupStage("inventory", null, "sku", "docs"))
+            .isThrownBy(() -> LookupStage.equality("inventory", null, "sku", "docs"))
             .withMessageContaining("localField");
     }
 
     @Test
     void shouldThrowOnNullForeignField() {
         assertThatNullPointerException()
-            .isThrownBy(() -> new LookupStage("inventory", "item", null, "docs"))
+            .isThrownBy(() -> LookupStage.equality("inventory", "item", null, "docs"))
             .withMessageContaining("foreignField");
     }
 
     @Test
     void shouldThrowOnNullAs() {
         assertThatNullPointerException()
-            .isThrownBy(() -> new LookupStage("inventory", "item", "sku", null))
+            .isThrownBy(() -> LookupStage.equality("inventory", "item", "sku", null))
             .withMessageContaining("as");
     }
 
     @Test
     void shouldProvideReadableToString() {
-        var stage = new LookupStage("inventory", "item", "sku", "inventory_docs");
+        var stage = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
 
         assertThat(stage.toString())
             .contains("LookupStage")

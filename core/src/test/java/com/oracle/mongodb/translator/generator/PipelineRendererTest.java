@@ -330,7 +330,7 @@ class PipelineRendererTest {
     @Test
     void shouldRenderLookupStage() {
         Pipeline pipeline = Pipeline.of("orders",
-            new LookupStage("products", "productId", "_id", "product")
+            LookupStage.equality("products", "productId", "_id", "product")
         );
 
         renderer.render(pipeline, context);
@@ -618,8 +618,8 @@ class PipelineRendererTest {
     @Test
     void shouldRenderMultipleLookupStages() {
         Pipeline pipeline = Pipeline.of("orders",
-            new LookupStage("customers", "customerId", "_id", "customer"),
-            new LookupStage("products", "productId", "_id", "product")
+            LookupStage.equality("customers", "customerId", "_id", "customer"),
+            LookupStage.equality("products", "productId", "_id", "product")
         );
 
         renderer.render(pipeline, context);

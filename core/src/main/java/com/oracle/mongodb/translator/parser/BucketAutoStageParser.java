@@ -153,6 +153,11 @@ public final class BucketAutoStageParser {
             return LiteralExpression.of(argument);
         }
 
+        if (argument instanceof Document) {
+            // Complex expression (e.g., { $cond: [...] }, { $multiply: [...] })
+            return expressionParser.parseValue(argument);
+        }
+
         throw new IllegalArgumentException("Unsupported accumulator argument: " + argument);
     }
 }

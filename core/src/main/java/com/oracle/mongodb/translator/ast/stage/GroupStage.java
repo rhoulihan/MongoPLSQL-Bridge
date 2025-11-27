@@ -6,6 +6,7 @@
 package com.oracle.mongodb.translator.ast.stage;
 
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
+import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
 import java.util.Collections;
@@ -77,8 +78,13 @@ public final class GroupStage implements Stage {
 
         // Render _id expression if present
         if (idExpression != null) {
-            ctx.visit(idExpression);
-            ctx.sql(" AS _id");
+            if (idExpression instanceof CompoundIdExpression compound) {
+                // For compound _id, render each field with its alias
+                compound.renderWithAliases(ctx);
+            } else {
+                ctx.visit(idExpression);
+                ctx.sql(" AS _id");
+            }
             first = false;
         }
 

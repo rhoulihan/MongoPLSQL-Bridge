@@ -6,6 +6,7 @@
 package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
+import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
@@ -239,8 +240,14 @@ public final class PipelineRenderer {
 
         // Render _id expression if present
         if (group.getIdExpression() != null) {
-            ctx.visit(group.getIdExpression());
-            ctx.sql(" AS _id");
+            var idExpr = group.getIdExpression();
+            if (idExpr instanceof CompoundIdExpression compound) {
+                // For compound _id, render each field with its alias
+                compound.renderWithAliases(ctx);
+            } else {
+                ctx.visit(idExpr);
+                ctx.sql(" AS _id");
+            }
             first = false;
         }
 

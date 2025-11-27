@@ -100,6 +100,11 @@ public final class ExpressionParser {
         if (LOGICAL_OPS.contains(op)) {
             return parseLogicalOperator(op, value);
         }
+        if ("$expr".equals(op)) {
+            // $expr allows aggregation expressions in query context
+            // The value is an expression document like {$eq: ["$field1", "$field2"]}
+            return parseValue(value);
+        }
         throw new UnsupportedOperatorException(op);
     }
 
@@ -107,12 +112,12 @@ public final class ExpressionParser {
         LogicalOp logicalOp = LogicalOp.fromMongo(op);
 
         if (logicalOp == LogicalOp.NOT) {
-            // $not can take a document (filter context) or expression (expression context)
-            if (value instanceof Document) {
-                return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
+            // $not at top level (filter context) requires a document
+            // Expression context handling (where $not can take expressions) is done in parseExpressionOperator
+            if (!(value instanceof Document)) {
+                throw new IllegalArgumentException("$not requires a document operand in filter context");
             }
-            // Expression context: $not: expr
-            return new LogicalExpression(logicalOp, List.of(parseValue(value)));
+            return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
         }
 
         if (!(value instanceof List)) {
@@ -279,6 +284,16 @@ public final class ExpressionParser {
 
         if (value instanceof Number || value instanceof Boolean) {
             return LiteralExpression.of(value);
+        }
+
+        if (value instanceof java.util.Date) {
+            // Date values are converted to Oracle timestamp literals
+            return LiteralExpression.of(value);
+        }
+
+        if (value instanceof org.bson.types.ObjectId) {
+            // ObjectId is converted to string representation
+            return LiteralExpression.of(value.toString());
         }
 
         if (value instanceof Document doc) {

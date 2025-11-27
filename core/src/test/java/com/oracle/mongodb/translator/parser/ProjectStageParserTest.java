@@ -126,11 +126,11 @@ class ProjectStageParserTest {
 
     @Test
     void shouldRejectUnsupportedExpressionOperator() {
-        // { $project: { computed: { $concat: ["a", "b"] } } }
-        var doc = new Document("computed", new Document("$concat", java.util.List.of("a", "b")));
+        // { $project: { computed: { $zip: {...} } } } - $zip is not supported
+        var doc = new Document("computed", new Document("$zip",
+            new Document("inputs", java.util.List.of(java.util.List.of(1, 2), java.util.List.of("a", "b")))));
 
         assertThatThrownBy(() -> parser.parse(doc))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("not yet supported");
+            .isInstanceOf(com.oracle.mongodb.translator.exception.UnsupportedOperatorException.class);
     }
 }
