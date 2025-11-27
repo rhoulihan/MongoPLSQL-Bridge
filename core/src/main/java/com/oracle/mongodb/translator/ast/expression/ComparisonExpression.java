@@ -6,6 +6,7 @@
 package com.oracle.mongodb.translator.ast.expression;
 
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -56,6 +57,25 @@ public final class ComparisonExpression implements Expression {
             } else {
                 throw new IllegalStateException("Invalid NULL comparison with operator: " + op);
             }
+            return;
+        }
+
+        // Handle $in/$nin with array literal as right operand
+        if ((op == ComparisonOp.IN || op == ComparisonOp.NIN)
+                && right instanceof LiteralExpression lit && lit.getValue() instanceof List) {
+            ctx.visit(left);
+            ctx.sql(" ");
+            ctx.sql(op.getSqlOperator());
+            ctx.sql(" (");
+            @SuppressWarnings("unchecked")
+            List<Object> values = (List<Object>) lit.getValue();
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) {
+                    ctx.sql(", ");
+                }
+                ctx.bind(values.get(i));
+            }
+            ctx.sql(")");
             return;
         }
 

@@ -46,7 +46,10 @@ public final class ExpressionParser {
     );
 
     private static final Set<String> ARITHMETIC_OPS = Set.of(
-        "$add", "$subtract", "$multiply", "$divide", "$mod"
+        "$add", "$subtract", "$multiply", "$divide", "$mod",
+        "$round", "$abs", "$ceil", "$floor", "$trunc",
+        "$sqrt", "$pow", "$exp", "$ln", "$log10",
+        "$max", "$min"
     );
 
     private static final Set<String> CONDITIONAL_OPS = Set.of(
@@ -104,10 +107,12 @@ public final class ExpressionParser {
         LogicalOp logicalOp = LogicalOp.fromMongo(op);
 
         if (logicalOp == LogicalOp.NOT) {
-            if (!(value instanceof Document)) {
-                throw new IllegalArgumentException("$not requires a document value");
+            // $not can take a document (filter context) or expression (expression context)
+            if (value instanceof Document) {
+                return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
             }
-            return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
+            // Expression context: $not: expr
+            return new LogicalExpression(logicalOp, List.of(parseValue(value)));
         }
 
         if (!(value instanceof List)) {
@@ -115,11 +120,31 @@ public final class ExpressionParser {
         }
 
         @SuppressWarnings("unchecked")
-        List<Document> docs = (List<Document>) value;
+        List<Object> items = (List<Object>) value;
         List<Expression> operands = new ArrayList<>();
 
-        for (Document doc : docs) {
-            operands.add(parseDocument(doc));
+        for (Object item : items) {
+            // In expression context, items can be expressions (field refs, literals, nested expressions)
+            // In filter context, items are documents
+            if (item instanceof Document) {
+                // Could be a filter document or an expression document
+                Document doc = (Document) item;
+                if (!doc.isEmpty()) {
+                    String firstKey = doc.keySet().iterator().next();
+                    if (firstKey.startsWith("$")) {
+                        // Expression document like {$eq: [...]}
+                        operands.add(parseValue(item));
+                    } else {
+                        // Filter document like {field: value}
+                        operands.add(parseDocument(doc));
+                    }
+                } else {
+                    operands.add(parseDocument(doc));
+                }
+            } else {
+                // Field reference or literal
+                operands.add(parseValue(item));
+            }
         }
 
         return new LogicalExpression(logicalOp, operands);
@@ -414,6 +439,11 @@ public final class ExpressionParser {
     private Expression parseArithmeticExpression(String op, Object operand) {
         ArithmeticOp arithmeticOp = ArithmeticOp.fromMongo(op);
 
+        // Handle single-argument functions (e.g., $abs, $ceil, $floor, $sqrt)
+        if (arithmeticOp.allowsSingleOperand() && !(operand instanceof List)) {
+            return new ArithmeticExpression(arithmeticOp, List.of(parseValue(operand)));
+        }
+
         if (!(operand instanceof List)) {
             throw new IllegalArgumentException(op + " requires an array of operands");
         }
@@ -421,7 +451,11 @@ public final class ExpressionParser {
         @SuppressWarnings("unchecked")
         List<Object> operands = (List<Object>) operand;
 
-        if (operands.size() < 2) {
+        if (operands.isEmpty()) {
+            throw new IllegalArgumentException(op + " requires at least 1 operand");
+        }
+
+        if (operands.size() < 2 && !arithmeticOp.allowsSingleOperand()) {
             throw new IllegalArgumentException(op + " requires at least 2 operands");
         }
 

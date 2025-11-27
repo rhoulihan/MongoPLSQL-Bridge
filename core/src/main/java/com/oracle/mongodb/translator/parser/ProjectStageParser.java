@@ -19,6 +19,8 @@ import java.util.Map;
  */
 public final class ProjectStageParser {
 
+    private final ExpressionParser expressionParser = new ExpressionParser();
+
     /**
      * Parses a $project stage document.
      *
@@ -88,22 +90,7 @@ public final class ProjectStageParser {
     }
 
     private Expression parseExpression(Document exprDoc) {
-        // For now, support simple field references and literals
-        // More complex expressions (arithmetic, conditionals) will be added later
-        if (exprDoc.size() == 1) {
-            Map.Entry<String, Object> entry = exprDoc.entrySet().iterator().next();
-            String op = entry.getKey();
-            Object arg = entry.getValue();
-
-            // Check if it's a known expression operator
-            if (op.startsWith("$")) {
-                // TODO: Support arithmetic expressions ($add, $subtract, etc.)
-                // TODO: Support conditional expressions ($cond, $ifNull, etc.)
-                throw new IllegalArgumentException(
-                    "Expression operator not yet supported: " + op);
-            }
-        }
-
-        throw new IllegalArgumentException("Unsupported expression: " + exprDoc);
+        // Delegate to the ExpressionParser which handles all expression types
+        return expressionParser.parseValue(exprDoc);
     }
 }

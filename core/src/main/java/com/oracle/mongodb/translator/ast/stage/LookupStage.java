@@ -5,14 +5,20 @@
  */
 package com.oracle.mongodb.translator.ast.stage;
 
+import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * Represents a $lookup stage that performs a left outer join to another collection.
- * Translates to Oracle's LEFT OUTER JOIN.
  *
- * <p>MongoDB syntax:
+ * <p>Supports two forms:
+ *
+ * <p>1. Simple equality match - translates to LEFT OUTER JOIN:
  * <pre>
  * {
  *   $lookup: {
@@ -24,32 +30,72 @@ import java.util.Objects;
  * }
  * </pre>
  *
- * <p>Oracle translation:
+ * <p>2. Pipeline with let variables - translates to LATERAL join or correlated subquery:
  * <pre>
- * LEFT OUTER JOIN inventory lookup_1 ON
- *   JSON_VALUE(base.data, '$.item') = JSON_VALUE(lookup_1.data, '$.sku')
+ * {
+ *   $lookup: {
+ *     from: "reviews",
+ *     let: { productId: "$productId" },
+ *     pipeline: [
+ *       { $match: { $expr: { $eq: ["$productId", "$$productId"] } } }
+ *     ],
+ *     as: "reviews"
+ *   }
+ * }
  * </pre>
  */
 public final class LookupStage implements Stage {
 
     private final String from;
-    private final String localField;
-    private final String foreignField;
+    private final String localField;     // null for pipeline form
+    private final String foreignField;   // null for pipeline form
     private final String as;
+    private final Map<String, String> letVariables;  // variable name -> field path
+    private final List<Stage> pipeline;              // stages in the pipeline
 
     /**
-     * Creates a lookup stage.
-     *
-     * @param from         the foreign collection to join
-     * @param localField   the field from the input documents
-     * @param foreignField the field from the foreign collection documents
-     * @param as           the name of the new array field to add to the input documents
+     * Creates a simple equality lookup stage.
      */
-    public LookupStage(String from, String localField, String foreignField, String as) {
+    private LookupStage(String from, String localField, String foreignField, String as) {
         this.from = Objects.requireNonNull(from, "from must not be null");
         this.localField = Objects.requireNonNull(localField, "localField must not be null");
         this.foreignField = Objects.requireNonNull(foreignField, "foreignField must not be null");
         this.as = Objects.requireNonNull(as, "as must not be null");
+        this.letVariables = Collections.emptyMap();
+        this.pipeline = Collections.emptyList();
+    }
+
+    /**
+     * Creates a pipeline lookup stage.
+     */
+    private LookupStage(String from, Map<String, String> letVariables, List<Stage> pipeline, String as) {
+        this.from = Objects.requireNonNull(from, "from must not be null");
+        this.localField = null;
+        this.foreignField = null;
+        this.as = Objects.requireNonNull(as, "as must not be null");
+        this.letVariables = letVariables != null ? Map.copyOf(letVariables) : Collections.emptyMap();
+        this.pipeline = pipeline != null ? List.copyOf(pipeline) : Collections.emptyList();
+    }
+
+    /**
+     * Creates a simple equality lookup stage.
+     */
+    public static LookupStage equality(String from, String localField, String foreignField, String as) {
+        return new LookupStage(from, localField, foreignField, as);
+    }
+
+    /**
+     * Creates a pipeline lookup stage with let variables.
+     */
+    public static LookupStage withPipeline(String from, Map<String, String> letVariables, List<Stage> pipeline, String as) {
+        return new LookupStage(from, letVariables, pipeline, as);
+    }
+
+    /**
+     * Returns true if this is a pipeline form lookup.
+     */
+    public boolean isPipelineForm() {
+        return localField == null;
     }
 
     /**
@@ -60,14 +106,14 @@ public final class LookupStage implements Stage {
     }
 
     /**
-     * Returns the local field path.
+     * Returns the local field path (null for pipeline form).
      */
     public String getLocalField() {
         return localField;
     }
 
     /**
-     * Returns the foreign field path.
+     * Returns the foreign field path (null for pipeline form).
      */
     public String getForeignField() {
         return foreignField;
@@ -80,6 +126,20 @@ public final class LookupStage implements Stage {
         return as;
     }
 
+    /**
+     * Returns the let variables (empty for equality form).
+     */
+    public Map<String, String> getLetVariables() {
+        return letVariables;
+    }
+
+    /**
+     * Returns the pipeline stages (empty for equality form).
+     */
+    public List<Stage> getPipeline() {
+        return pipeline;
+    }
+
     @Override
     public String getOperatorName() {
         return "$lookup";
@@ -87,6 +147,14 @@ public final class LookupStage implements Stage {
 
     @Override
     public void render(SqlGenerationContext ctx) {
+        if (isPipelineForm()) {
+            renderPipelineForm(ctx);
+        } else {
+            renderEqualityForm(ctx);
+        }
+    }
+
+    private void renderEqualityForm(SqlGenerationContext ctx) {
         // Generate a unique alias for the joined table
         String alias = ctx.generateTableAlias(from);
 
@@ -105,8 +173,22 @@ public final class LookupStage implements Stage {
         ctx.sql("')");
     }
 
+    private void renderPipelineForm(SqlGenerationContext ctx) {
+        // Pipeline form with let/pipeline is complex and requires correlated subquery support
+        // For now, throw an exception with a clear message
+        throw new UnsupportedOperatorException(
+            "$lookup with let/pipeline (correlated subquery) is not yet fully supported. " +
+            "Use the simple form with localField/foreignField instead.");
+    }
+
     @Override
     public String toString() {
+        if (isPipelineForm()) {
+            return "LookupStage(from=" + from
+                + ", let=" + letVariables
+                + ", pipeline=" + pipeline.size() + " stages"
+                + ", as=" + as + ")";
+        }
         return "LookupStage(from=" + from
             + ", localField=" + localField
             + ", foreignField=" + foreignField

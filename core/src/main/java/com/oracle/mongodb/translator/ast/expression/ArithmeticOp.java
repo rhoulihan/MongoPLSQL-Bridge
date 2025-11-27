@@ -13,30 +13,56 @@ import java.util.Map;
  */
 public enum ArithmeticOp {
 
-    ADD("+", "$add"),
-    SUBTRACT("-", "$subtract"),
-    MULTIPLY("*", "$multiply"),
-    DIVIDE("/", "$divide"),
-    MOD("MOD", "$mod");
+    ADD("+", "$add", false),
+    SUBTRACT("-", "$subtract", false),
+    MULTIPLY("*", "$multiply", false),
+    DIVIDE("/", "$divide", false),
+    MOD("MOD", "$mod", true),
+    ROUND("ROUND", "$round", true),
+    ABS("ABS", "$abs", true),
+    CEIL("CEIL", "$ceil", true),
+    FLOOR("FLOOR", "$floor", true),
+    TRUNC("TRUNC", "$trunc", true),
+    SQRT("SQRT", "$sqrt", true),
+    POW("POWER", "$pow", true),
+    EXP("EXP", "$exp", true),
+    LN("LN", "$ln", true),
+    LOG10("LOG", "$log10", true),
+    // $max and $min as expression operators (not accumulators)
+    MAX("GREATEST", "$max", true),
+    MIN("LEAST", "$min", true);
 
     private static final Map<String, ArithmeticOp> MONGO_LOOKUP;
 
     static {
-        MONGO_LOOKUP = Map.of(
-            "$add", ADD,
-            "$subtract", SUBTRACT,
-            "$multiply", MULTIPLY,
-            "$divide", DIVIDE,
-            "$mod", MOD
-        );
+        MONGO_LOOKUP = new java.util.HashMap<>();
+        MONGO_LOOKUP.put("$add", ADD);
+        MONGO_LOOKUP.put("$subtract", SUBTRACT);
+        MONGO_LOOKUP.put("$multiply", MULTIPLY);
+        MONGO_LOOKUP.put("$divide", DIVIDE);
+        MONGO_LOOKUP.put("$mod", MOD);
+        MONGO_LOOKUP.put("$round", ROUND);
+        MONGO_LOOKUP.put("$abs", ABS);
+        MONGO_LOOKUP.put("$ceil", CEIL);
+        MONGO_LOOKUP.put("$floor", FLOOR);
+        MONGO_LOOKUP.put("$trunc", TRUNC);
+        MONGO_LOOKUP.put("$sqrt", SQRT);
+        MONGO_LOOKUP.put("$pow", POW);
+        MONGO_LOOKUP.put("$exp", EXP);
+        MONGO_LOOKUP.put("$ln", LN);
+        MONGO_LOOKUP.put("$log10", LOG10);
+        MONGO_LOOKUP.put("$max", MAX);
+        MONGO_LOOKUP.put("$min", MIN);
     }
 
     private final String sqlOperator;
     private final String mongoOperator;
+    private final boolean isFunction;
 
-    ArithmeticOp(String sqlOperator, String mongoOperator) {
+    ArithmeticOp(String sqlOperator, String mongoOperator, boolean isFunction) {
         this.sqlOperator = sqlOperator;
         this.mongoOperator = mongoOperator;
+        this.isFunction = isFunction;
     }
 
     /**
@@ -54,10 +80,19 @@ public enum ArithmeticOp {
     }
 
     /**
-     * Returns true if this operator requires a function call (like MOD).
+     * Returns true if this operator requires a function call (like MOD, ROUND, etc.).
      */
     public boolean requiresFunctionCall() {
-        return this == MOD;
+        return isFunction;
+    }
+
+    /**
+     * Returns true if this operator can accept a single argument.
+     */
+    public boolean allowsSingleOperand() {
+        return this == ABS || this == CEIL || this == FLOOR || this == SQRT
+            || this == EXP || this == LN || this == LOG10 || this == TRUNC
+            || this == ROUND;
     }
 
     /**

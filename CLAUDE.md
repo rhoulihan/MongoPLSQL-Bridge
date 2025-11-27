@@ -283,10 +283,16 @@ Both databases contain matching test data:
 
 ### TDD Methodology
 This project follows strict Test-Driven Development:
-1. Write a failing test first
-2. Implement minimal code to pass the test
-3. Refactor while keeping tests green
-4. Maintain 80%+ code coverage
+1. **ALWAYS write tests first** before implementing any new feature or fix
+2. Write a failing test that demonstrates the expected behavior
+3. Implement minimal code to pass the test
+4. Refactor while keeping tests green
+5. Maintain 80%+ code coverage
+
+**Important:** When adding new operators or fixing bugs, create the test case FIRST. This ensures:
+- The requirement is clearly understood before implementation
+- The implementation is verifiable
+- Regressions are caught early
 
 ### Code Style
 - Google Java Style (enforced via Checkstyle)

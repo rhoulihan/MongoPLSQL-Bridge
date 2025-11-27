@@ -28,6 +28,7 @@ let outputDir = path.join(__dirname, '../output');
 let mongodbOnly = false;
 let oracleOnly = false;
 let includeLargeScale = false;
+let largeScaleOnly = false;
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--output-dir' && args[i + 1]) {
@@ -38,6 +39,9 @@ for (let i = 0; i < args.length; i++) {
     } else if (args[i] === '--oracle-only') {
         oracleOnly = true;
     } else if (args[i] === '--include-large-scale' || args[i] === '--large-scale') {
+        includeLargeScale = true;
+    } else if (args[i] === '--large-scale-only') {
+        largeScaleOnly = true;
         includeLargeScale = true;
     }
 }
@@ -50,15 +54,15 @@ if (!fs.existsSync(outputDir)) {
 /**
  * Load test cases from JSON file
  */
-function loadTestCases(includeLargeScale = false) {
+function loadTestCases(includeLargeScale = false, largeScaleOnly = false) {
     const testCasesPath = path.join(__dirname, '../tests/test-cases.json');
     const curatedTestsPath = path.join(__dirname, '../import/curated-tests.json');
     const largeScalePath = path.join(__dirname, '../large-scale/complex-pipelines.json');
 
     const testCases = [];
 
-    // Load main test cases
-    if (fs.existsSync(testCasesPath)) {
+    // Load main test cases (unless large-scale-only mode)
+    if (!largeScaleOnly && fs.existsSync(testCasesPath)) {
         const data = JSON.parse(fs.readFileSync(testCasesPath, 'utf8'));
         const cases = data.test_cases || data.tests || [];
         for (const tc of cases) {
@@ -74,8 +78,8 @@ function loadTestCases(includeLargeScale = false) {
         }
     }
 
-    // Load curated tests
-    if (fs.existsSync(curatedTestsPath)) {
+    // Load curated tests (unless large-scale-only mode)
+    if (!largeScaleOnly && fs.existsSync(curatedTestsPath)) {
         const data = JSON.parse(fs.readFileSync(curatedTestsPath, 'utf8'));
         const cases = data.test_cases || data.tests || [];
         for (const tc of cases) {
@@ -445,7 +449,8 @@ async function main() {
     console.log(`MongoDB: ${MONGODB_URI}`);
     if (mongodbOnly) console.log('Mode: MongoDB only');
     if (oracleOnly) console.log('Mode: Oracle only');
-    if (includeLargeScale) console.log('Including large-scale tests');
+    if (largeScaleOnly) console.log('Mode: Large-scale tests only');
+    else if (includeLargeScale) console.log('Including large-scale tests');
     console.log('');
 
     const client = new MongoClient(MONGODB_URI);
@@ -454,7 +459,7 @@ async function main() {
         await client.connect();
 
         // Load test cases
-        const testCases = loadTestCases(includeLargeScale);
+        const testCases = loadTestCases(includeLargeScale, largeScaleOnly);
         console.log(`Loaded ${testCases.length} test cases\n`);
 
         // Summary tracking

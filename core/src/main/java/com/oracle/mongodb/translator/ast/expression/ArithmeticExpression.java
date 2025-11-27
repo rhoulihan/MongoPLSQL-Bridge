@@ -31,12 +31,15 @@ public final class ArithmeticExpression implements Expression {
      * Creates an arithmetic expression.
      *
      * @param op the arithmetic operator
-     * @param operands the operand expressions (at least 2 for binary operators)
+     * @param operands the operand expressions (at least 1 for unary, 2 for binary operators)
      */
     public ArithmeticExpression(ArithmeticOp op, List<Expression> operands) {
         this.op = Objects.requireNonNull(op, "op must not be null");
-        if (operands == null || operands.size() < 2) {
-            throw new IllegalArgumentException("Arithmetic expression requires at least 2 operands");
+        if (operands == null || operands.isEmpty()) {
+            throw new IllegalArgumentException("Arithmetic expression requires at least 1 operand");
+        }
+        if (operands.size() < 2 && !op.allowsSingleOperand()) {
+            throw new IllegalArgumentException(op.getMongoOperator() + " requires at least 2 operands");
         }
         this.operands = new ArrayList<>(operands);
     }
