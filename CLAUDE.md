@@ -84,7 +84,11 @@ core/src/main/java/com/oracle/mongodb/translator/
 │   │   ├── LogicalExpression.java
 │   │   ├── ArithmeticExpression.java
 │   │   ├── AccumulatorExpression.java
-│   │   └── ConditionalExpression.java
+│   │   ├── ConditionalExpression.java
+│   │   ├── StringExpression.java
+│   │   ├── DateExpression.java
+│   │   ├── ArrayExpression.java
+│   │   └── TypeConversionExpression.java
 │   └── stage/              # Stage implementations
 │       ├── Stage.java (sealed interface)
 │       ├── MatchStage.java
@@ -93,6 +97,20 @@ core/src/main/java/com/oracle/mongodb/translator/
 │       ├── SortStage.java
 │       ├── LimitStage.java
 │       ├── SkipStage.java
+│       ├── LookupStage.java
+│       ├── UnwindStage.java
+│       ├── AddFieldsStage.java
+│       ├── UnionWithStage.java
+│       ├── BucketStage.java
+│       ├── BucketAutoStage.java
+│       ├── FacetStage.java
+│       ├── GraphLookupStage.java
+│       ├── SetWindowFieldsStage.java
+│       ├── RedactStage.java
+│       ├── SampleStage.java
+│       ├── CountStage.java
+│       ├── MergeStage.java
+│       ├── OutStage.java
 │       └── Pipeline.java
 ├── parser/                 # BSON parsing to AST
 │   ├── PipelineParser.java
@@ -100,7 +118,20 @@ core/src/main/java/com/oracle/mongodb/translator/
 │   ├── StageParserRegistry.java
 │   ├── ExpressionParser.java
 │   ├── GroupStageParser.java
-│   └── ProjectStageParser.java
+│   ├── ProjectStageParser.java
+│   ├── LookupStageParser.java
+│   ├── UnwindStageParser.java
+│   ├── AddFieldsStageParser.java
+│   ├── GraphLookupStageParser.java
+│   ├── SetWindowFieldsStageParser.java
+│   ├── RedactStageParser.java
+│   ├── SampleStageParser.java
+│   └── CountStageParser.java
+├── optimizer/              # Pipeline optimization
+│   ├── PipelineOptimizer.java
+│   ├── PredicatePushdownOptimizer.java
+│   ├── SortLimitOptimizer.java
+│   └── OptimizationChain.java
 ├── generator/              # SQL generation from AST
 │   ├── SqlGenerationContext.java (interface)
 │   ├── DefaultSqlGenerationContext.java
@@ -136,6 +167,20 @@ core/src/main/java/com/oracle/mongodb/translator/
 # Generate test coverage report
 ./gradlew :core:jacocoTestReport
 # Report at: core/build/reports/jacoco/test/html/index.html
+
+# Run cross-database validation tests (requires Docker)
+./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh
+```
+
+### Performance Benchmarks (JMH)
+```bash
+# Run all benchmarks
+./gradlew :benchmarks:jmh
+
+# Quick benchmark run (minimal warmup)
+./gradlew :benchmarks:benchmarkQuick
+
+# Results at: benchmarks/build/reports/jmh/results.json
 ```
 
 ### Test Environment (Docker)
@@ -185,24 +230,50 @@ Both databases contain matching test data:
 - Phase 1: Project Initialization (10/10 tickets)
 - Phase 2: Core Infrastructure (7/7 tickets)
 - Phase 3: Tier 1 Operators (13/13 tickets)
+- Phase 4: Tier 2-4 Operators & Optimization (18/18 tickets)
 
 **Currently Implemented Operators:**
 
-| Stage Operators | Expression Operators |
-|-----------------|---------------------|
-| `$match` → WHERE | Comparison: `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin` |
-| `$group` → GROUP BY | Logical: `$and`, `$or`, `$not`, `$nor` |
-| `$project` → SELECT | Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` |
-| `$sort` → ORDER BY | Conditional: `$cond`, `$ifNull` |
-| `$limit` → FETCH FIRST | Accumulators: `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last` |
-| `$skip` → OFFSET | |
+| Stage Operators | Oracle Translation |
+|-----------------|-------------------|
+| `$match` | WHERE clause with JSON_VALUE/JSON_EXISTS |
+| `$group` | GROUP BY with aggregate functions |
+| `$project` | SELECT with field selection/computation |
+| `$sort` | ORDER BY clause (with Top-N optimization) |
+| `$limit` | FETCH FIRST n ROWS ONLY |
+| `$skip` | OFFSET n ROWS |
+| `$lookup` | LEFT OUTER JOIN |
+| `$unwind` | JSON_TABLE with NESTED PATH |
+| `$addFields`/`$set` | Computed columns |
+| `$unionWith` | UNION ALL |
+| `$bucket` | CASE expressions |
+| `$bucketAuto` | NTILE window function |
+| `$facet` | Multiple subqueries (JSON_OBJECT) |
+| `$graphLookup` | Recursive CTE (with restrictSearchWithMatch) |
+| `$setWindowFields` | Window functions (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
+| `$redact` | Conditional WHERE clause ($$PRUNE/$$KEEP/$$DESCEND) |
+| `$sample` | ORDER BY DBMS_RANDOM.VALUE |
+| `$count` | SELECT JSON_OBJECT(... COUNT(*)) |
+| `$merge` | MERGE statement (stub) |
+| `$out` | INSERT statement (stub) |
 
-**Next Phase (Phase 4):**
-- IMPL-031: `$lookup` (LEFT OUTER JOIN)
-- IMPL-032: `$unwind` (JSON_TABLE NESTED PATH)
-- IMPL-033: `$addFields`/`$set`
-- String, date, and array operators
-- Query optimization passes
+**Expression Operators:**
+
+| Category | Operators |
+|----------|-----------|
+| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin` |
+| Logical | `$and`, `$or`, `$not`, `$nor` |
+| Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` |
+| Conditional | `$cond`, `$ifNull` |
+| String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll` |
+| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` |
+| Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice` |
+| Type Conversion | `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate` |
+| Accumulators | `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet` |
+
+**Test Coverage:**
+- Unit Tests: 90% line coverage, 80% branch coverage
+- Cross-Database Validation: 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 ## Development Guidelines
 
@@ -276,9 +347,12 @@ void shouldExecuteMatchPipeline() {
 | Expression parsing | `parser/ExpressionParser.java` |
 | Stage registration | `parser/StageParserRegistry.java` |
 | SQL context | `generator/DefaultSqlGenerationContext.java` |
+| Pipeline optimization | `optimizer/OptimizationChain.java` |
 | Implementation tracking | `docs/IMPLEMENTATION_STATUS.md` |
 | Technical spec | `docs/MONGODB_AGGREGATION_SPEC.md` |
-| Phase 4 roadmap | `docs/IMPLEMENTATION_PLAN_PHASE4.md` |
+| Query test cases | `query-tests/tests/test-cases.json` |
+| Curated tests | `query-tests/import/curated-tests.json` |
+| Benchmarks | `benchmarks/src/main/java/.../benchmark/*.java` |
 
 ## Oracle SQL/JSON Patterns
 
@@ -302,6 +376,16 @@ JSON_TABLE(data, '$.items[*]' COLUMNS (
 JSON_EXISTS(data, '$.optionalField')
 ```
 
+## Project Modules
+
+| Module | Description |
+|--------|-------------|
+| `core` | Main translation library with AST, parsers, generators |
+| `integration-tests` | Oracle Testcontainers integration tests |
+| `benchmarks` | JMH performance benchmarks |
+| `generator` | Code generation from operator specs |
+| `query-tests` | Cross-database validation tests (MongoDB ↔ Oracle) |
+
 ## Dependencies
 
 - Oracle JDBC 23.3.0
@@ -310,6 +394,7 @@ JSON_EXISTS(data, '$.optionalField')
 - Jackson for JSON processing
 - JUnit 5, AssertJ, Mockito for testing
 - Testcontainers for integration tests
+- JMH 1.37 for benchmarking
 
 ## Docker Images
 
