@@ -272,6 +272,59 @@ node load-data.js --target mongodb --data-dir ./data --drop
 node compare-pipelines.js --verbose
 ```
 
+#### Exporting Results for Physical Inspection
+
+Export query results from both MongoDB and Oracle to JSON files for manual comparison:
+
+```bash
+cd query-tests/scripts
+
+# Install Node.js dependencies (if not already done)
+npm install
+
+# Export results for standard tests
+node export-results.js
+
+# Export results including large-scale tests
+node export-results.js --include-large-scale
+
+# Export MongoDB only (skip Oracle)
+node export-results.js --mongodb-only
+
+# Export Oracle only (skip MongoDB)
+node export-results.js --oracle-only
+
+# Custom output directory
+node export-results.js --output-dir /path/to/output
+```
+
+**Output:** JSON files are written to `query-tests/output/` with one file per test case:
+
+```json
+{
+  "testId": "CMP001",
+  "testName": "Equality match - string",
+  "mongodb": {
+    "success": true,
+    "results": [{"_id": "S001", "orderId": 1001, "status": "completed"}, ...],
+    "count": 5
+  },
+  "oracle": {
+    "success": true,
+    "results": [{"id": "S001", "orderId": 1001, "status": "completed"}, ...],
+    "count": 5
+  },
+  "comparison": {
+    "mongodbCount": 5,
+    "oracleCount": 5,
+    "countsMatch": true,
+    "bothSucceeded": true
+  }
+}
+```
+
+A `_summary.json` file provides an overview of all test results.
+
 ### Test Coverage Report
 
 Generate an HTML coverage report:
