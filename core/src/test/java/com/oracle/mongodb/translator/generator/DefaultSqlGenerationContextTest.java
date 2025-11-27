@@ -98,4 +98,99 @@ class DefaultSqlGenerationContextTest {
 
         assertThat(inlineContext.toSql()).isEqualTo("WHERE status = NULL");
     }
+
+    @Test
+    void shouldHandleNumberWhenInlining() {
+        var inlineContext = new DefaultSqlGenerationContext(true, null);
+
+        inlineContext.sql("WHERE count = ");
+        inlineContext.bind(42);
+
+        assertThat(inlineContext.toSql()).isEqualTo("WHERE count = 42");
+    }
+
+    @Test
+    void shouldHandleDoubleWhenInlining() {
+        var inlineContext = new DefaultSqlGenerationContext(true, null);
+
+        inlineContext.sql("WHERE price = ");
+        inlineContext.bind(99.99);
+
+        assertThat(inlineContext.toSql()).isEqualTo("WHERE price = 99.99");
+    }
+
+    @Test
+    void shouldHandleBooleanWhenInlining() {
+        var inlineContext = new DefaultSqlGenerationContext(true, null);
+
+        inlineContext.sql("WHERE active = ");
+        inlineContext.bind(true);
+
+        assertThat(inlineContext.toSql()).isEqualTo("WHERE active = true");
+    }
+
+    @Test
+    void shouldHandleFalseBooleanWhenInlining() {
+        var inlineContext = new DefaultSqlGenerationContext(true, null);
+
+        inlineContext.sql("WHERE active = ");
+        inlineContext.bind(false);
+
+        assertThat(inlineContext.toSql()).isEqualTo("WHERE active = false");
+    }
+
+    @Test
+    void shouldQuoteIdentifiersWithDigitPrefix() {
+        context.sql("SELECT ");
+        context.identifier("1column");
+
+        assertThat(context.toSql()).isEqualTo("SELECT \"1column\"");
+    }
+
+    @Test
+    void shouldNotQuoteUppercaseIdentifiers() {
+        context.sql("SELECT ");
+        context.identifier("SELECT");
+
+        // Simple identifiers including uppercase are not quoted
+        assertThat(context.toSql()).isEqualTo("SELECT SELECT");
+    }
+
+    @Test
+    void shouldProvideDefaultBaseTableAlias() {
+        assertThat(context.getBaseTableAlias()).isEqualTo("base");
+    }
+
+    @Test
+    void shouldUseCustomBaseTableAlias() {
+        var customContext = new DefaultSqlGenerationContext(false, null, "custom");
+
+        assertThat(customContext.getBaseTableAlias()).isEqualTo("custom");
+    }
+
+    @Test
+    void shouldReturnEmptyBindVariablesInitially() {
+        assertThat(context.getBindVariables()).isEmpty();
+    }
+
+    @Test
+    void shouldStartWithEmptySql() {
+        assertThat(context.toSql()).isEmpty();
+    }
+
+    @Test
+    void shouldQuoteIdentifiersWithSpaces() {
+        context.sql("SELECT ");
+        context.identifier("column name");
+
+        assertThat(context.toSql()).isEqualTo("SELECT \"column name\"");
+    }
+
+    @Test
+    void shouldNotQuoteIdentifiersWithUnderscores() {
+        context.sql("SELECT ");
+        context.identifier("column_name");
+
+        assertThat(context.toSql()).isEqualTo("SELECT column_name");
+    }
 }

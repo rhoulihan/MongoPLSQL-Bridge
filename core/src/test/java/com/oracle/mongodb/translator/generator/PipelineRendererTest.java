@@ -11,21 +11,33 @@ import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
+import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
+import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
+import com.oracle.mongodb.translator.ast.stage.BucketStage;
+import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
+import com.oracle.mongodb.translator.ast.stage.FacetStage;
+import com.oracle.mongodb.translator.ast.stage.GraphLookupStage;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
+import com.oracle.mongodb.translator.ast.stage.LookupStage;
 import com.oracle.mongodb.translator.ast.stage.MatchStage;
 import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage.ProjectionField;
+import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage;
+import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage.WindowField;
 import com.oracle.mongodb.translator.ast.stage.SkipStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortField;
+import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
+import com.oracle.mongodb.translator.ast.stage.UnwindStage;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -311,5 +323,358 @@ class PipelineRendererTest {
         schemaRenderer.render(pipeline, ctx);
 
         assertThat(ctx.toSql()).isEqualTo("SELECT data FROM myschema.order_collection");
+    }
+
+    // Additional tests for better coverage
+
+    @Test
+    void shouldRenderLookupStage() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new LookupStage("products", "productId", "_id", "product")
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("LEFT OUTER JOIN")
+            .contains("products")
+            .contains("product");
+    }
+
+    @Test
+    void shouldRenderUnwindStage() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new UnwindStage("items", null, false)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("JSON_TABLE")
+            .contains("items");
+    }
+
+    @Test
+    void shouldRenderUnwindWithIncludeArrayIndex() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new UnwindStage("items", "itemIndex", false)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("JSON_TABLE")
+            .contains("FOR ORDINALITY");
+    }
+
+    @Test
+    void shouldRenderAddFieldsStage() {
+        var fields = new LinkedHashMap<String, Expression>();
+        fields.put("fullName", FieldPathExpression.of("name"));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new AddFieldsStage(fields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("SELECT")
+            .contains("fullName");
+    }
+
+    @Test
+    void shouldRenderUnionWithStage() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new UnionWithStage("inventory", List.of())
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("UNION ALL")
+            .contains("inventory");
+    }
+
+    @Test
+    void shouldRenderUnionWithPipeline() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new UnionWithStage("inventory", List.of(new LimitStage(5)))
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("UNION ALL")
+            .contains("pipeline");
+    }
+
+    @Test
+    void shouldRenderBucketStage() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                List.of(0, 100, 200, 500),
+                null,
+                accumulators
+            )
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("CASE")
+            .contains("WHEN")
+            .contains("GROUP BY");
+    }
+
+    @Test
+    void shouldRenderBucketStageWithDefault() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                List.of(0, 100, 200),
+                "Other",
+                accumulators
+            )
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("CASE")
+            .contains("ELSE");
+    }
+
+    @Test
+    void shouldRenderBucketStageWithNullLiteral() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                List.of(0, 100, 200),
+                null,
+                accumulators
+            )
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("CASE")
+            .contains("GROUP BY");
+    }
+
+    @Test
+    void shouldRenderBucketAutoStage() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                4,
+                accumulators,
+                null
+            )
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("NTILE(4)")
+            .contains("GROUP BY");
+    }
+
+    @Test
+    void shouldRenderFacetStage() {
+        var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+        facets.put("byStatus", List.of(
+            new GroupStage(FieldPathExpression.of("status"), new LinkedHashMap<>())
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new FacetStage(facets)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("SELECT");
+    }
+
+    @Test
+    void shouldRenderSetWindowFieldsStage() {
+        var output = new LinkedHashMap<String, WindowField>();
+        output.put("rank", new WindowField("$rank", null, null));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new SetWindowFieldsStage("$category", Map.of("amount", -1), output)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("RANK()")
+            .contains("OVER")
+            .contains("PARTITION BY");
+    }
+
+    @Test
+    void shouldRenderGraphLookupStage() {
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy", null, null)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("WITH");
+    }
+
+    @Test
+    void shouldRenderGraphLookupWithDepthField() {
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy", 5, "level")
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("WITH")
+            .contains("level");
+    }
+
+    @Test
+    void shouldRenderProjectWithExcludedFields() {
+        var projections = new LinkedHashMap<String, ProjectionField>();
+        projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+        projections.put("password", ProjectionField.exclude());
+
+        Pipeline pipeline = Pipeline.of("users",
+            new ProjectStage(projections)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("AS name")
+            .doesNotContain("password");
+    }
+
+    @Test
+    void shouldRenderProjectWithAllExcluded() {
+        var projections = new LinkedHashMap<String, ProjectionField>();
+        projections.put("password", ProjectionField.exclude());
+        projections.put("secret", ProjectionField.exclude());
+
+        Pipeline pipeline = Pipeline.of("users",
+            new ProjectStage(projections)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("NULL AS dummy");
+    }
+
+    @Test
+    void shouldRenderGroupWithEmptyAccumulators() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(null, accumulators)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("NULL AS dummy");
+    }
+
+    @Test
+    void shouldRenderSortAscending() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new SortStage(List.of(
+                new SortField(FieldPathExpression.of("name"), SortDirection.ASC)
+            ))
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("ORDER BY")
+            .doesNotContain("DESC");
+    }
+
+    @Test
+    void shouldRenderMultipleLookupStages() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new LookupStage("customers", "customerId", "_id", "customer"),
+            new LookupStage("products", "productId", "_id", "product")
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("LEFT OUTER JOIN customers")
+            .contains("LEFT OUTER JOIN products");
+    }
+
+    @Test
+    void shouldRenderMultipleAddFieldsStages() {
+        var fields1 = new LinkedHashMap<String, Expression>();
+        fields1.put("computed1", LiteralExpression.of(1));
+
+        var fields2 = new LinkedHashMap<String, Expression>();
+        fields2.put("computed2", LiteralExpression.of(2));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new AddFieldsStage(fields1),
+            new AddFieldsStage(fields2)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("computed1")
+            .contains("computed2");
+    }
+
+    @Test
+    void shouldRenderEmptyAddFieldsStage() {
+        var fields = new LinkedHashMap<String, Expression>();
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new AddFieldsStage(fields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .isEqualTo("SELECT data FROM orders");
+    }
+
+    @Test
+    void shouldRenderMultipleGraphLookupStages() {
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "managers", null, null),
+            new GraphLookupStage("employees", "$managerId", "managerId", "_id", "subordinates", null, null)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("WITH")
+            .contains("managers")
+            .contains("subordinates");
     }
 }

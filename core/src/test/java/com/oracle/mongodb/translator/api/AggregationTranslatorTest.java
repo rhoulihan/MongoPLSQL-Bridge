@@ -131,4 +131,135 @@ class AggregationTranslatorTest {
 
         assertThat(result.capability()).isEqualTo(TranslationCapability.FULL_SUPPORT);
     }
+
+    @Test
+    void shouldCreateTranslatorWithOptions() {
+        var options = TranslationOptions.builder()
+            .prettyPrint(true)
+            .strictMode(true)
+            .build();
+
+        var translatorWithOptions = AggregationTranslator.create(
+            OracleConfiguration.builder()
+                .collectionName("orders")
+                .build(),
+            options
+        );
+
+        assertThat(translatorWithOptions).isNotNull();
+        assertThat(translatorWithOptions.getOptions()).isEqualTo(options);
+    }
+
+    @Test
+    void shouldReturnConfiguration() {
+        var config = OracleConfiguration.builder()
+            .collectionName("products")
+            .schemaName("inventory")
+            .build();
+
+        var customTranslator = AggregationTranslator.create(config);
+
+        assertThat(customTranslator.getConfiguration()).isEqualTo(config);
+        assertThat(customTranslator.getConfiguration().collectionName()).isEqualTo("products");
+        assertThat(customTranslator.getConfiguration().schemaName()).isEqualTo("inventory");
+    }
+
+    @Test
+    void shouldReturnDefaultOptions() {
+        assertThat(translator.getOptions()).isNotNull();
+    }
+
+    @Test
+    void shouldTranslateMatchPipeline() {
+        var pipeline = List.of(
+            Document.parse("{\"$match\": {\"status\": \"active\"}}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("WHERE")
+            .contains("status");
+        assertThat(result.bindVariables()).isNotEmpty();
+    }
+
+    @Test
+    void shouldTranslateGroupPipeline() {
+        var pipeline = List.of(
+            Document.parse("{\"$group\": {\"_id\": \"$category\", \"total\": {\"$sum\": \"$amount\"}}}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("GROUP BY")
+            .contains("SUM");
+    }
+
+    @Test
+    void shouldTranslateProjectPipeline() {
+        var pipeline = List.of(
+            Document.parse("{\"$project\": {\"name\": 1, \"price\": 1}}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("AS name")
+            .contains("AS price");
+    }
+
+    @Test
+    void shouldTranslateSortPipeline() {
+        var pipeline = List.of(
+            Document.parse("{\"$sort\": {\"price\": -1}}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("ORDER BY")
+            .contains("DESC");
+    }
+
+    @Test
+    void shouldTranslateComplexPipeline() {
+        var pipeline = List.of(
+            Document.parse("{\"$match\": {\"active\": true}}"),
+            Document.parse("{\"$group\": {\"_id\": \"$category\", \"count\": {\"$count\": {}}}}"),
+            Document.parse("{\"$sort\": {\"count\": -1}}"),
+            Document.parse("{\"$limit\": 10}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("WHERE")
+            .contains("GROUP BY")
+            .contains("ORDER BY")
+            .contains("FETCH FIRST");
+    }
+
+    @Test
+    void shouldTranslateEmptyPipeline() {
+        var pipeline = List.<Document>of();
+
+        var result = translator.translate(pipeline);
+
+        assertThat(result.sql())
+            .contains("SELECT")
+            .contains("orders");
+    }
+
+    @Test
+    void shouldReturnWarningsWhenApplicable() {
+        var pipeline = List.of(
+            Document.parse("{\"$limit\": 10}")
+        );
+
+        var result = translator.translate(pipeline);
+
+        // Warnings list should exist (may be empty)
+        assertThat(result.warnings()).isNotNull();
+    }
 }

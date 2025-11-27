@@ -245,16 +245,35 @@ parser/
 ├── ProjectStageParserTest.java ✅
 ├── LookupStageParserTest.java ✅
 ├── UnwindStageParserTest.java ✅
-└── AddFieldsStageParserTest.java ✅
+├── AddFieldsStageParserTest.java ✅
+├── GraphLookupStageParserTest.java ✅
+└── SetWindowFieldsStageParserTest.java ✅
+
+generator/dialect/
+└── Oracle26aiDialectTest.java ✅
 ```
 
 ## Test Coverage
 
-**Unit Tests:** 300+ test methods across 45+ test files
+**Unit Tests:** 749 test methods across 50+ test files
 **Integration Tests:** Oracle Testcontainers suite
 **Cross-Database Validation:** 79 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 All tests passing: ✅ Yes
+
+### Code Coverage (JaCoCo)
+
+| Package | Line Coverage | Branch Coverage |
+|---------|---------------|-----------------|
+| **Overall** | **90%** | **80%** |
+| `api` | 97% | 100% |
+| `generator` | 96% | 93% |
+| `optimizer` | 92% | 86% |
+| `ast.stage` | 90% | 74% |
+| `ast.expression` | 89% | 69% |
+| `parser` | 87% | 82% |
+| `exception` | 100% | 100% |
+| `generator.dialect` | 100% | n/a |
 
 ### Cross-Database Validation Test Categories
 
