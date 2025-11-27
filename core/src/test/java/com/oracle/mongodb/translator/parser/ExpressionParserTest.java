@@ -665,4 +665,244 @@ class ExpressionParserTest {
         expr.render(context);
         assertThat(context.toSql()).contains("=");
     }
+
+    // Type conversion expression tests
+
+    @Test
+    void shouldParseToIntExpression() {
+        var doc = Document.parse("{\"$toInt\": \"$price\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TRUNC(TO_NUMBER(");
+    }
+
+    @Test
+    void shouldParseToLongExpression() {
+        var doc = Document.parse("{\"$toLong\": \"$count\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TRUNC(TO_NUMBER(");
+    }
+
+    @Test
+    void shouldParseToDoubleExpression() {
+        var doc = Document.parse("{\"$toDouble\": \"$amount\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TO_BINARY_DOUBLE(");
+    }
+
+    @Test
+    void shouldParseToDecimalExpression() {
+        var doc = Document.parse("{\"$toDecimal\": \"$total\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TO_NUMBER(");
+    }
+
+    @Test
+    void shouldParseToStringExpression() {
+        var doc = Document.parse("{\"$toString\": \"$code\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TO_CHAR(");
+    }
+
+    @Test
+    void shouldParseToBoolExpression() {
+        var doc = Document.parse("{\"$toBool\": \"$active\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("CASE WHEN");
+    }
+
+    @Test
+    void shouldParseToDateExpression() {
+        var doc = Document.parse("{\"$toDate\": \"$timestamp\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("TO_TIMESTAMP_TZ(");
+    }
+
+    @Test
+    void shouldParseTypeExpression() {
+        var doc = Document.parse("{\"$type\": \"$field\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("CASE");
+    }
+
+    @Test
+    void shouldParseIsNumberExpression() {
+        var doc = Document.parse("{\"$isNumber\": \"$value\"}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_LIKE");
+    }
+
+    @Test
+    void shouldParseConvertExpression() {
+        var doc = Document.parse("{\"$convert\": {\"input\": \"$value\", \"to\": \"int\", \"onNull\": 0}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("NVL(");
+    }
+
+    @Test
+    void shouldParseConvertWithoutOnNull() {
+        var doc = Document.parse("{\"$convert\": {\"input\": \"$value\", \"to\": \"int\"}}");
+        Expression expr = parser.parseValue(doc);
+        assertThat(expr).isNotNull();
+    }
+
+    // Additional String Operators Tests
+
+    @Test
+    void shouldParseSplitExpression() {
+        var doc = Document.parse("{\"$split\": [\"$text\", \",\"]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_SUBSTR");
+    }
+
+    @Test
+    void shouldParseIndexOfCPExpression() {
+        var doc = Document.parse("{\"$indexOfCP\": [\"$text\", \"abc\"]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("INSTR");
+    }
+
+    @Test
+    void shouldParseIndexOfCPWithStartExpression() {
+        var doc = Document.parse("{\"$indexOfCP\": [\"$text\", \"abc\", 5, 20]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("INSTR");
+    }
+
+    @Test
+    void shouldParseRegexMatchExpression() {
+        var doc = Document.parse("{\"$regexMatch\": {\"input\": \"$description\", \"regex\": \"pattern\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_LIKE");
+    }
+
+    @Test
+    void shouldParseRegexMatchWithOptionsExpression() {
+        var doc = Document.parse("{\"$regexMatch\": {\"input\": \"$description\", \"regex\": \"pattern\", \"options\": \"i\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_LIKE");
+        // Options is passed as a bind variable
+        assertThat(context.getBindVariables()).contains("i");
+    }
+
+    @Test
+    void shouldParseRegexFindExpression() {
+        var doc = Document.parse("{\"$regexFind\": {\"input\": \"$text\", \"regex\": \"\\\\d+\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_INSTR");
+    }
+
+    @Test
+    void shouldParseReplaceOneExpression() {
+        var doc = Document.parse("{\"$replaceOne\": {\"input\": \"$text\", \"find\": \"foo\", \"replacement\": \"bar\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_REPLACE");
+    }
+
+    @Test
+    void shouldParseReplaceAllExpression() {
+        var doc = Document.parse("{\"$replaceAll\": {\"input\": \"$text\", \"find\": \"foo\", \"replacement\": \"bar\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("REGEXP_REPLACE");
+    }
+
+    @Test
+    void shouldThrowForInvalidRegexMatchDocument() {
+        var doc = Document.parse("{\"$regexMatch\": {\"input\": \"$text\"}}");
+        assertThatThrownBy(() -> parser.parseValue(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("regex");
+    }
+
+    @Test
+    void shouldThrowForInvalidReplaceOneDocument() {
+        var doc = Document.parse("{\"$replaceOne\": {\"input\": \"$text\", \"find\": \"foo\"}}");
+        assertThatThrownBy(() -> parser.parseValue(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("replacement");
+    }
+
+    // Additional Array Operators Tests
+
+    @Test
+    void shouldParseConcatArraysExpression() {
+        var doc = Document.parse("{\"$concatArrays\": [\"$arr1\", \"$arr2\"]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("JSON_ARRAYAGG");
+    }
+
+    @Test
+    void shouldParseSliceExpression() {
+        var doc = Document.parse("{\"$slice\": [\"$items\", 3]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("JSON_QUERY");
+    }
+
+    @Test
+    void shouldParseSliceWithSkipExpression() {
+        var doc = Document.parse("{\"$slice\": [\"$items\", 2, 5]}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("JSON_QUERY");
+    }
+
+    @Test
+    void shouldParseFilterExpression() {
+        var doc = Document.parse("{\"$filter\": {\"input\": \"$items\", \"as\": \"item\", \"cond\": true}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("JSON_ARRAYAGG");
+    }
+
+    @Test
+    void shouldParseMapExpression() {
+        var doc = Document.parse("{\"$map\": {\"input\": \"$items\", \"as\": \"item\", \"in\": \"$item\"}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        assertThat(context.toSql()).contains("JSON_ARRAYAGG");
+    }
+
+    @Test
+    void shouldParseReduceExpression() {
+        var doc = Document.parse("{\"$reduce\": {\"input\": \"$items\", \"initialValue\": 0, \"in\": 1}}");
+        Expression expr = parser.parseValue(doc);
+        expr.render(context);
+        // $reduce is complex and renders a placeholder
+        assertThat(context.toSql()).contains("NULL");
+    }
+
+    @Test
+    void shouldThrowForInvalidSliceArgs() {
+        var doc = Document.parse("{\"$slice\": [\"$items\"]}");
+        assertThatThrownBy(() -> parser.parseValue(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("2 or 3 arguments");
+    }
+
+    @Test
+    void shouldThrowForInvalidFilterDocument() {
+        var doc = Document.parse("{\"$filter\": {\"input\": \"$items\"}}");
+        assertThatThrownBy(() -> parser.parseValue(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("cond");
+    }
 }

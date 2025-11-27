@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2024-11-26
+**Last Updated:** 2025-11-26
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -68,9 +68,9 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-032 | $unwind Stage Implementation | ✅ Done | JSON_TABLE with NESTED PATH |
 | IMPL-033 | $addFields/$set Stage Implementation | ✅ Done | Computed columns in SELECT |
 | IMPL-034 | Additional Accumulators | ✅ Done | $push (JSON_ARRAYAGG), $addToSet (DISTINCT) |
-| IMPL-035 | String Operators | ✅ Done | $concat, $toLower, $toUpper, $substr, $trim, $ltrim, $rtrim, $strLenCP |
+| IMPL-035 | String Operators | ✅ Done | $concat, $toLower, $toUpper, $substr, $trim, $ltrim, $rtrim, $strLenCP, $split, $indexOfCP, $regexMatch, $regexFind, $replaceOne, $replaceAll |
 | IMPL-036 | Date Operators | ✅ Done | $year, $month, $dayOfMonth, $hour, $minute, $second, $dayOfWeek, $dayOfYear |
-| IMPL-037 | Array Operators | ✅ Done | $arrayElemAt, $size, $first, $last |
+| IMPL-037 | Array Operators | ✅ Done | $arrayElemAt, $size, $first, $last, $filter, $map, $reduce, $concatArrays, $slice |
 | IMPL-038 | Predicate Pushdown Optimizer | ✅ Done | Moves $match before $project/$limit/$sort |
 | IMPL-039 | Sort-Limit Optimization | ✅ Done | Top-N optimization with limit hints |
 | IMPL-040 | Optimization Chain | ✅ Done | Configurable optimizer chain |
@@ -78,10 +78,14 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-042 | $bucket/$bucketAuto Stages | ✅ Done | CASE expressions, NTILE for auto |
 | IMPL-043 | $merge/$out Stages | ✅ Done | INSERT/MERGE statements (stub) |
 | IMPL-044 | $unionWith Stage | ✅ Done | UNION ALL |
-| IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation |
+| IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation with restrictSearchWithMatch |
 | IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
 | IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
 | IMPL-048 | Integration Test Suite | ✅ Done | 79 cross-validation tests |
+| IMPL-049 | Type Conversion Operators | ✅ Done | $type, $toInt, $toString, $toDouble, $toBool, $toDate |
+| IMPL-050 | $redact Stage | ✅ Done | Document-level filtering with $$PRUNE/$$KEEP/$$DESCEND |
+| IMPL-051 | $sample Stage | ✅ Done | Random sampling with DBMS_RANDOM.VALUE |
+| IMPL-052 | $count Stage | ✅ Done | Document count with JSON_OBJECT output |
 
 ## Files Created
 
@@ -116,7 +120,9 @@ ast/
 │   ├── DateOp.java ✅
 │   ├── DateExpression.java ✅
 │   ├── ArrayOp.java ✅
-│   └── ArrayExpression.java ✅
+│   ├── ArrayExpression.java ✅
+│   ├── TypeConversionOp.java ✅
+│   └── TypeConversionExpression.java ✅
 └── stage/
     ├── Stage.java ✅
     ├── LimitStage.java ✅
@@ -136,7 +142,10 @@ ast/
     ├── MergeStage.java ✅
     ├── OutStage.java ✅
     ├── GraphLookupStage.java ✅
-    └── SetWindowFieldsStage.java ✅
+    ├── SetWindowFieldsStage.java ✅
+    ├── RedactStage.java ✅
+    ├── SampleStage.java ✅
+    └── CountStage.java ✅
 
 optimizer/
 ├── PipelineOptimizer.java ✅
@@ -178,7 +187,10 @@ parser/
 ├── MergeStageParser.java ✅
 ├── OutStageParser.java ✅
 ├── GraphLookupStageParser.java ✅
-└── SetWindowFieldsStageParser.java ✅
+├── SetWindowFieldsStageParser.java ✅
+├── RedactStageParser.java ✅
+├── SampleStageParser.java ✅
+└── CountStageParser.java ✅
 ```
 
 ### Test Files (`core/src/test/java/com/oracle/mongodb/translator/`)
@@ -208,7 +220,9 @@ ast/
 │   ├── DateOpTest.java ✅
 │   ├── DateExpressionTest.java ✅
 │   ├── ArrayOpTest.java ✅
-│   └── ArrayExpressionTest.java ✅
+│   ├── ArrayExpressionTest.java ✅
+│   ├── TypeConversionOpTest.java ✅
+│   └── TypeConversionExpressionTest.java ✅
 └── stage/
     ├── LimitStageTest.java ✅
     ├── SkipStageTest.java ✅
@@ -219,7 +233,11 @@ ast/
     ├── SortStageTest.java ✅
     ├── LookupStageTest.java ✅
     ├── UnwindStageTest.java ✅
-    └── AddFieldsStageTest.java ✅
+    ├── AddFieldsStageTest.java ✅
+    ├── RedactStageTest.java ✅
+    ├── SampleStageTest.java ✅
+    ├── CountStageTest.java ✅
+    └── GraphLookupStageTest.java ✅
 
 optimizer/
 ├── PredicatePushdownOptimizerTest.java ✅
@@ -247,7 +265,10 @@ parser/
 ├── UnwindStageParserTest.java ✅
 ├── AddFieldsStageParserTest.java ✅
 ├── GraphLookupStageParserTest.java ✅
-└── SetWindowFieldsStageParserTest.java ✅
+├── SetWindowFieldsStageParserTest.java ✅
+├── RedactStageParserTest.java ✅
+├── SampleStageParserTest.java ✅
+└── CountStageParserTest.java ✅
 
 generator/dialect/
 └── Oracle26aiDialectTest.java ✅
@@ -336,6 +357,107 @@ ORDER BY JSON_VALUE(data, '$.total' RETURNING NUMBER) DESC
 FETCH FIRST 5 ROWS ONLY
 ```
 
+### Random Sampling ($sample)
+```javascript
+// MongoDB
+db.products.aggregate([
+  { $sample: { size: 5 } }
+])
+```
+```sql
+-- Oracle SQL
+SELECT data FROM products
+ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 5 ROWS ONLY
+```
+
+### Document Count ($count)
+```javascript
+// MongoDB
+db.orders.aggregate([
+  { $match: { status: "completed" } },
+  { $count: "completedOrders" }
+])
+```
+```sql
+-- Oracle SQL
+SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS data FROM orders
+WHERE JSON_VALUE(data, '$.status') = :1
+```
+
+### Type Conversion
+```javascript
+// MongoDB
+db.orders.aggregate([
+  { $project: {
+    amountAsString: { $toString: "$amount" },
+    quantityAsInt: { $toInt: "$quantity" },
+    dataType: { $type: "$status" }
+  }}
+])
+```
+```sql
+-- Oracle SQL
+SELECT JSON_OBJECT(
+  'amountAsString' VALUE TO_CHAR(JSON_VALUE(data, '$.amount' RETURNING NUMBER)),
+  'quantityAsInt' VALUE TO_NUMBER(JSON_VALUE(data, '$.quantity')),
+  'dataType' VALUE JSON_VALUE(data, '$.status.type()')
+) AS data FROM orders
+```
+
+### String Operations with Regex
+```javascript
+// MongoDB
+db.users.aggregate([
+  { $project: {
+    emailParts: { $split: ["$email", "@"] },
+    hasGmail: { $regexMatch: { input: "$email", regex: "gmail\\.com$" } },
+    domain: { $replaceOne: { input: "$email", find: "old.com", replacement: "new.com" } }
+  }}
+])
+```
+```sql
+-- Oracle SQL
+SELECT JSON_OBJECT(
+  'emailParts' VALUE (SELECT JSON_ARRAYAGG(val) FROM JSON_TABLE(JSON_VALUE(data, '$.email'), '$' COLUMNS val PATH '$[*]') WHERE val IS NOT NULL),
+  'hasGmail' VALUE CASE WHEN REGEXP_LIKE(JSON_VALUE(data, '$.email'), :1) THEN 1 ELSE 0 END,
+  'domain' VALUE REGEXP_REPLACE(JSON_VALUE(data, '$.email'), :2, :3, 1, 1)
+) AS data FROM users
+```
+
+### Array Operations
+```javascript
+// MongoDB
+db.orders.aggregate([
+  { $project: {
+    filteredItems: { $filter: { input: "$items", as: "item", cond: { $gt: ["$$item.price", 100] } } },
+    itemNames: { $map: { input: "$items", as: "item", in: "$$item.name" } },
+    totalQuantity: { $reduce: { input: "$items", initialValue: 0, in: { $add: ["$$value", "$$this.qty"] } } },
+    firstThree: { $slice: ["$tags", 3] }
+  }}
+])
+```
+
+### Document Redaction ($redact)
+```javascript
+// MongoDB - filter documents based on security level
+db.documents.aggregate([
+  { $redact: {
+    $cond: {
+      if: { $eq: ["$level", 5] },
+      then: "$$PRUNE",
+      else: "$$DESCEND"
+    }
+  }}
+])
+```
+```sql
+-- Oracle SQL
+SELECT data FROM documents
+/* $redact */ WHERE CASE WHEN
+  CASE WHEN JSON_VALUE(data, '$.level' RETURNING NUMBER) = :1 THEN '$$PRUNE' ELSE '$$DESCEND' END
+  = '$$PRUNE' THEN 0 ELSE 1 END = 1
+```
+
 ## Cross-Database Validation
 
 The `query-tests/` directory contains comprehensive validation tests that execute queries against both MongoDB 8.0 and Oracle 23.6 to ensure consistent results.
@@ -374,10 +496,13 @@ Run validation tests:
 
 ## Next Steps
 
-1. Add additional MongoDB expression operators ($type, $toInt, $toString, etc.)
-2. Implement $graphLookup with restrictSearchWithMatch option
-3. Add more complex window function tests
-4. Expand documentation with more examples
+1. ~~Add additional MongoDB expression operators ($type, $toInt, $toString, etc.)~~ ✅ Done
+2. ~~Implement $graphLookup with restrictSearchWithMatch option~~ ✅ Done
+3. ~~Expand documentation with more examples~~ ✅ Done
+4. ~~Create performance benchmark suite~~ ✅ Done (benchmarks/ module with JMH)
+5. ~~Add query test cases for new operators~~ ✅ Done (23 new test cases)
+6. Add more complex window function tests
+7. Implement additional operators as needed
 
 ## Git Commits
 

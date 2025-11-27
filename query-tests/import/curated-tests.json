@@ -2024,6 +2024,601 @@
         }
       ],
       "expected_count": 1
+    },
+    {
+      "id": "CUR040",
+      "name": "$split - split string by delimiter",
+      "category": "string",
+      "operator": "$split",
+      "description": "Curated test from MongoDB patterns: $split - split string by delimiter",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "parts": {
+              "$split": ["$str", "l"]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "parts": ["he", "", "o"]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR041",
+      "name": "$indexOfCP - find position of substring",
+      "category": "string",
+      "operator": "$indexOfCP",
+      "description": "Curated test from MongoDB patterns: $indexOfCP - find position of substring",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "position": {
+              "$indexOfCP": ["$str", "ll"]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "position": 2
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR042",
+      "name": "$indexOfCP - not found returns -1",
+      "category": "string",
+      "operator": "$indexOfCP",
+      "description": "Curated test from MongoDB patterns: $indexOfCP - not found returns -1",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "position": {
+              "$indexOfCP": ["$str", "xyz"]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "position": -1
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR043",
+      "name": "$regexMatch - basic pattern matching",
+      "category": "string",
+      "operator": "$regexMatch",
+      "description": "Curated test from MongoDB patterns: $regexMatch - basic pattern matching",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "hasDigit": {
+              "$regexMatch": {
+                "input": "$mixed",
+                "regex": "[0-9]"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        },
+        {
+          "$limit": 3
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": "_id",
+      "expected_result": [
+        {
+          "_id": 1,
+          "hasDigit": false
+        },
+        {
+          "_id": 2,
+          "hasDigit": true
+        },
+        {
+          "_id": 3,
+          "hasDigit": false
+        }
+      ],
+      "expected_count": 3
+    },
+    {
+      "id": "CUR044",
+      "name": "$replaceOne - replace first occurrence",
+      "category": "string",
+      "operator": "$replaceOne",
+      "description": "Curated test from MongoDB patterns: $replaceOne - replace first occurrence",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "replaced": {
+              "$replaceOne": {
+                "input": "$str",
+                "find": "l",
+                "replacement": "L"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "replaced": "heLlo"
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR045",
+      "name": "$replaceAll - replace all occurrences",
+      "category": "string",
+      "operator": "$replaceAll",
+      "description": "Curated test from MongoDB patterns: $replaceAll - replace all occurrences",
+      "collection": "string_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "replaced": {
+              "$replaceAll": {
+                "input": "$str",
+                "find": "l",
+                "replacement": "L"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "replaced": "heLLo"
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR046",
+      "name": "$filter - filter array by condition",
+      "category": "array",
+      "operator": "$filter",
+      "description": "Curated test from MongoDB patterns: $filter - filter array by condition",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "filtered": {
+              "$filter": {
+                "input": "$arr",
+                "as": "num",
+                "cond": {
+                  "$gt": ["$$num", 2]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "filtered": [3, 4, 5]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR047",
+      "name": "$map - transform array elements",
+      "category": "array",
+      "operator": "$map",
+      "description": "Curated test from MongoDB patterns: $map - transform array elements",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "doubled": {
+              "$map": {
+                "input": "$arr",
+                "as": "num",
+                "in": {
+                  "$multiply": ["$$num", 2]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "doubled": [2, 4, 6, 8, 10]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR048",
+      "name": "$reduce - sum array elements",
+      "category": "array",
+      "operator": "$reduce",
+      "description": "Curated test from MongoDB patterns: $reduce - sum array elements",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "total": {
+              "$reduce": {
+                "input": "$arr",
+                "initialValue": 0,
+                "in": {
+                  "$add": ["$$value", "$$this"]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "total": 15
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR049",
+      "name": "$concatArrays - concatenate two arrays",
+      "category": "array",
+      "operator": "$concatArrays",
+      "description": "Curated test from MongoDB patterns: $concatArrays - concatenate two arrays",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "combined": {
+              "$concatArrays": ["$arr", "$tags"]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "combined": [1, 2, 3, 4, 5, "a", "b", "c"]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR050",
+      "name": "$slice - get first N elements",
+      "category": "array",
+      "operator": "$slice",
+      "description": "Curated test from MongoDB patterns: $slice - get first N elements",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "firstThree": {
+              "$slice": ["$arr", 3]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "firstThree": [1, 2, 3]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR051",
+      "name": "$slice - get last N elements",
+      "category": "array",
+      "operator": "$slice",
+      "description": "Curated test from MongoDB patterns: $slice - get last N elements",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "lastTwo": {
+              "$slice": ["$arr", -2]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "lastTwo": [4, 5]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR052",
+      "name": "$slice - get elements from position with count",
+      "category": "array",
+      "operator": "$slice",
+      "description": "Curated test from MongoDB patterns: $slice - get elements from position with count",
+      "collection": "array_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "middle": {
+              "$slice": ["$arr", 1, 3]
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "middle": [2, 3, 4]
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR053",
+      "name": "$toInt - convert to integer",
+      "category": "typeConversion",
+      "operator": "$toInt",
+      "description": "Curated test from MongoDB patterns: $toInt - convert to integer",
+      "collection": "arith_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 5
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "intVal": {
+              "$toInt": "$a"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 5,
+          "intVal": 7
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR054",
+      "name": "$toString - convert to string",
+      "category": "typeConversion",
+      "operator": "$toString",
+      "description": "Curated test from MongoDB patterns: $toString - convert to string",
+      "collection": "arith_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "strVal": {
+              "$toString": "$a"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "strVal": "10"
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR055",
+      "name": "$toDouble - convert to double",
+      "category": "typeConversion",
+      "operator": "$toDouble",
+      "description": "Curated test from MongoDB patterns: $toDouble - convert to double",
+      "collection": "arith_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "doubleVal": {
+              "$toDouble": "$a"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": null,
+      "expected_result": [
+        {
+          "_id": 1,
+          "doubleVal": 10.0
+        }
+      ],
+      "expected_count": 1
+    },
+    {
+      "id": "CUR056",
+      "name": "$type - get BSON type of field",
+      "category": "typeConversion",
+      "operator": "$type",
+      "description": "Curated test from MongoDB patterns: $type - get BSON type of field",
+      "collection": "arith_tests",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": {
+              "$in": [1, 6]
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "aType": {
+              "$type": "$a"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "sort_by": "_id",
+      "expected_result": [
+        {
+          "_id": 1,
+          "aType": "int"
+        },
+        {
+          "_id": 6,
+          "aType": "null"
+        }
+      ],
+      "expected_count": 2
     }
   ]
 }

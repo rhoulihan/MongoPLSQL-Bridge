@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
+import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -117,5 +118,78 @@ class GraphLookupStageTest {
             .contains("employees")
             .contains("maxDepth=5")
             .contains("depthField=level");
+    }
+
+    // restrictSearchWithMatch tests
+
+    @Test
+    void shouldCreateWithRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"status\": \"active\"}");
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+            null, null, restrictMatch
+        );
+
+        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+        assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
+    }
+
+    @Test
+    void shouldCreateWithAllOptionsIncludingRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"active\": true}");
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+            5, "level", restrictMatch
+        );
+
+        assertThat(stage.getFrom()).isEqualTo("employees");
+        assertThat(stage.getMaxDepth()).isEqualTo(5);
+        assertThat(stage.getDepthField()).isEqualTo("level");
+        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+    }
+
+    @Test
+    void shouldRenderCteWithRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"status\": \"active\"}");
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+            null, null, restrictMatch
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("WITH graph_hierarchy");
+        assertThat(sql).contains("UNION ALL");
+        // The restrict match should add a WHERE clause filtering by status
+        assertThat(sql).contains("status");
+    }
+
+    @Test
+    void shouldRenderCteWithMaxDepthAndRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"department\": \"Engineering\"}");
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+            5, null, restrictMatch
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("graph_depth < 5");
+        assertThat(sql).contains("department");
+    }
+
+    @Test
+    void shouldIncludeRestrictSearchWithMatchInToString() {
+        var restrictMatch = Document.parse("{\"status\": \"active\"}");
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+            null, null, restrictMatch
+        );
+
+        assertThat(stage.toString())
+            .contains("GraphLookupStage")
+            .contains("restrictSearchWithMatch");
     }
 }

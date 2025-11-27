@@ -118,4 +118,60 @@ class ArrayExpressionTest {
         assertThat(context.toSql())
             .isEqualTo("JSON_VALUE(data, '$.orders.items[0]')");
     }
+
+    // New array operator tests
+
+    @Test
+    void shouldRenderConcatArrays() {
+        // MongoDB: {$concatArrays: ["$arr1", "$arr2"]}
+        var expr = ArrayExpression.concatArrays(
+            java.util.List.of(
+                FieldPathExpression.of("arr1"),
+                FieldPathExpression.of("arr2")
+            )
+        );
+
+        expr.render(context);
+
+        // Uses JSON_ARRAYAGG with JSON_TABLE to flatten and re-aggregate
+        assertThat(context.toSql()).contains("JSON_ARRAYAGG");
+        assertThat(context.toSql()).contains("JSON_TABLE");
+        assertThat(context.toSql()).contains("arr1");
+        assertThat(context.toSql()).contains("arr2");
+    }
+
+    @Test
+    void shouldRenderSliceWithTwoArgs() {
+        // MongoDB: {$slice: ["$items", 3]} - first 3 elements
+        var expr = ArrayExpression.slice(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(3)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("JSON_QUERY");
+    }
+
+    @Test
+    void shouldRenderSliceWithThreeArgs() {
+        // MongoDB: {$slice: ["$items", 2, 5]} - skip 2, take 5
+        var expr = ArrayExpression.sliceWithSkip(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(2),
+            LiteralExpression.of(5)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("JSON_QUERY");
+    }
+
+    @Test
+    void shouldReturnNewOps() {
+        assertThat(ArrayExpression.concatArrays(java.util.List.of(FieldPathExpression.of("x"))).getOp())
+            .isEqualTo(ArrayOp.CONCAT_ARRAYS);
+        assertThat(ArrayExpression.slice(FieldPathExpression.of("x"), LiteralExpression.of(1)).getOp())
+            .isEqualTo(ArrayOp.SLICE);
+    }
 }

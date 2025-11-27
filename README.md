@@ -32,9 +32,10 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 - Logical: `$and`, `$or`, `$not`, `$nor`
 - Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`
 - Conditional: `$cond`, `$ifNull`
-- String: `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`
+- String: `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll`
 - Date: `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear`
-- Array: `$arrayElemAt`, `$size`, `$first`, `$last`
+- Array: `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice`
+- Type Conversion: `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate`
 
 **Accumulator Operators:**
 - `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet`
@@ -46,9 +47,9 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 79 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 102 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (10), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4), $redact (2), $sample (2), $count (3), $graphLookup (1)
 
 ### Test Coverage
 
@@ -70,8 +71,11 @@ All 79 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [
 - `$bucket` - CASE expression grouping
 - `$bucketAuto` - NTILE-based automatic bucketing
 - `$facet` - Multiple parallel subqueries (JSON_OBJECT)
-- `$graphLookup` - Recursive CTE for hierarchical queries
+- `$graphLookup` - Recursive CTE for hierarchical queries (with restrictSearchWithMatch)
 - `$setWindowFields` - Window functions (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.)
+- `$redact` - Document-level filtering ($$PRUNE/$$KEEP/$$DESCEND)
+- `$sample` - Random sampling (DBMS_RANDOM.VALUE)
+- `$count` - Document count (JSON_OBJECT output)
 - `$merge` - MERGE statement (stub)
 - `$out` - INSERT statement (stub)
 
@@ -157,6 +161,9 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | `$facet` | ✅ Implemented | Multiple subqueries (JSON_OBJECT) |
 | `$graphLookup` | ✅ Implemented | Recursive CTE |
 | `$setWindowFields` | ✅ Implemented | Window functions |
+| `$redact` | ✅ Implemented | Conditional WHERE clause |
+| `$sample` | ✅ Implemented | ORDER BY DBMS_RANDOM.VALUE |
+| `$count` | ✅ Implemented | SELECT JSON_OBJECT(... COUNT(*)) |
 | `$merge` | ✅ Stub | MERGE statement |
 | `$out` | ✅ Stub | INSERT statement |
 
@@ -168,9 +175,10 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | Logical | `$and`, `$or`, `$not`, `$nor` | ✅ Implemented |
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` | ✅ Implemented |
 | Conditional | `$cond`, `$ifNull` | ✅ Implemented |
-| String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP` | ✅ Implemented |
+| String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll` | ✅ Implemented |
 | Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` | ✅ Implemented |
-| Array | `$arrayElemAt`, `$size`, `$first`, `$last` | ✅ Implemented |
+| Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice` | ✅ Implemented |
+| Type Conversion | `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate` | ✅ Implemented |
 
 ### Accumulator Operators
 
@@ -271,6 +279,7 @@ mongo-oracle-translator/
 │   ├── tests/               # Test case definitions
 │   ├── scripts/             # Test runner scripts
 │   └── results/             # Test output
+├── benchmarks/              # JMH performance benchmarks
 ├── docs/                    # Documentation
 ├── scripts/                 # Environment management
 └── docker-compose.yml       # MongoDB + Oracle setup

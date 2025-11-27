@@ -147,4 +147,137 @@ class StringExpressionTest {
 
         assertThat(context.toSql()).isEqualTo("UPPER(TRIM(JSON_VALUE(data, '$.name')))");
     }
+
+    // New string operator tests
+
+    @Test
+    void shouldRenderSplit() {
+        // {$split: ["$text", ","]}
+        var expr = StringExpression.split(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of(",")
+        );
+
+        expr.render(context);
+
+        // Oracle doesn't have direct split function, but we can use a JSON array approach
+        // or REGEXP_SUBSTR in a nested pattern
+        assertThat(context.toSql()).contains("REGEXP_SUBSTR");
+    }
+
+    @Test
+    void shouldRenderIndexOfCP() {
+        // {$indexOfCP: ["$text", "abc"]}
+        var expr = StringExpression.indexOfCP(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of("abc")
+        );
+
+        expr.render(context);
+
+        // Oracle INSTR returns 1-based index, MongoDB expects 0-based
+        // So we need to subtract 1 from the result
+        assertThat(context.toSql()).contains("INSTR");
+    }
+
+    @Test
+    void shouldRenderIndexOfCPWithStartEnd() {
+        // {$indexOfCP: ["$text", "abc", 5, 20]}
+        var expr = StringExpression.indexOfCP(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of("abc"),
+            LiteralExpression.of(5),
+            LiteralExpression.of(20)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("INSTR");
+    }
+
+    @Test
+    void shouldRenderRegexMatch() {
+        // {$regexMatch: {input: "$description", regex: "pattern"}}
+        var expr = StringExpression.regexMatch(
+            FieldPathExpression.of("description"),
+            LiteralExpression.of("pattern")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("REGEXP_LIKE");
+    }
+
+    @Test
+    void shouldRenderRegexMatchWithOptions() {
+        // {$regexMatch: {input: "$description", regex: "pattern", options: "i"}}
+        var expr = StringExpression.regexMatch(
+            FieldPathExpression.of("description"),
+            LiteralExpression.of("pattern"),
+            LiteralExpression.of("i")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("REGEXP_LIKE");
+        // Options is passed as a bind variable
+        assertThat(context.getBindVariables()).contains("i");
+    }
+
+    @Test
+    void shouldRenderRegexFind() {
+        // {$regexFind: {input: "$text", regex: "\\d+"}}
+        var expr = StringExpression.regexFind(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of("\\d+")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("REGEXP_INSTR");
+    }
+
+    @Test
+    void shouldRenderReplaceOne() {
+        // {$replaceOne: {input: "$text", find: "foo", replacement: "bar"}}
+        var expr = StringExpression.replaceOne(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of("foo"),
+            LiteralExpression.of("bar")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("REGEXP_REPLACE");
+    }
+
+    @Test
+    void shouldRenderReplaceAll() {
+        // {$replaceAll: {input: "$text", find: "foo", replacement: "bar"}}
+        var expr = StringExpression.replaceAll(
+            FieldPathExpression.of("text"),
+            LiteralExpression.of("foo"),
+            LiteralExpression.of("bar")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("REGEXP_REPLACE");
+    }
+
+    @Test
+    void shouldReturnNewOps() {
+        assertThat(StringExpression.split(FieldPathExpression.of("x"), LiteralExpression.of(",")).getOp())
+            .isEqualTo(StringOp.SPLIT);
+        assertThat(StringExpression.indexOfCP(FieldPathExpression.of("x"), LiteralExpression.of("a")).getOp())
+            .isEqualTo(StringOp.INDEX_OF_CP);
+        assertThat(StringExpression.regexMatch(FieldPathExpression.of("x"), LiteralExpression.of("a")).getOp())
+            .isEqualTo(StringOp.REGEX_MATCH);
+        assertThat(StringExpression.regexFind(FieldPathExpression.of("x"), LiteralExpression.of("a")).getOp())
+            .isEqualTo(StringOp.REGEX_FIND);
+        assertThat(StringExpression.replaceOne(FieldPathExpression.of("x"), LiteralExpression.of("a"), LiteralExpression.of("b")).getOp())
+            .isEqualTo(StringOp.REPLACE_ONE);
+        assertThat(StringExpression.replaceAll(FieldPathExpression.of("x"), LiteralExpression.of("a"), LiteralExpression.of("b")).getOp())
+            .isEqualTo(StringOp.REPLACE_ALL);
+    }
 }

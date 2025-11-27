@@ -20,18 +20,34 @@ public enum StringOp {
     TRIM("TRIM", "$trim"),
     LTRIM("LTRIM", "$ltrim"),
     RTRIM("RTRIM", "$rtrim"),
-    STRLEN("LENGTH", "$strLenCP");
+    STRLEN("LENGTH", "$strLenCP"),
+    SPLIT("SPLIT", "$split"),
+    INDEX_OF_CP("INSTR", "$indexOfCP"),
+    REGEX_MATCH("REGEXP_LIKE", "$regexMatch"),
+    REGEX_FIND("REGEXP_INSTR", "$regexFind"),
+    REPLACE_ONE("REGEXP_REPLACE", "$replaceOne"),
+    REPLACE_ALL("REGEXP_REPLACE", "$replaceAll");
 
-    private static final Map<String, StringOp> MONGO_LOOKUP = Map.of(
-        "$concat", CONCAT,
-        "$toLower", TO_LOWER,
-        "$toUpper", TO_UPPER,
-        "$substr", SUBSTR,
-        "$trim", TRIM,
-        "$ltrim", LTRIM,
-        "$rtrim", RTRIM,
-        "$strLenCP", STRLEN
-    );
+    private static final Map<String, StringOp> MONGO_LOOKUP;
+
+    static {
+        MONGO_LOOKUP = Map.ofEntries(
+            Map.entry("$concat", CONCAT),
+            Map.entry("$toLower", TO_LOWER),
+            Map.entry("$toUpper", TO_UPPER),
+            Map.entry("$substr", SUBSTR),
+            Map.entry("$trim", TRIM),
+            Map.entry("$ltrim", LTRIM),
+            Map.entry("$rtrim", RTRIM),
+            Map.entry("$strLenCP", STRLEN),
+            Map.entry("$split", SPLIT),
+            Map.entry("$indexOfCP", INDEX_OF_CP),
+            Map.entry("$regexMatch", REGEX_MATCH),
+            Map.entry("$regexFind", REGEX_FIND),
+            Map.entry("$replaceOne", REPLACE_ONE),
+            Map.entry("$replaceAll", REPLACE_ALL)
+        );
+    }
 
     private final String sqlFunction;
     private final String mongoOperator;

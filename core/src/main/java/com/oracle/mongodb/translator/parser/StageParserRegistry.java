@@ -98,6 +98,18 @@ public final class StageParserRegistry {
         // $setWindowFields stage - window functions (stub)
         SetWindowFieldsStageParser setWindowFieldsParser = new SetWindowFieldsStageParser();
         register("$setWindowFields", value -> setWindowFieldsParser.parse((Document) value));
+
+        // $redact stage - filter content based on document level
+        RedactStageParser redactParser = new RedactStageParser();
+        register("$redact", redactParser::parse);
+
+        // $sample stage - randomly select documents
+        SampleStageParser sampleParser = new SampleStageParser();
+        register("$sample", value -> sampleParser.parse(value));
+
+        // $count stage - count documents
+        CountStageParser countParser = new CountStageParser();
+        register("$count", countParser::parse);
     }
 
     private SortStage parseSortStage(Object value) {

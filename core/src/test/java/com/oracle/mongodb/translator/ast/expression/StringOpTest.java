@@ -23,7 +23,13 @@ class StringOpTest {
         "$trim, TRIM",
         "$ltrim, LTRIM",
         "$rtrim, RTRIM",
-        "$strLenCP, LENGTH"
+        "$strLenCP, LENGTH",
+        "$split, SPLIT",
+        "$indexOfCP, INSTR",
+        "$regexMatch, REGEXP_LIKE",
+        "$regexFind, REGEXP_INSTR",
+        "$replaceOne, REGEXP_REPLACE",
+        "$replaceAll, REGEXP_REPLACE"
     })
     void shouldMapMongoToSql(String mongoOp, String sqlFunc) {
         StringOp op = StringOp.fromMongo(mongoOp);
@@ -51,6 +57,12 @@ class StringOpTest {
         assertThat(StringOp.isStringOp("$toUpper")).isTrue();
         assertThat(StringOp.isStringOp("$substr")).isTrue();
         assertThat(StringOp.isStringOp("$trim")).isTrue();
+        assertThat(StringOp.isStringOp("$split")).isTrue();
+        assertThat(StringOp.isStringOp("$indexOfCP")).isTrue();
+        assertThat(StringOp.isStringOp("$regexMatch")).isTrue();
+        assertThat(StringOp.isStringOp("$regexFind")).isTrue();
+        assertThat(StringOp.isStringOp("$replaceOne")).isTrue();
+        assertThat(StringOp.isStringOp("$replaceAll")).isTrue();
     }
 
     @Test

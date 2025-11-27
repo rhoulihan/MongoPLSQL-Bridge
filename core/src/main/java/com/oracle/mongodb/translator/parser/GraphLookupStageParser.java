@@ -62,7 +62,18 @@ public final class GraphLookupStageParser {
             }
         }
 
-        return new GraphLookupStage(from, startWith, connectFromField, connectToField, as, maxDepth, depthField);
+        Document restrictSearchWithMatch = null;
+        Object restrictValue = doc.get("restrictSearchWithMatch");
+        if (restrictValue != null) {
+            if (restrictValue instanceof Document) {
+                restrictSearchWithMatch = (Document) restrictValue;
+            } else {
+                throw new IllegalArgumentException(
+                    "$graphLookup 'restrictSearchWithMatch' must be a document, got: " + restrictValue.getClass().getSimpleName());
+            }
+        }
+
+        return new GraphLookupStage(from, startWith, connectFromField, connectToField, as, maxDepth, depthField, restrictSearchWithMatch);
     }
 
     private String parseStartWith(Object value) {

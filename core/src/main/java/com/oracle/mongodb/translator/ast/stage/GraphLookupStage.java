@@ -6,6 +6,8 @@
 package com.oracle.mongodb.translator.ast.stage;
 
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import org.bson.Document;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -56,6 +58,7 @@ public final class GraphLookupStage implements Stage {
     private final String as;
     private final Integer maxDepth;
     private final String depthField;
+    private final Document restrictSearchWithMatch;
 
     /**
      * Creates a graph lookup stage.
@@ -68,14 +71,32 @@ public final class GraphLookupStage implements Stage {
      */
     public GraphLookupStage(String from, String startWith, String connectFromField,
                             String connectToField, String as) {
-        this(from, startWith, connectFromField, connectToField, as, null, null);
+        this(from, startWith, connectFromField, connectToField, as, null, null, null);
     }
 
     /**
-     * Creates a graph lookup stage with all options.
+     * Creates a graph lookup stage with maxDepth and depthField options.
      */
     public GraphLookupStage(String from, String startWith, String connectFromField,
                             String connectToField, String as, Integer maxDepth, String depthField) {
+        this(from, startWith, connectFromField, connectToField, as, maxDepth, depthField, null);
+    }
+
+    /**
+     * Creates a graph lookup stage with all options including restrictSearchWithMatch.
+     *
+     * @param from                    the collection to search
+     * @param startWith               the starting field/expression
+     * @param connectFromField        the field in the recursive documents to match
+     * @param connectToField          the field in the from collection to match against
+     * @param as                      the output array field name
+     * @param maxDepth                maximum recursion depth (optional)
+     * @param depthField              field name to store depth (optional)
+     * @param restrictSearchWithMatch document to filter recursive searches (optional)
+     */
+    public GraphLookupStage(String from, String startWith, String connectFromField,
+                            String connectToField, String as, Integer maxDepth, String depthField,
+                            Document restrictSearchWithMatch) {
         this.from = Objects.requireNonNull(from, "from must not be null");
         this.startWith = Objects.requireNonNull(startWith, "startWith must not be null");
         this.connectFromField = Objects.requireNonNull(connectFromField, "connectFromField must not be null");
@@ -83,6 +104,7 @@ public final class GraphLookupStage implements Stage {
         this.as = Objects.requireNonNull(as, "as must not be null");
         this.maxDepth = maxDepth;
         this.depthField = depthField;
+        this.restrictSearchWithMatch = restrictSearchWithMatch;
     }
 
     public String getFrom() {
@@ -113,6 +135,13 @@ public final class GraphLookupStage implements Stage {
         return depthField;
     }
 
+    /**
+     * Returns the restrictSearchWithMatch document, or null if not specified.
+     */
+    public Document getRestrictSearchWithMatch() {
+        return restrictSearchWithMatch;
+    }
+
     @Override
     public String getOperatorName() {
         return "$graphLookup";
@@ -140,6 +169,11 @@ public final class GraphLookupStage implements Stage {
         ctx.sql(startField);
         ctx.sql("')");
 
+        // Add restrictSearchWithMatch filter to base case
+        if (restrictSearchWithMatch != null) {
+            renderRestrictSearchWithMatchConditions(ctx, "", "");
+        }
+
         ctx.sql(" UNION ALL ");
 
         // Recursive case: traverse the graph
@@ -153,10 +187,16 @@ public final class GraphLookupStage implements Stage {
         ctx.sql(connectFromField);
         ctx.sql("')");
 
-        // Add depth limit if specified
+        // Add depth limit and restrictSearchWithMatch filter if specified
+        boolean hasWhere = false;
         if (maxDepth != null) {
             ctx.sql(" WHERE g.graph_depth < ");
             ctx.sql(String.valueOf(maxDepth));
+            hasWhere = true;
+        }
+
+        if (restrictSearchWithMatch != null) {
+            renderRestrictSearchWithMatchConditions(ctx, hasWhere ? "" : " WHERE 1=1", "c");
         }
 
         ctx.sql(") ");
@@ -173,6 +213,108 @@ public final class GraphLookupStage implements Stage {
         ctx.sql(" FROM ");
         ctx.sql(cteName);
         ctx.sql(" g");
+    }
+
+    /**
+     * Renders the restrictSearchWithMatch conditions as AND clauses.
+     *
+     * @param ctx         the SQL generation context
+     * @param prefix      prefix to add before conditions (e.g., " WHERE 1=1")
+     * @param tableAlias  the table alias to use (e.g., "c" for recursive case, empty for base case)
+     */
+    private void renderRestrictSearchWithMatchConditions(SqlGenerationContext ctx, String prefix, String tableAlias) {
+        if (restrictSearchWithMatch == null || restrictSearchWithMatch.isEmpty()) {
+            return;
+        }
+
+        ctx.sql(prefix);
+        String dataRef = tableAlias.isEmpty() ? "data" : tableAlias + ".data";
+
+        for (Map.Entry<String, Object> entry : restrictSearchWithMatch.entrySet()) {
+            String field = entry.getKey();
+            Object value = entry.getValue();
+
+            ctx.sql(" AND JSON_VALUE(");
+            ctx.sql(dataRef);
+            ctx.sql(", '$.");
+            ctx.sql(field);
+            ctx.sql("')");
+
+            if (value instanceof Document doc) {
+                // Handle operators like $in, $gt, etc.
+                renderOperatorCondition(ctx, doc);
+            } else {
+                // Simple equality
+                ctx.sql(" = ");
+                renderLiteralValue(ctx, value);
+            }
+        }
+    }
+
+    private void renderOperatorCondition(SqlGenerationContext ctx, Document operatorDoc) {
+        // For simplicity, handle common operators
+        for (Map.Entry<String, Object> entry : operatorDoc.entrySet()) {
+            String op = entry.getKey();
+            Object operand = entry.getValue();
+
+            switch (op) {
+                case "$in" -> {
+                    ctx.sql(" IN (");
+                    if (operand instanceof java.util.List<?> list) {
+                        boolean first = true;
+                        for (Object item : list) {
+                            if (!first) ctx.sql(", ");
+                            renderLiteralValue(ctx, item);
+                            first = false;
+                        }
+                    }
+                    ctx.sql(")");
+                }
+                case "$eq" -> {
+                    ctx.sql(" = ");
+                    renderLiteralValue(ctx, operand);
+                }
+                case "$ne" -> {
+                    ctx.sql(" != ");
+                    renderLiteralValue(ctx, operand);
+                }
+                case "$gt" -> {
+                    ctx.sql(" > ");
+                    renderLiteralValue(ctx, operand);
+                }
+                case "$gte" -> {
+                    ctx.sql(" >= ");
+                    renderLiteralValue(ctx, operand);
+                }
+                case "$lt" -> {
+                    ctx.sql(" < ");
+                    renderLiteralValue(ctx, operand);
+                }
+                case "$lte" -> {
+                    ctx.sql(" <= ");
+                    renderLiteralValue(ctx, operand);
+                }
+                default -> {
+                    // Unsupported operator - fall back to equality for now
+                    ctx.sql(" = ");
+                    renderLiteralValue(ctx, operand);
+                }
+            }
+        }
+    }
+
+    private void renderLiteralValue(SqlGenerationContext ctx, Object value) {
+        if (value == null) {
+            ctx.sql("NULL");
+        } else if (value instanceof String str) {
+            ctx.sql("'");
+            ctx.sql(str.replace("'", "''"));
+            ctx.sql("'");
+        } else if (value instanceof Boolean bool) {
+            ctx.sql(bool ? "'true'" : "'false'");
+        } else {
+            ctx.sql(String.valueOf(value));
+        }
     }
 
     /**
@@ -196,6 +338,11 @@ public final class GraphLookupStage implements Stage {
         ctx.sql(startField);
         ctx.sql("')");
 
+        // Add restrictSearchWithMatch filter to base case
+        if (restrictSearchWithMatch != null) {
+            renderRestrictSearchWithMatchConditions(ctx, "", "");
+        }
+
         ctx.sql(" UNION ALL ");
 
         // Recursive case
@@ -209,9 +356,16 @@ public final class GraphLookupStage implements Stage {
         ctx.sql(connectFromField);
         ctx.sql("')");
 
+        // Add depth limit and restrictSearchWithMatch filter if specified
+        boolean hasWhere = false;
         if (maxDepth != null) {
             ctx.sql(" WHERE g.graph_depth < ");
             ctx.sql(String.valueOf(maxDepth));
+            hasWhere = true;
+        }
+
+        if (restrictSearchWithMatch != null) {
+            renderRestrictSearchWithMatchConditions(ctx, hasWhere ? "" : " WHERE 1=1", "c");
         }
 
         ctx.sql(")");
@@ -237,6 +391,9 @@ public final class GraphLookupStage implements Stage {
         }
         if (depthField != null) {
             sb.append(", depthField=").append(depthField);
+        }
+        if (restrictSearchWithMatch != null) {
+            sb.append(", restrictSearchWithMatch=").append(restrictSearchWithMatch.toJson());
         }
         sb.append(")");
         return sb.toString();

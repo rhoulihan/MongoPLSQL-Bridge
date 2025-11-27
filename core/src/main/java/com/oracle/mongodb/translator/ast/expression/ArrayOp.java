@@ -16,14 +16,28 @@ public enum ArrayOp {
     ARRAY_ELEM_AT("$arrayElemAt"),
     SIZE("$size"),
     FIRST("$first"),
-    LAST("$last");
+    LAST("$last"),
+    FILTER("$filter"),
+    MAP("$map"),
+    REDUCE("$reduce"),
+    CONCAT_ARRAYS("$concatArrays"),
+    SLICE("$slice");
 
-    private static final Map<String, ArrayOp> MONGO_LOOKUP = Map.of(
-        "$arrayElemAt", ARRAY_ELEM_AT,
-        "$size", SIZE,
-        "$first", FIRST,
-        "$last", LAST
-    );
+    private static final Map<String, ArrayOp> MONGO_LOOKUP;
+
+    static {
+        MONGO_LOOKUP = Map.of(
+            "$arrayElemAt", ARRAY_ELEM_AT,
+            "$size", SIZE,
+            "$first", FIRST,
+            "$last", LAST,
+            "$filter", FILTER,
+            "$map", MAP,
+            "$reduce", REDUCE,
+            "$concatArrays", CONCAT_ARRAYS,
+            "$slice", SLICE
+        );
+    }
 
     private final String mongoOperator;
 

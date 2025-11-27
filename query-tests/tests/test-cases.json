@@ -1299,6 +1299,396 @@
       "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, denseRank FROM (SELECT id, data, DENSE_RANK() OVER (ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC) AS denseRank FROM employees) WHERE denseRank <= 3 ORDER BY denseRank",
       "expected_count": 3,
       "sort_by": "denseRank"
+    },
+    {
+      "id": "TYPE001",
+      "name": "$type - get field type",
+      "category": "typeConversion",
+      "operator": "$type",
+      "description": "Tests $type operator to get BSON type of a field",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "statusType": {"$type": "$status"}, "amountType": {"$type": "$amount"}}},
+        {"$limit": 3},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "TYPE002",
+      "name": "$toInt - convert string to integer",
+      "category": "typeConversion",
+      "operator": "$toInt",
+      "description": "Tests $toInt operator to convert values to integers",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "priceInt": {"$toInt": "$price"}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "TYPE003",
+      "name": "$toString - convert number to string",
+      "category": "typeConversion",
+      "operator": "$toString",
+      "description": "Tests $toString operator to convert values to strings",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "salaryStr": {"$toString": "$salary"}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "TYPE004",
+      "name": "$toDouble - convert to double",
+      "category": "typeConversion",
+      "operator": "$toDouble",
+      "description": "Tests $toDouble operator to convert values to doubles",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "priceDouble": {"$toDouble": "$price"}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "TYPE005",
+      "name": "$toBool - convert to boolean",
+      "category": "typeConversion",
+      "operator": "$toBool",
+      "description": "Tests $toBool operator to convert values to booleans",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "isActive": {"$toBool": "$active"}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR007",
+      "name": "$split - split string into array",
+      "category": "string",
+      "operator": "$split",
+      "description": "Tests $split operator to split strings by delimiter",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$addFields": {"nameParts": {"$split": ["$name", " "]}}},
+        {"$project": {"_id": 1, "name": 1, "firstName": {"$arrayElemAt": [{"$split": ["$name", " "]}, 0]}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR008",
+      "name": "$indexOfCP - find substring position",
+      "category": "string",
+      "operator": "$indexOfCP",
+      "description": "Tests $indexOfCP operator to find position of substring",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "aPosition": {"$indexOfCP": ["$name", "a"]}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR009",
+      "name": "$regexMatch - regex pattern matching",
+      "category": "string",
+      "operator": "$regexMatch",
+      "description": "Tests $regexMatch operator for pattern matching",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "hasVowelStart": {"$regexMatch": {"input": "$name", "regex": "^[AEIOUaeiou]"}}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR010",
+      "name": "$replaceOne - replace first occurrence",
+      "category": "string",
+      "operator": "$replaceOne",
+      "description": "Tests $replaceOne operator to replace first match",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "modifiedDept": {"$replaceOne": {"input": "$department", "find": "Engineering", "replacement": "Tech"}}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR011",
+      "name": "$replaceAll - replace all occurrences",
+      "category": "string",
+      "operator": "$replaceAll",
+      "description": "Tests $replaceAll operator to replace all matches",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "nameNoSpaces": {"$replaceAll": {"input": "$name", "find": " ", "replacement": "_"}}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR005",
+      "name": "$filter - filter array elements",
+      "category": "array",
+      "operator": "$filter",
+      "description": "Tests $filter operator to filter array elements by condition",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "orderId": 1, "highValueItems": {"$filter": {"input": "$items", "as": "item", "cond": {"$gt": ["$$item.qty", 1]}}}}},
+        {"$sort": {"orderId": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ARR006",
+      "name": "$map - transform array elements",
+      "category": "array",
+      "operator": "$map",
+      "description": "Tests $map operator to transform array elements",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "orderId": 1, "itemProducts": {"$map": {"input": "$items", "as": "item", "in": "$$item.product"}}}},
+        {"$sort": {"orderId": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ARR007",
+      "name": "$reduce - reduce array to single value",
+      "category": "array",
+      "operator": "$reduce",
+      "description": "Tests $reduce operator to reduce array to single value",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "orderId": 1, "totalQty": {"$reduce": {"input": "$items", "initialValue": 0, "in": {"$add": ["$$value", "$$this.qty"]}}}}},
+        {"$sort": {"orderId": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ARR008",
+      "name": "$concatArrays - concatenate arrays",
+      "category": "array",
+      "operator": "$concatArrays",
+      "description": "Tests $concatArrays operator to concatenate multiple arrays",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$exists": true}}},
+        {"$project": {"_id": 1, "orderId": 1, "allLabels": {"$concatArrays": ["$tags", ["extra"]]}}},
+        {"$sort": {"orderId": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ARR009",
+      "name": "$slice - get subset of array",
+      "category": "array",
+      "operator": "$slice",
+      "description": "Tests $slice operator to get array subset",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$exists": true}}},
+        {"$project": {"_id": 1, "name": 1, "firstTwoTags": {"$slice": ["$tags", 2]}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR010",
+      "name": "$slice - get last elements",
+      "category": "array",
+      "operator": "$slice",
+      "description": "Tests $slice operator to get last N elements",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$exists": true}}},
+        {"$project": {"_id": 1, "name": 1, "lastTwoTags": {"$slice": ["$tags", -2]}}},
+        {"$sort": {"_id": 1}},
+        {"$limit": 5}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "REDACT001",
+      "name": "$redact - document level filtering with PRUNE",
+      "category": "redact",
+      "operator": "$redact",
+      "description": "Tests $redact stage to filter documents based on condition",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$redact": {"$cond": {"if": {"$gte": ["$salary", 80000]}, "then": "$$KEEP", "else": "$$PRUNE"}}},
+        {"$project": {"_id": 1, "name": 1, "salary": 1}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 6,
+      "sort_by": "_id"
+    },
+    {
+      "id": "REDACT002",
+      "name": "$redact - with DESCEND for nested documents",
+      "category": "redact",
+      "operator": "$redact",
+      "description": "Tests $redact stage with DESCEND option",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$redact": {"$cond": {"if": {"$eq": ["$status", "completed"]}, "then": "$$DESCEND", "else": "$$PRUNE"}}},
+        {"$project": {"_id": 1, "orderId": 1, "status": 1}},
+        {"$sort": {"orderId": 1}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "SAMPLE001",
+      "name": "$sample - random document selection",
+      "category": "sample",
+      "operator": "$sample",
+      "description": "Tests $sample stage to randomly select documents",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$sample": {"size": 3}},
+        {"$project": {"_id": 1, "name": 1}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 3,
+      "sort_by": null
+    },
+    {
+      "id": "SAMPLE002",
+      "name": "$sample - with subsequent processing",
+      "category": "sample",
+      "operator": "$sample",
+      "description": "Tests $sample stage followed by other stages",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$sample": {"size": 5}},
+        {"$project": {"_id": 1, "name": 1, "department": 1}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": null
+    },
+    {
+      "id": "COUNT001",
+      "name": "$count - count all documents",
+      "category": "count",
+      "operator": "$count",
+      "description": "Tests $count stage to count documents",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$count": "totalEmployees"}
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "COUNT002",
+      "name": "$count - count after filter",
+      "category": "count",
+      "operator": "$count",
+      "description": "Tests $count stage after $match filter",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$count": "completedOrders"}
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "COUNT003",
+      "name": "$count - count with complex filter",
+      "category": "count",
+      "operator": "$count",
+      "description": "Tests $count stage with complex $match conditions",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$match": {"$and": [{"active": true}, {"salary": {"$gte": 80000}}]}},
+        {"$count": "highEarningActiveEmployees"}
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "GRAPHLOOKUP001",
+      "name": "$graphLookup - with restrictSearchWithMatch",
+      "category": "graphLookup",
+      "operator": "$graphLookup",
+      "description": "Tests $graphLookup with restrictSearchWithMatch filter",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$match": {"_id": 1}},
+        {"$graphLookup": {
+          "from": "employees",
+          "startWith": "$department",
+          "connectFromField": "department",
+          "connectToField": "department",
+          "as": "colleagues",
+          "maxDepth": 0,
+          "restrictSearchWithMatch": {"active": true}
+        }},
+        {"$project": {"_id": 1, "name": 1, "colleagueCount": {"$size": "$colleagues"}}}
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null
     }
   ]
 }

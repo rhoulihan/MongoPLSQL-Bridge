@@ -346,4 +346,92 @@ class GraphLookupStageParserTest {
 
         assertThat(stage.getOperatorName()).isEqualTo("$graphLookup");
     }
+
+    // restrictSearchWithMatch tests
+
+    @Test
+    void shouldParseWithRestrictSearchWithMatch() {
+        var doc = Document.parse("""
+            {
+                "from": "employees",
+                "startWith": "$reportsTo",
+                "connectFromField": "reportsTo",
+                "connectToField": "name",
+                "as": "hierarchy",
+                "restrictSearchWithMatch": {
+                    "status": "active"
+                }
+            }
+            """);
+
+        GraphLookupStage stage = parser.parse(doc);
+
+        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+        assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
+    }
+
+    @Test
+    void shouldParseWithComplexRestrictSearchWithMatch() {
+        var doc = Document.parse("""
+            {
+                "from": "employees",
+                "startWith": "$reportsTo",
+                "connectFromField": "reportsTo",
+                "connectToField": "name",
+                "as": "hierarchy",
+                "restrictSearchWithMatch": {
+                    "status": "active",
+                    "department": { "$in": ["Engineering", "Sales"] }
+                }
+            }
+            """);
+
+        GraphLookupStage stage = parser.parse(doc);
+
+        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+        assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
+        assertThat(stage.getRestrictSearchWithMatch().get("department")).isNotNull();
+    }
+
+    @Test
+    void shouldParseWithAllOptionsIncludingRestrictSearchWithMatch() {
+        var doc = Document.parse("""
+            {
+                "from": "employees",
+                "startWith": "$managerId",
+                "connectFromField": "managerId",
+                "connectToField": "_id",
+                "as": "managers",
+                "maxDepth": 5,
+                "depthField": "level",
+                "restrictSearchWithMatch": {
+                    "active": true
+                }
+            }
+            """);
+
+        GraphLookupStage stage = parser.parse(doc);
+
+        assertThat(stage.getFrom()).isEqualTo("employees");
+        assertThat(stage.getMaxDepth()).isEqualTo(5);
+        assertThat(stage.getDepthField()).isEqualTo("level");
+        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+        assertThat(stage.getRestrictSearchWithMatch().getBoolean("active")).isTrue();
+    }
+
+    @Test
+    void shouldThrowOnNonDocumentRestrictSearchWithMatch() {
+        var doc = new Document()
+            .append("from", "employees")
+            .append("startWith", "$reportsTo")
+            .append("connectFromField", "reportsTo")
+            .append("connectToField", "name")
+            .append("as", "hierarchy")
+            .append("restrictSearchWithMatch", "invalid");
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("restrictSearchWithMatch")
+            .withMessageContaining("document");
+    }
 }

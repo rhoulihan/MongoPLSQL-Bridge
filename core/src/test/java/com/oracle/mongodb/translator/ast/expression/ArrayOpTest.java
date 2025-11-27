@@ -57,6 +57,11 @@ class ArrayOpTest {
         assertThat(ArrayOp.isArrayOp("$size")).isTrue();
         assertThat(ArrayOp.isArrayOp("$first")).isTrue();
         assertThat(ArrayOp.isArrayOp("$last")).isTrue();
+        assertThat(ArrayOp.isArrayOp("$filter")).isTrue();
+        assertThat(ArrayOp.isArrayOp("$map")).isTrue();
+        assertThat(ArrayOp.isArrayOp("$reduce")).isTrue();
+        assertThat(ArrayOp.isArrayOp("$concatArrays")).isTrue();
+        assertThat(ArrayOp.isArrayOp("$slice")).isTrue();
     }
 
     @Test
@@ -64,5 +69,23 @@ class ArrayOpTest {
         assertThat(ArrayOp.isArrayOp("$eq")).isFalse();
         assertThat(ArrayOp.isArrayOp("$sum")).isFalse();
         assertThat(ArrayOp.isArrayOp("$concat")).isFalse();
+    }
+
+    @Test
+    void shouldMapNewArrayOperators() {
+        assertThat(ArrayOp.fromMongo("$filter")).isEqualTo(ArrayOp.FILTER);
+        assertThat(ArrayOp.fromMongo("$map")).isEqualTo(ArrayOp.MAP);
+        assertThat(ArrayOp.fromMongo("$reduce")).isEqualTo(ArrayOp.REDUCE);
+        assertThat(ArrayOp.fromMongo("$concatArrays")).isEqualTo(ArrayOp.CONCAT_ARRAYS);
+        assertThat(ArrayOp.fromMongo("$slice")).isEqualTo(ArrayOp.SLICE);
+    }
+
+    @Test
+    void shouldReturnNewMongoOperators() {
+        assertThat(ArrayOp.FILTER.getMongoOperator()).isEqualTo("$filter");
+        assertThat(ArrayOp.MAP.getMongoOperator()).isEqualTo("$map");
+        assertThat(ArrayOp.REDUCE.getMongoOperator()).isEqualTo("$reduce");
+        assertThat(ArrayOp.CONCAT_ARRAYS.getMongoOperator()).isEqualTo("$concatArrays");
+        assertThat(ArrayOp.SLICE.getMongoOperator()).isEqualTo("$slice");
     }
 }
