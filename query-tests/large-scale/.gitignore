@@ -1,0 +1,11 @@
+# Node modules
+node_modules/
+
+# Generated data (can be regenerated)
+data/
+
+# Results (generated at runtime)
+results/
+
+# NPM package files
+package-lock.json
