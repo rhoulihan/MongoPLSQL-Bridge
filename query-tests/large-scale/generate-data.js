@@ -20,6 +20,18 @@ const path = require('path');
 
 // Configuration based on size
 const SIZES = {
+    tiny: {
+        ecommerce_orders: 500,
+        ecommerce_products: 100,
+        ecommerce_customers: 200,
+        ecommerce_reviews: 1000,
+        analytics_events: 2000,
+        analytics_sessions: 500,
+        social_users: 300,
+        social_posts: 1000,
+        iot_devices: 100,
+        iot_readings: 2000
+    },
     small: {
         ecommerce_orders: 10000,
         ecommerce_products: 1000,

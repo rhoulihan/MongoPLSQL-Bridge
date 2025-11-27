@@ -34,7 +34,7 @@ class GroupStageTest {
         stage.render(context);
 
         assertThat(context.toSql())
-            .isEqualTo("SELECT JSON_VALUE(data, '$.status') AS _id GROUP BY JSON_VALUE(data, '$.status')");
+            .isEqualTo("SELECT JSON_VALUE(data, '$.status') AS \"_id\" GROUP BY JSON_VALUE(data, '$.status')");
     }
 
     @Test
@@ -50,7 +50,7 @@ class GroupStageTest {
 
         assertThat(context.toSql())
             .contains("SELECT")
-            .contains("JSON_VALUE(data, '$.status') AS _id")
+            .contains("JSON_VALUE(data, '$.status') AS \"_id\"")
             .contains("SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS totalAmount")
             .contains("GROUP BY JSON_VALUE(data, '$.status')");
     }
@@ -69,7 +69,7 @@ class GroupStageTest {
 
         assertThat(context.toSql())
             .contains("SELECT")
-            .contains("AS _id")
+            .contains("AS \"_id\"")
             .contains("AS count")
             .contains("AS avgPrice")
             .contains("GROUP BY");

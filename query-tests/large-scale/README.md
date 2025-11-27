@@ -16,25 +16,27 @@ The test suite validates that complex aggregation pipelines produce identical re
 | File | Description |
 |------|-------------|
 | `generate-data.js` | Generates test data with configurable sizes |
-| `load-data.js` | Loads generated data into MongoDB and Oracle |
-| `compare-pipelines.js` | Executes and compares pipeline results |
+| `load-data.js` | Loads generated data into MongoDB and Oracle using SQL |
+| `reload-products.js` | Utility to reload ecommerce_products table |
 | `complex-pipelines.json` | Pipeline definitions for testing |
-| `run-comparison.sh` | Main entry script to run full test suite |
 
 ## Quick Start
 
 ```bash
-# Run full test suite with small dataset (~100MB)
-./run-comparison.sh --size small
-
 # Generate data only
 node generate-data.js --size medium --output ./data
 
-# Load data into databases
+# Load data into MongoDB only
+node load-data.js --target mongodb --data-dir ./data --drop
+
+# Load data into Oracle only (uses SQL with PL/SQL for large CLOBs)
+node load-data.js --target oracle --data-dir ./data --drop
+
+# Load data into both databases
 node load-data.js --target both --data-dir ./data --drop
 
-# Run pipeline comparisons
-node compare-pipelines.js --verbose
+# Run pipeline comparisons (from query-tests directory)
+cd .. && node scripts/export-results.js --large-scale-only
 ```
 
 ## Data Sizes
@@ -74,16 +76,16 @@ The test suite includes 10 complex pipelines testing various operators:
 
 | ID | Name | Operators Tested |
 |----|------|-----------------|
-| PIPE001 | E-commerce Revenue Analysis | $match, $unwind, $lookup, $group, $project, $sort, $limit |
-| PIPE002 | Product Variant Analysis | $match, $unwind, $project, $group, $addFields, $sort |
-| PIPE003 | Customer LTV Analysis | $match, $project, $addFields, $group, $sort |
-| PIPE004 | Review Sentiment Analysis | $match, $lookup, $unwind, $project, $group |
-| PIPE005 | Analytics Funnel Analysis | $match, $project, $group, $addFields |
-| PIPE006 | Social Engagement Analysis | $match, $project, $addFields, $group |
-| PIPE007 | IoT Device Health | $unwind, $project, $group, $addFields |
-| PIPE008 | IoT Time-Series Aggregation | $match, $project, $group, $addFields |
-| PIPE009 | User Network Analysis | $match, $project, $addFields, $bucket |
-| PIPE010 | Order-to-Review Journey | $match, $unwind, $lookup (correlated), $project, $group |
+| PIPE001 | E-commerce Order Revenue Analysis | $match, $group, $addFields, $sort, $limit |
+| PIPE002 | Product Performance Analysis | $group, $addFields, $sort, $limit |
+| PIPE003 | Customer Lifetime Value Analysis | $match, $group, $addFields, $sort |
+| PIPE004 | Review Sentiment and Quality Analysis | $match, $group, $addFields, $sort, $limit |
+| PIPE005 | Analytics Session Funnel Analysis | $match, $group, $addFields, $sort, $limit |
+| PIPE006 | Social Post Engagement Analysis | $match, $group, $addFields, $sort |
+| PIPE007 | IoT Device Health Analysis by Building | $group, $addFields, $sort, $limit |
+| PIPE008 | IoT Time-Series Aggregation | $group, $addFields, $sort, $limit |
+| PIPE009 | User Follower Network Analysis | $match, $bucket, $addFields |
+| PIPE010 | Order Analysis by Payment and Shipping | $group, $addFields, $sort, $limit |
 
 ## Document Nesting Examples
 
@@ -205,15 +207,32 @@ Results are saved to `results/comparison-report-<timestamp>.json`:
 }
 ```
 
+## Oracle Data Loading
+
+The `load-data.js` script uses SQL with PL/SQL for Oracle data loading:
+
+- **No SODA dependency** - Uses native SQL INSERT statements
+- **CLOB handling** - Large JSON documents are split into 2000-character chunks
+- **Docker execution** - Runs SQL via `docker exec` and `sqlplus`
+- **JSON validation** - Tables created with `IS JSON` constraint
+
+Example Oracle table structure:
+```sql
+CREATE TABLE ecommerce_products (
+  id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  data CLOB CONSTRAINT ecommerce_products_json CHECK (data IS JSON)
+);
+```
+
 ## Requirements
 
 - Node.js 16+
 - MongoDB 6.0+
-- Oracle Database 23ai/26ai
-- npm packages: `mongodb`, `oracledb`
+- Oracle Database 23ai Free (running in Docker container `mongo-translator-oracle`)
+- npm packages: `mongodb`
 
 ## Notes
 
 - For `xlarge` dataset, ensure at least 8GB RAM available
-- Oracle SODA requires thick mode client for optimal performance
+- Oracle loading uses SQL*Plus with 2000-char chunks to avoid line length limits
 - Some pipelines may require MongoDB `allowDiskUse: true`

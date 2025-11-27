@@ -164,8 +164,9 @@ function translatePipeline(collection, pipeline) {
         fs.writeFileSync(tempFile, JSON.stringify(pipeline));
 
         // Run gradle task to translate (task is in :core subproject)
+        // Use -Pinline=true to inline bind variable values for direct execution
         const result = execSync(
-            `./gradlew -q :core:translatePipeline -PcollectionName="${collection}" -PpipelineFile="${tempFile}"`,
+            `./gradlew -q :core:translatePipeline -PcollectionName="${collection}" -PpipelineFile="${tempFile}" -Pinline=true`,
             {
                 cwd: PROJECT_ROOT,
                 encoding: 'utf8',
@@ -201,88 +202,24 @@ function translatePipeline(collection, pipeline) {
 }
 
 /**
- * Convert a SELECT statement to return JSON array using Oracle JSON functions
+ * Wrap SQL to return JSON rows using Oracle's JSON_OBJECT function.
+ * This wraps the entire query as a subquery to avoid GROUP BY issues.
  */
 function wrapSqlAsJson(sql) {
-    // Parse the SELECT statement to extract column aliases and convert to JSON_OBJECT
-    const trimmedSql = sql.trim().replace(/;$/, '');
+    // Remove trailing semicolon if present
+    const cleanSql = sql.trim().replace(/;$/, '');
 
-    // Extract the SELECT ... FROM portion
-    const selectMatch = trimmedSql.match(/^SELECT\s+(.*?)\s+FROM\s+(.*)$/is);
+    // Extract column names/aliases from SELECT clause
+    // This is a simplified parser - assumes SELECT ... FROM pattern
+    const selectMatch = cleanSql.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+/i);
     if (!selectMatch) {
-        // Can't parse, return original
-        return sql;
+        // Can't parse, return as-is
+        return cleanSql;
     }
 
-    const selectPart = selectMatch[1];
-    const fromPart = selectMatch[2];
-
-    // Parse column expressions and their aliases
-    // Handle: expr AS alias, expr alias, or just expr
-    const columns = [];
-    let depth = 0;
-    let current = '';
-
-    for (let i = 0; i < selectPart.length; i++) {
-        const ch = selectPart[i];
-        if (ch === '(') depth++;
-        else if (ch === ')') depth--;
-        else if (ch === ',' && depth === 0) {
-            columns.push(current.trim());
-            current = '';
-            continue;
-        }
-        current += ch;
-    }
-    if (current.trim()) columns.push(current.trim());
-
-    // Build JSON_OBJECT key-value pairs
-    const jsonPairs = columns.map(col => {
-        // Check for "expr AS alias" pattern
-        const asMatch = col.match(/^(.+?)\s+AS\s+(\w+)$/i);
-        if (asMatch) {
-            const expr = asMatch[1].trim();
-            const alias = asMatch[2].trim();
-            return `'${alias}' VALUE ${expr}`;
-        }
-
-        // Check for simple column name (no spaces, no functions)
-        if (/^\w+$/.test(col)) {
-            return `'${col}' VALUE ${col}`;
-        }
-
-        // Check for "expr alias" pattern (no AS keyword)
-        const spaceMatch = col.match(/^(.+?)\s+(\w+)$/);
-        if (spaceMatch && !spaceMatch[1].includes('(')) {
-            // Simple case without function
-            const expr = spaceMatch[1].trim();
-            const alias = spaceMatch[2].trim();
-            return `'${alias}' VALUE ${expr}`;
-        }
-
-        // For complex expressions, try to extract trailing alias
-        const lastSpaceIdx = col.lastIndexOf(' ');
-        if (lastSpaceIdx > 0) {
-            const possibleAlias = col.substring(lastSpaceIdx + 1).trim();
-            if (/^\w+$/.test(possibleAlias) && !['FROM', 'WHERE', 'AND', 'OR', 'AS', 'RETURNING', 'NUMBER'].includes(possibleAlias.toUpperCase())) {
-                const expr = col.substring(0, lastSpaceIdx).trim();
-                return `'${possibleAlias}' VALUE ${expr}`;
-            }
-        }
-
-        // Just use expression as both key and value
-        // Extract field name from JSON_VALUE if present
-        const jsonValueMatch = col.match(/JSON_VALUE\s*\([^,]+,\s*'\$\.(\w+)'/i);
-        if (jsonValueMatch) {
-            return `'${jsonValueMatch[1]}' VALUE ${col}`;
-        }
-
-        // Use column as-is with generic name
-        return `'col' VALUE ${col}`;
-    });
-
-    // Build the JSON query
-    return `SELECT JSON_OBJECT(${jsonPairs.join(', ')} RETURNING CLOB) AS json_row FROM ${fromPart}`;
+    // Wrap the entire query as a subquery and build JSON from its columns
+    // Use * to select all columns from the subquery, then build JSON
+    return `SELECT JSON_OBJECT(*) AS json_row FROM (${cleanSql})`;
 }
 
 /**
@@ -309,13 +246,40 @@ SET LONGCHUNKSIZE 1000000
 ${jsonSql};
 EXIT;
 `;
+        // Write SQL to temp file to avoid shell escaping issues
+        const tempFile = '/tmp/_temp_oracle_query.sql';
+        fs.writeFileSync(tempFile, sqlCommand);
+
+        // Copy file to container and execute
+        execSync(`docker cp "${tempFile}" mongo-translator-oracle:/tmp/query.sql`, { encoding: 'utf8' });
         const result = execSync(
-            `docker exec mongo-translator-oracle bash -c "echo '${sqlCommand.replace(/'/g, "'\\''")}' | sqlplus -s translator/translator123@//localhost:1521/FREEPDB1"`,
+            `docker exec mongo-translator-oracle sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 @/tmp/query.sql`,
             { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
         );
 
+        // Clean up temp file
+        try { fs.unlinkSync(tempFile); } catch {}
+
         // Parse results - each non-empty line is a JSON row
         const lines = result.split('\n').filter(line => line.trim() !== '');
+
+        // Check for Oracle errors in output
+        const errorLines = lines.filter(line =>
+            line.includes('ERROR at line') ||
+            line.includes('ORA-') ||
+            line.includes('SP2-')
+        );
+
+        if (errorLines.length > 0) {
+            // Extract the ORA error message
+            const oraError = lines.find(line => line.includes('ORA-')) || errorLines[0];
+            return {
+                success: false,
+                error: oraError.trim(),
+                results: lines.map(l => ({ _raw: l.trim() })),
+                count: 0
+            };
+        }
 
         // Parse JSON results
         const results = [];

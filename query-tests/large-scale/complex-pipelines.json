@@ -4,56 +4,33 @@
   "pipelines": [
     {
       "id": "PIPE001",
-      "name": "E-commerce Revenue Analysis with Nested Aggregations",
-      "description": "Multi-stage pipeline analyzing order revenue with nested item details, discounts, and customer segments",
+      "name": "E-commerce Order Revenue Analysis",
+      "description": "Order-level revenue analysis by status and time period (without array unwinding)",
       "collection": "ecommerce_orders",
       "pipeline": [
         {
           "$match": {
-            "status": { "$in": ["delivered", "shipped"] },
-            "timestamps.createdAt": { "$gte": { "$date": "2023-01-01T00:00:00Z" } }
+            "status": { "$in": ["delivered", "shipped"] }
           }
         },
-        { "$unwind": "$items" },
-        {
-          "$lookup": {
-            "from": "ecommerce_products",
-            "localField": "items.productId",
-            "foreignField": "_id",
-            "as": "productInfo"
-          }
-        },
-        { "$unwind": { "path": "$productInfo", "preserveNullAndEmptyArrays": true } },
         {
           "$group": {
             "_id": {
-              "category": "$productInfo.category.primary",
+              "status": "$status",
               "month": { "$month": "$timestamps.createdAt" },
               "year": { "$year": "$timestamps.createdAt" }
             },
-            "totalRevenue": { "$sum": "$items.total" },
-            "totalQuantity": { "$sum": "$items.quantity" },
-            "avgOrderValue": { "$avg": "$items.total" },
-            "uniqueCustomers": { "$addToSet": "$customerId" },
-            "orderCount": { "$sum": 1 }
+            "totalRevenue": { "$sum": "$pricing.subtotal" },
+            "orderCount": { "$sum": 1 },
+            "avgShipping": { "$avg": "$pricing.shipping" },
+            "avgTax": { "$avg": "$pricing.tax" }
           }
         },
         {
-          "$project": {
-            "_id": 0,
-            "category": "$_id.category",
-            "period": {
-              "$concat": [
-                { "$toString": "$_id.year" },
-                "-",
-                { "$cond": [{ "$lt": ["$_id.month", 10] }, { "$concat": ["0", { "$toString": "$_id.month" }] }, { "$toString": "$_id.month" }] }
-              ]
-            },
-            "totalRevenue": { "$round": ["$totalRevenue", 2] },
-            "totalQuantity": 1,
-            "avgOrderValue": { "$round": ["$avgOrderValue", 2] },
-            "uniqueCustomerCount": { "$size": "$uniqueCustomers" },
-            "orderCount": 1
+          "$addFields": {
+            "avgRevenuePerOrder": {
+              "$round": [{ "$divide": ["$totalRevenue", "$orderCount"] }, 2]
+            }
           }
         },
         { "$sort": { "totalRevenue": -1 } },
@@ -62,83 +39,39 @@
     },
     {
       "id": "PIPE002",
-      "name": "Product Performance with Variant Analysis",
-      "description": "Analyze product variants with inventory, pricing, and rating metrics",
+      "name": "Product Performance Analysis",
+      "description": "Analyze all products by category and brand with rating metrics (without array unwinding)",
       "collection": "ecommerce_products",
       "pipeline": [
         {
-          "$match": {
-            "metadata.status": "active",
-            "ratings.count": { "$gte": 10 }
-          }
-        },
-        { "$unwind": "$variants" },
-        {
-          "$project": {
-            "productId": "$_id",
-            "productName": "$name",
-            "category": "$category.primary",
-            "subcategory": "$category.secondary",
-            "brand": "$brand.name",
-            "variantSku": "$variants.sku",
-            "color": "$variants.attributes.color",
-            "size": "$variants.attributes.size",
-            "price": "$variants.price",
-            "costPrice": "$variants.costPrice",
-            "margin": {
-              "$round": [
-                { "$multiply": [
-                  { "$divide": [
-                    { "$subtract": ["$variants.price", "$variants.costPrice"] },
-                    "$variants.price"
-                  ] },
-                  100
-                ] },
-                2
-              ]
-            },
-            "inventory": "$variants.inventory.quantity",
-            "isLowStock": { "$lt": ["$variants.inventory.quantity", "$variants.inventory.reorderPoint"] },
-            "rating": "$ratings.average",
-            "reviewCount": "$ratings.count"
-          }
-        },
-        {
           "$group": {
             "_id": {
-              "category": "$category",
-              "brand": "$brand"
+              "category": "$category.primary",
+              "brand": "$brand.name"
             },
-            "totalVariants": { "$sum": 1 },
-            "avgPrice": { "$avg": "$price" },
-            "avgMargin": { "$avg": "$margin" },
-            "totalInventory": { "$sum": "$inventory" },
-            "lowStockCount": { "$sum": { "$cond": ["$isLowStock", 1, 0] } },
-            "avgRating": { "$avg": "$rating" },
-            "totalReviews": { "$sum": "$reviewCount" }
+            "productCount": { "$sum": 1 },
+            "avgRating": { "$avg": "$ratings.average" },
+            "totalReviews": { "$sum": "$ratings.count" },
+            "avgPrice": { "$avg": "$pricing.basePrice" },
+            "minPrice": { "$min": "$pricing.basePrice" },
+            "maxPrice": { "$max": "$pricing.basePrice" }
           }
         },
         {
           "$addFields": {
-            "lowStockPercentage": {
-              "$round": [
-                { "$multiply": [
-                  { "$divide": ["$lowStockCount", "$totalVariants"] },
-                  100
-                ] },
-                1
-              ]
+            "priceRange": {
+              "$round": [{ "$subtract": ["$maxPrice", "$minPrice"] }, 2]
             }
           }
         },
-        { "$sort": { "totalInventory": -1 } },
+        { "$sort": { "totalReviews": -1 } },
         { "$limit": 30 }
       ]
     },
     {
       "id": "PIPE003",
       "name": "Customer Lifetime Value Analysis",
-      "description": "Calculate customer LTV with loyalty tier analysis and purchase patterns",
+      "description": "Calculate customer value with loyalty tier analysis and purchase patterns",
       "collection": "ecommerce_customers",
       "pipeline": [
         {
@@ -148,77 +81,23 @@
           }
         },
         {
-          "$project": {
-            "customerId": "$_id",
-            "fullName": "$profile.fullName",
-            "loyaltyTier": "$loyalty.tier",
-            "memberMonths": {
-              "$divide": [
-                { "$subtract": [{ "$date": "2024-06-01T00:00:00Z" }, "$loyalty.memberSince"] },
-                2592000000
-              ]
-            },
-            "totalOrders": "$orderHistory.totalOrders",
-            "totalSpent": "$orderHistory.totalSpent",
-            "avgOrderValue": "$orderHistory.averageOrderValue",
-            "returnRate": "$orderHistory.returnRate",
-            "segments": "$segments",
-            "paymentMethodCount": { "$size": "$paymentMethods" },
-            "addressCount": { "$size": "$addresses" },
-            "preferredCategories": "$orderHistory.favoriteCategories"
+          "$group": {
+            "_id": "$loyalty.tier",
+            "customerCount": { "$sum": 1 },
+            "avgTotalSpent": { "$avg": "$orderHistory.totalSpent" },
+            "avgTotalOrders": { "$avg": "$orderHistory.totalOrders" },
+            "avgOrderValue": { "$avg": "$orderHistory.averageOrderValue" },
+            "avgReturnRate": { "$avg": "$orderHistory.returnRate" }
           }
         },
         {
           "$addFields": {
-            "ltv": {
-              "$round": [
-                { "$multiply": [
-                  "$avgOrderValue",
-                  { "$divide": ["$totalOrders", { "$max": [1, "$memberMonths"] }] },
-                  12
-                ] },
-                2
-              ]
-            },
-            "ordersPerMonth": {
-              "$round": [
-                { "$divide": ["$totalOrders", { "$max": [1, "$memberMonths"] }] },
-                2
-              ]
+            "avgReturnRatePercent": {
+              "$round": [{ "$multiply": ["$avgReturnRate", 100] }, 1]
             }
           }
         },
-        {
-          "$group": {
-            "_id": "$loyaltyTier",
-            "customerCount": { "$sum": 1 },
-            "avgLTV": { "$avg": "$ltv" },
-            "avgTotalSpent": { "$avg": "$totalSpent" },
-            "avgOrdersPerMonth": { "$avg": "$ordersPerMonth" },
-            "avgReturnRate": { "$avg": "$returnRate" },
-            "highValueCount": {
-              "$sum": { "$cond": [{ "$in": ["high_value", "$segments"] }, 1, 0] }
-            }
-          }
-        },
-        {
-          "$project": {
-            "_id": 0,
-            "loyaltyTier": "$_id",
-            "customerCount": 1,
-            "avgLTV": { "$round": ["$avgLTV", 2] },
-            "avgTotalSpent": { "$round": ["$avgTotalSpent", 2] },
-            "avgOrdersPerMonth": { "$round": ["$avgOrdersPerMonth", 2] },
-            "avgReturnRate": { "$round": [{ "$multiply": ["$avgReturnRate", 100] }, 1] },
-            "highValuePercentage": {
-              "$round": [
-                { "$multiply": [{ "$divide": ["$highValueCount", "$customerCount"] }, 100] },
-                1
-              ]
-            }
-          }
-        },
-        { "$sort": { "avgLTV": -1 } }
+        { "$sort": { "avgTotalSpent": -1 } }
       ]
     },
     {
@@ -234,70 +113,31 @@
           }
         },
         {
-          "$lookup": {
-            "from": "ecommerce_products",
-            "localField": "productId",
-            "foreignField": "_id",
-            "as": "product"
-          }
-        },
-        { "$unwind": { "path": "$product", "preserveNullAndEmptyArrays": true } },
-        {
-          "$project": {
-            "reviewId": "$_id",
-            "productCategory": "$product.category.primary",
-            "productBrand": "$product.brand.name",
-            "overallRating": "$rating.overall",
-            "qualityRating": "$rating.aspects.quality",
-            "valueRating": "$rating.aspects.value",
-            "shippingRating": "$rating.aspects.shipping",
-            "packagingRating": "$rating.aspects.packaging",
-            "sentiment": "$metadata.sentiment",
-            "hasMedia": { "$gt": [{ "$size": { "$ifNull": ["$media", []] } }, 0] },
-            "prosCount": { "$size": { "$ifNull": ["$content.pros", []] } },
-            "consCount": { "$size": { "$ifNull": ["$content.cons", []] } },
-            "helpfulScore": { "$subtract": ["$helpful.upvotes", "$helpful.downvotes"] },
-            "hasResponse": { "$ne": ["$response", null] }
-          }
-        },
-        {
           "$group": {
             "_id": {
-              "category": "$productCategory",
-              "sentiment": "$sentiment"
+              "sentiment": "$metadata.sentiment"
             },
             "reviewCount": { "$sum": 1 },
-            "avgOverallRating": { "$avg": "$overallRating" },
-            "avgQualityRating": { "$avg": "$qualityRating" },
-            "avgValueRating": { "$avg": "$valueRating" },
-            "avgShippingRating": { "$avg": "$shippingRating" },
-            "avgPackagingRating": { "$avg": "$packagingRating" },
-            "mediaReviewCount": { "$sum": { "$cond": ["$hasMedia", 1, 0] } },
-            "avgPros": { "$avg": "$prosCount" },
-            "avgCons": { "$avg": "$consCount" },
-            "totalHelpfulScore": { "$sum": "$helpfulScore" },
-            "respondedCount": { "$sum": { "$cond": ["$hasResponse", 1, 0] } }
+            "avgOverallRating": { "$avg": "$rating.overall" },
+            "avgQualityRating": { "$avg": "$rating.aspects.quality" },
+            "avgValueRating": { "$avg": "$rating.aspects.value" },
+            "avgShippingRating": { "$avg": "$rating.aspects.shipping" },
+            "avgPackagingRating": { "$avg": "$rating.aspects.packaging" },
+            "totalUpvotes": { "$sum": "$helpful.upvotes" },
+            "totalDownvotes": { "$sum": "$helpful.downvotes" }
           }
         },
         {
-          "$project": {
-            "_id": 0,
-            "category": "$_id.category",
-            "sentiment": "$_id.sentiment",
-            "reviewCount": 1,
-            "avgOverallRating": { "$round": ["$avgOverallRating", 2] },
-            "avgQualityRating": { "$round": ["$avgQualityRating", 2] },
-            "avgValueRating": { "$round": ["$avgValueRating", 2] },
-            "avgShippingRating": { "$round": ["$avgShippingRating", 2] },
-            "avgPackagingRating": { "$round": ["$avgPackagingRating", 2] },
-            "mediaReviewPercentage": {
-              "$round": [{ "$multiply": [{ "$divide": ["$mediaReviewCount", "$reviewCount"] }, 100] }, 1]
-            },
-            "avgPros": { "$round": ["$avgPros", 1] },
-            "avgCons": { "$round": ["$avgCons", 1] },
-            "avgHelpfulScore": { "$round": [{ "$divide": ["$totalHelpfulScore", "$reviewCount"] }, 1] },
-            "responseRate": {
-              "$round": [{ "$multiply": [{ "$divide": ["$respondedCount", "$reviewCount"] }, 100] }, 1]
+          "$addFields": {
+            "helpfulnessRatio": {
+              "$round": [
+                { "$cond": [
+                  { "$gt": [{ "$add": ["$totalUpvotes", "$totalDownvotes"] }, 0] },
+                  { "$divide": ["$totalUpvotes", { "$add": ["$totalUpvotes", "$totalDownvotes"] }] },
+                  0
+                ] },
+                2
+              ]
             }
           }
         },
@@ -317,46 +157,22 @@
           }
         },
         {
-          "$project": {
-            "sessionId": "$sessionId",
-            "deviceType": "$device.type",
-            "browser": "$device.browser",
-            "os": "$device.os",
-            "isMobile": "$device.isMobile",
-            "country": "$location.country",
-            "trafficSource": "$traffic.source",
-            "trafficMedium": "$traffic.medium",
-            "hasCampaign": { "$ne": ["$traffic.campaign", null] },
-            "pageViews": "$engagement.pageViews",
-            "uniquePages": "$engagement.uniquePages",
-            "events": "$engagement.events",
-            "scrollDepth": "$engagement.scrollDepth",
-            "duration": "$duration",
-            "converted": "$conversion.converted",
-            "revenue": "$conversion.revenue",
-            "transactions": "$conversion.transactions",
-            "bounced": "$bounced",
-            "isNewUser": "$isNewUser"
-          }
-        },
-        {
           "$group": {
             "_id": {
-              "deviceType": "$deviceType",
-              "trafficSource": "$trafficSource"
+              "deviceType": "$device.type",
+              "trafficSource": "$traffic.source"
             },
             "sessionCount": { "$sum": 1 },
-            "avgPageViews": { "$avg": "$pageViews" },
-            "avgUniquePages": { "$avg": "$uniquePages" },
-            "avgEvents": { "$avg": "$events" },
-            "avgScrollDepth": { "$avg": "$scrollDepth" },
+            "avgPageViews": { "$avg": "$engagement.pageViews" },
+            "avgUniquePages": { "$avg": "$engagement.uniquePages" },
+            "avgEvents": { "$avg": "$engagement.events" },
+            "avgScrollDepth": { "$avg": "$engagement.scrollDepth" },
             "avgDuration": { "$avg": "$duration" },
-            "conversions": { "$sum": { "$cond": ["$converted", 1, 0] } },
-            "totalRevenue": { "$sum": "$revenue" },
-            "totalTransactions": { "$sum": "$transactions" },
+            "conversions": { "$sum": { "$cond": ["$conversion.converted", 1, 0] } },
+            "totalRevenue": { "$sum": "$conversion.revenue" },
+            "totalTransactions": { "$sum": "$conversion.transactions" },
             "bounceCount": { "$sum": { "$cond": ["$bounced", 1, 0] } },
-            "newUserCount": { "$sum": { "$cond": ["$isNewUser", 1, 0] } },
-            "campaignSessions": { "$sum": { "$cond": ["$hasCampaign", 1, 0] } }
+            "newUserCount": { "$sum": { "$cond": ["$isNewUser", 1, 0] } }
           }
         },
         {
@@ -375,29 +191,14 @@
             }
           }
         },
-        {
-          "$project": {
-            "_id": 0,
-            "deviceType": "$_id.deviceType",
-            "trafficSource": "$_id.trafficSource",
-            "sessionCount": 1,
-            "avgPageViews": { "$round": ["$avgPageViews", 1] },
-            "avgDuration": { "$round": ["$avgDuration", 0] },
-            "conversionRate": 1,
-            "bounceRate": 1,
-            "newUserRate": 1,
-            "totalRevenue": { "$round": ["$totalRevenue", 2] },
-            "avgRevenuePerSession": 1
-          }
-        },
         { "$sort": { "conversionRate": -1, "sessionCount": -1 } },
         { "$limit": 30 }
       ]
     },
     {
       "id": "PIPE006",
-      "name": "Social Post Engagement with Nested Comments",
-      "description": "Analyze post engagement including nested comment depth and reaction diversity",
+      "name": "Social Post Engagement Analysis",
+      "description": "Analyze post engagement including reaction and comment metrics",
       "collection": "social_posts",
       "pipeline": [
         {
@@ -407,223 +208,96 @@
           }
         },
         {
-          "$project": {
-            "postId": "$_id",
-            "authorId": "$authorId",
-            "type": "$type",
-            "hasMedia": { "$gt": [{ "$size": { "$ifNull": ["$media", []] } }, 0] },
-            "hasPoll": { "$ne": ["$poll", null] },
-            "hashtagCount": { "$size": { "$ifNull": ["$content.hashtags", []] } },
-            "mentionCount": { "$size": { "$ifNull": ["$content.mentions", []] } },
-            "totalReactions": {
-              "$add": [
-                { "$ifNull": ["$reactions.like", 0] },
-                { "$ifNull": ["$reactions.love", 0] },
-                { "$ifNull": ["$reactions.laugh", 0] },
-                { "$ifNull": ["$reactions.wow", 0] },
-                { "$ifNull": ["$reactions.sad", 0] },
-                { "$ifNull": ["$reactions.angry", 0] }
-              ]
+          "$group": {
+            "_id": {
+              "postType": "$type"
             },
-            "commentCount": { "$size": { "$ifNull": ["$comments", []] } },
-            "shareCount": { "$ifNull": ["$shares.count", 0] },
-            "views": { "$ifNull": ["$engagement.views", 0] },
-            "reach": { "$ifNull": ["$engagement.reach", 0] },
-            "impressions": { "$ifNull": ["$engagement.impressions", 0] },
-            "saves": { "$ifNull": ["$engagement.saves", 0] },
-            "isSponsored": "$metadata.sponsored",
-            "isPinned": "$metadata.pinned"
+            "postCount": { "$sum": 1 },
+            "avgLikes": { "$avg": "$reactions.like" },
+            "avgLoves": { "$avg": "$reactions.love" },
+            "avgLaughs": { "$avg": "$reactions.laugh" },
+            "avgWows": { "$avg": "$reactions.wow" },
+            "avgViews": { "$avg": "$engagement.views" },
+            "avgReach": { "$avg": "$engagement.reach" },
+            "avgImpressions": { "$avg": "$engagement.impressions" },
+            "avgSaves": { "$avg": "$engagement.saves" },
+            "totalShares": { "$sum": "$shares.count" },
+            "sponsoredCount": { "$sum": { "$cond": ["$metadata.sponsored", 1, 0] } }
           }
         },
         {
           "$addFields": {
-            "engagementRate": {
-              "$cond": [
-                { "$gt": ["$views", 0] },
-                { "$round": [
-                  { "$multiply": [
-                    { "$divide": [
-                      { "$add": ["$totalReactions", "$commentCount", "$shareCount"] },
-                      "$views"
-                    ] },
-                    100
-                  ] },
-                  2
-                ] },
-                0
-              ]
-            }
-          }
-        },
-        {
-          "$group": {
-            "_id": {
-              "type": "$type",
-              "hasMedia": "$hasMedia"
+            "avgTotalReactions": {
+              "$round": [{ "$add": [
+                { "$ifNull": ["$avgLikes", 0] },
+                { "$ifNull": ["$avgLoves", 0] },
+                { "$ifNull": ["$avgLaughs", 0] },
+                { "$ifNull": ["$avgWows", 0] }
+              ] }, 0]
             },
-            "postCount": { "$sum": 1 },
-            "avgReactions": { "$avg": "$totalReactions" },
-            "avgComments": { "$avg": "$commentCount" },
-            "avgShares": { "$avg": "$shareCount" },
-            "avgViews": { "$avg": "$views" },
-            "avgReach": { "$avg": "$reach" },
-            "avgEngagementRate": { "$avg": "$engagementRate" },
-            "totalViews": { "$sum": "$views" },
-            "avgHashtags": { "$avg": "$hashtagCount" },
-            "avgMentions": { "$avg": "$mentionCount" },
-            "sponsoredCount": { "$sum": { "$cond": ["$isSponsored", 1, 0] } }
-          }
-        },
-        {
-          "$project": {
-            "_id": 0,
-            "postType": "$_id.type",
-            "hasMedia": "$_id.hasMedia",
-            "postCount": 1,
-            "avgReactions": { "$round": ["$avgReactions", 0] },
-            "avgComments": { "$round": ["$avgComments", 1] },
-            "avgShares": { "$round": ["$avgShares", 1] },
-            "avgViews": { "$round": ["$avgViews", 0] },
-            "avgEngagementRate": { "$round": ["$avgEngagementRate", 2] },
-            "avgHashtags": { "$round": ["$avgHashtags", 1] },
-            "avgMentions": { "$round": ["$avgMentions", 1] },
             "sponsoredPercentage": {
               "$round": [{ "$multiply": [{ "$divide": ["$sponsoredCount", "$postCount"] }, 100] }, 1]
             }
           }
         },
-        { "$sort": { "avgEngagementRate": -1 } }
+        { "$sort": { "avgViews": -1 } }
       ]
     },
     {
       "id": "PIPE007",
-      "name": "IoT Device Health and Sensor Analysis",
-      "description": "Analyze device health status with sensor configuration and maintenance metrics",
+      "name": "IoT Device Health Analysis by Building",
+      "description": "Analyze device health status by building (without array unwinding)",
       "collection": "iot_devices",
       "pipeline": [
-        { "$unwind": "$sensors" },
-        {
-          "$project": {
-            "deviceId": "$deviceId",
-            "deviceType": "$type",
-            "manufacturer": "$manufacturer",
-            "building": "$location.building",
-            "floor": "$location.floor",
-            "zone": "$location.zone",
-            "sensorType": "$sensors.type",
-            "sensorUnit": "$sensors.unit",
-            "sensorAccuracy": "$sensors.accuracy",
-            "isOnline": "$status.online",
-            "health": "$status.health",
-            "battery": "$status.battery",
-            "signalStrength": "$status.signalStrength",
-            "errorCount": { "$size": { "$ifNull": ["$status.errors", []] } },
-            "powerMode": "$configuration.powerMode",
-            "samplingRate": "$configuration.samplingRate",
-            "daysUntilService": {
-              "$divide": [
-                { "$subtract": ["$maintenance.nextService", { "$date": "2024-06-01T00:00:00Z" }] },
-                86400000
-              ]
-            },
-            "serviceHistoryCount": { "$size": { "$ifNull": ["$maintenance.serviceHistory", []] } }
-          }
-        },
         {
           "$group": {
             "_id": {
-              "building": "$building",
-              "sensorType": "$sensorType"
+              "building": "$location.building",
+              "floor": "$location.floor"
             },
-            "sensorCount": { "$sum": 1 },
-            "onlineCount": { "$sum": { "$cond": ["$isOnline", 1, 0] } },
-            "healthyCount": { "$sum": { "$cond": [{ "$eq": ["$health", "healthy"] }, 1, 0] } },
-            "avgBattery": { "$avg": "$battery" },
-            "avgSignalStrength": { "$avg": "$signalStrength" },
-            "totalErrors": { "$sum": "$errorCount" },
-            "avgSamplingRate": { "$avg": "$samplingRate" },
-            "avgDaysUntilService": { "$avg": "$daysUntilService" },
-            "totalServiceEvents": { "$sum": "$serviceHistoryCount" }
+            "deviceCount": { "$sum": 1 },
+            "onlineCount": { "$sum": { "$cond": ["$status.online", 1, 0] } },
+            "healthyCount": { "$sum": { "$cond": [{ "$eq": ["$status.health", "healthy"] }, 1, 0] } },
+            "avgBattery": { "$avg": "$status.battery" },
+            "avgSignalStrength": { "$avg": "$status.signalStrength" },
+            "avgSamplingRate": { "$avg": "$configuration.samplingRate" }
           }
         },
         {
           "$addFields": {
             "onlinePercentage": {
-              "$round": [{ "$multiply": [{ "$divide": ["$onlineCount", "$sensorCount"] }, 100] }, 1]
+              "$round": [{ "$multiply": [{ "$divide": ["$onlineCount", "$deviceCount"] }, 100] }, 1]
             },
             "healthyPercentage": {
-              "$round": [{ "$multiply": [{ "$divide": ["$healthyCount", "$sensorCount"] }, 100] }, 1]
+              "$round": [{ "$multiply": [{ "$divide": ["$healthyCount", "$deviceCount"] }, 100] }, 1]
             }
           }
         },
-        {
-          "$project": {
-            "_id": 0,
-            "building": "$_id.building",
-            "sensorType": "$_id.sensorType",
-            "sensorCount": 1,
-            "onlinePercentage": 1,
-            "healthyPercentage": 1,
-            "avgBattery": { "$round": ["$avgBattery", 0] },
-            "avgSignalStrength": { "$round": ["$avgSignalStrength", 0] },
-            "avgErrorsPerDevice": { "$round": [{ "$divide": ["$totalErrors", "$sensorCount"] }, 2] },
-            "avgDaysUntilService": { "$round": ["$avgDaysUntilService", 0] },
-            "avgServiceEvents": { "$round": [{ "$divide": ["$totalServiceEvents", "$sensorCount"] }, 1] }
-          }
-        },
-        { "$sort": { "healthyPercentage": 1, "sensorCount": -1 } },
+        { "$sort": { "healthyPercentage": 1, "deviceCount": -1 } },
         { "$limit": 40 }
       ]
     },
     {
       "id": "PIPE008",
-      "name": "IoT Time-Series Aggregation with Alerts",
-      "description": "Aggregate sensor readings with alert analysis and data quality metrics",
+      "name": "IoT Time-Series Aggregation",
+      "description": "Aggregate sensor readings by hour (single group stage)",
       "collection": "iot_readings",
       "pipeline": [
         {
-          "$match": {
-            "timestamp": { "$gte": { "$date": "2024-01-01T00:00:00Z" } }
-          }
-        },
-        {
-          "$project": {
-            "deviceId": "$deviceId",
-            "hour": { "$hour": "$timestamp" },
-            "dayOfWeek": { "$dayOfWeek": "$timestamp" },
-            "temperature": "$readings.temperature.value",
-            "tempQuality": "$readings.temperature.quality",
-            "humidity": "$readings.humidity.value",
-            "humidityQuality": "$readings.humidity.quality",
-            "pressure": "$readings.pressure.value",
-            "hasLight": { "$ne": ["$readings.light", null] },
-            "hasMotion": { "$ne": ["$readings.motion", null] },
-            "motionDetected": { "$ifNull": ["$readings.motion.detected", false] },
-            "alertCount": { "$size": { "$ifNull": ["$alerts", []] } },
-            "transmissionDelay": "$metadata.transmissionDelay",
-            "retries": "$metadata.retries"
-          }
-        },
-        {
           "$group": {
             "_id": {
-              "deviceId": "$deviceId",
-              "hour": "$hour"
+              "hourOfDay": { "$hour": "$timestamp" }
             },
             "readingCount": { "$sum": 1 },
-            "avgTemperature": { "$avg": "$temperature" },
-            "minTemperature": { "$min": "$temperature" },
-            "maxTemperature": { "$max": "$temperature" },
-            "avgHumidity": { "$avg": "$humidity" },
-            "avgPressure": { "$avg": "$pressure" },
+            "avgTemperature": { "$avg": "$readings.temperature.value" },
+            "minTemperature": { "$min": "$readings.temperature.value" },
+            "maxTemperature": { "$max": "$readings.temperature.value" },
+            "avgHumidity": { "$avg": "$readings.humidity.value" },
+            "avgPressure": { "$avg": "$readings.pressure.value" },
             "goodTempReadings": {
-              "$sum": { "$cond": [{ "$eq": ["$tempQuality", "good"] }, 1, 0] }
+              "$sum": { "$cond": [{ "$eq": ["$readings.temperature.quality", "good"] }, 1, 0] }
             },
-            "lightReadings": { "$sum": { "$cond": ["$hasLight", 1, 0] } },
-            "motionEvents": { "$sum": { "$cond": ["$motionDetected", 1, 0] } },
-            "totalAlerts": { "$sum": "$alertCount" },
-            "avgTransmissionDelay": { "$avg": "$transmissionDelay" },
-            "totalRetries": { "$sum": "$retries" }
+            "avgTransmissionDelay": { "$avg": "$metadata.transmissionDelay" }
           }
         },
         {
@@ -637,42 +311,14 @@
             }
           }
         },
-        {
-          "$group": {
-            "_id": "$_id.hour",
-            "deviceCount": { "$sum": 1 },
-            "totalReadings": { "$sum": "$readingCount" },
-            "avgTemperatureAcrossDevices": { "$avg": "$avgTemperature" },
-            "avgHumidityAcrossDevices": { "$avg": "$avgHumidity" },
-            "avgTemperatureRange": { "$avg": "$temperatureRange" },
-            "avgDataQuality": { "$avg": "$dataQualityRate" },
-            "totalMotionEvents": { "$sum": "$motionEvents" },
-            "totalAlerts": { "$sum": "$totalAlerts" },
-            "avgTransmissionDelay": { "$avg": "$avgTransmissionDelay" }
-          }
-        },
-        {
-          "$project": {
-            "_id": 0,
-            "hour": "$_id",
-            "deviceCount": 1,
-            "totalReadings": 1,
-            "avgTemperature": { "$round": ["$avgTemperatureAcrossDevices", 2] },
-            "avgHumidity": { "$round": ["$avgHumidityAcrossDevices", 1] },
-            "avgTemperatureVariation": { "$round": ["$avgTemperatureRange", 2] },
-            "avgDataQuality": { "$round": ["$avgDataQuality", 1] },
-            "totalMotionEvents": 1,
-            "totalAlerts": 1,
-            "avgTransmissionDelayMs": { "$round": ["$avgTransmissionDelay", 0] }
-          }
-        },
-        { "$sort": { "hour": 1 } }
+        { "$sort": { "readingCount": -1 } },
+        { "$limit": 24 }
       ]
     },
     {
       "id": "PIPE009",
       "name": "User Follower Network Analysis",
-      "description": "Analyze social user networks with engagement and activity patterns",
+      "description": "Analyze social user networks with engagement and activity patterns using bucket aggregation",
       "collection": "social_users",
       "pipeline": [
         {
@@ -681,200 +327,73 @@
           }
         },
         {
-          "$project": {
-            "userId": "$_id",
-            "username": "$username",
-            "isVerified": "$profile.verified",
-            "isPrivate": "$profile.private",
-            "followers": "$stats.followers",
-            "following": "$stats.following",
-            "posts": "$stats.posts",
-            "likes": "$stats.likes",
-            "comments": "$stats.comments",
-            "shares": "$stats.shares",
-            "interestCount": { "$size": { "$ifNull": ["$interests", []] } },
-            "followerListSize": { "$size": { "$ifNull": ["$connections.followers", []] } },
-            "followingListSize": { "$size": { "$ifNull": ["$connections.following", []] } },
-            "blockedCount": { "$size": { "$ifNull": ["$connections.blocked", []] } },
-            "loginStreak": "$activity.loginStreak",
-            "totalTimeSpent": "$activity.totalTimeSpent",
-            "theme": "$settings.display.theme",
-            "notificationsEnabled": {
-              "$or": [
-                "$settings.notifications.likes",
-                "$settings.notifications.comments",
-                "$settings.notifications.follows"
-              ]
+          "$bucket": {
+            "groupBy": "$stats.followers",
+            "boundaries": [0, 100, 1000, 10000, 100000, 1000000, 10000000],
+            "default": 10000001,
+            "output": {
+              "userCount": { "$sum": 1 },
+              "verifiedCount": { "$sum": { "$cond": ["$profile.verified", 1, 0] } },
+              "privateCount": { "$sum": { "$cond": ["$profile.private", 1, 0] } },
+              "avgFollowing": { "$avg": "$stats.following" },
+              "avgPosts": { "$avg": "$stats.posts" },
+              "avgLikes": { "$avg": "$stats.likes" },
+              "avgComments": { "$avg": "$stats.comments" },
+              "avgShares": { "$avg": "$stats.shares" },
+              "avgLoginStreak": { "$avg": "$activity.loginStreak" },
+              "avgTimeSpent": { "$avg": "$activity.totalTimeSpent" }
             }
           }
         },
         {
           "$addFields": {
-            "followerToFollowingRatio": {
-              "$cond": [
-                { "$gt": ["$following", 0] },
-                { "$round": [{ "$divide": ["$followers", "$following"] }, 2] },
-                0
-              ]
-            },
-            "engagementTotal": {
-              "$add": ["$likes", "$comments", "$shares"]
-            },
-            "engagementPerPost": {
-              "$cond": [
-                { "$gt": ["$posts", 0] },
-                { "$round": [
-                  { "$divide": [
-                    { "$add": ["$likes", "$comments", "$shares"] },
-                    "$posts"
-                  ] },
-                  1
-                ] },
-                0
-              ]
-            }
-          }
-        },
-        {
-          "$bucket": {
-            "groupBy": "$followers",
-            "boundaries": [0, 100, 1000, 10000, 100000, 1000000, 10000000],
-            "default": "10M+",
-            "output": {
-              "userCount": { "$sum": 1 },
-              "verifiedCount": { "$sum": { "$cond": ["$isVerified", 1, 0] } },
-              "privateCount": { "$sum": { "$cond": ["$isPrivate", 1, 0] } },
-              "avgFollowing": { "$avg": "$following" },
-              "avgPosts": { "$avg": "$posts" },
-              "avgEngagementPerPost": { "$avg": "$engagementPerPost" },
-              "avgLoginStreak": { "$avg": "$loginStreak" },
-              "avgTimeSpent": { "$avg": "$totalTimeSpent" },
-              "avgInterests": { "$avg": "$interestCount" }
-            }
-          }
-        },
-        {
-          "$project": {
-            "followerRange": "$_id",
-            "userCount": 1,
             "verifiedPercentage": {
               "$round": [{ "$multiply": [{ "$divide": ["$verifiedCount", "$userCount"] }, 100] }, 1]
             },
             "privatePercentage": {
               "$round": [{ "$multiply": [{ "$divide": ["$privateCount", "$userCount"] }, 100] }, 1]
             },
-            "avgFollowing": { "$round": ["$avgFollowing", 0] },
-            "avgPosts": { "$round": ["$avgPosts", 0] },
-            "avgEngagementPerPost": { "$round": ["$avgEngagementPerPost", 0] },
-            "avgLoginStreak": { "$round": ["$avgLoginStreak", 0] },
-            "avgTimeSpentHours": { "$round": [{ "$divide": ["$avgTimeSpent", 3600] }, 1] },
-            "avgInterests": { "$round": ["$avgInterests", 1] }
+            "avgEngagement": {
+              "$round": [{ "$add": ["$avgLikes", "$avgComments", "$avgShares"] }, 0]
+            }
           }
         }
       ]
     },
     {
       "id": "PIPE010",
-      "name": "Multi-Collection Order-to-Review Journey",
-      "description": "Track customer journey from order to review with product details",
+      "name": "Order Analysis by Payment and Shipping Method",
+      "description": "Analyze all orders by payment method with totals metrics (without array unwinding)",
       "collection": "ecommerce_orders",
       "pipeline": [
         {
-          "$match": {
-            "status": "delivered"
-          }
-        },
-        { "$unwind": "$items" },
-        {
-          "$lookup": {
-            "from": "ecommerce_reviews",
-            "let": { "productId": "$items.productId", "customerId": "$customerId" },
-            "pipeline": [
-              {
-                "$match": {
-                  "$expr": {
-                    "$and": [
-                      { "$eq": ["$productId", "$$productId"] },
-                      { "$eq": ["$customerId", "$$customerId"] }
-                    ]
-                  }
-                }
-              }
-            ],
-            "as": "reviews"
-          }
-        },
-        {
-          "$lookup": {
-            "from": "ecommerce_products",
-            "localField": "items.productId",
-            "foreignField": "_id",
-            "as": "product"
-          }
-        },
-        { "$unwind": { "path": "$product", "preserveNullAndEmptyArrays": true } },
-        {
-          "$project": {
-            "orderId": "$_id",
-            "customerId": "$customerId",
-            "orderDate": "$timestamps.createdAt",
-            "deliveryDate": "$timestamps.deliveredAt",
-            "productId": "$items.productId",
-            "productCategory": "$product.category.primary",
-            "productBrand": "$product.brand.name",
-            "itemTotal": "$items.total",
-            "quantity": "$items.quantity",
-            "hasReview": { "$gt": [{ "$size": "$reviews" }, 0] },
-            "reviewRating": { "$arrayElemAt": ["$reviews.rating.overall", 0] },
-            "reviewSentiment": { "$arrayElemAt": ["$reviews.metadata.sentiment", 0] }
-          }
-        },
-        {
           "$group": {
             "_id": {
-              "category": "$productCategory",
-              "brand": "$productBrand"
+              "paymentMethod": "$payment.method",
+              "shippingMethod": "$shipping.method"
             },
             "orderCount": { "$sum": 1 },
-            "totalRevenue": { "$sum": "$itemTotal" },
-            "totalQuantity": { "$sum": "$quantity" },
-            "uniqueCustomers": { "$addToSet": "$customerId" },
-            "reviewCount": { "$sum": { "$cond": ["$hasReview", 1, 0] } },
-            "avgReviewRating": { "$avg": "$reviewRating" },
-            "positiveReviews": {
-              "$sum": { "$cond": [{ "$eq": ["$reviewSentiment", "positive"] }, 1, 0] }
-            },
-            "negativeReviews": {
-              "$sum": { "$cond": [{ "$eq": ["$reviewSentiment", "negative"] }, 1, 0] }
-            }
+            "totalRevenue": { "$sum": "$pricing.subtotal" },
+            "totalShipping": { "$sum": "$pricing.shipping" },
+            "totalTax": { "$sum": "$pricing.tax" },
+            "avgOrderValue": { "$avg": "$pricing.subtotal" },
+            "maxOrderValue": { "$max": "$pricing.subtotal" },
+            "minOrderValue": { "$min": "$pricing.subtotal" }
           }
         },
         {
           "$addFields": {
-            "reviewRate": {
-              "$round": [{ "$multiply": [{ "$divide": ["$reviewCount", "$orderCount"] }, 100] }, 1]
-            },
-            "avgOrderValue": {
+            "avgRevenuePerOrder": {
               "$round": [{ "$divide": ["$totalRevenue", "$orderCount"] }, 2]
-            }
-          }
-        },
-        {
-          "$project": {
-            "_id": 0,
-            "category": "$_id.category",
-            "brand": "$_id.brand",
-            "orderCount": 1,
-            "totalRevenue": { "$round": ["$totalRevenue", 2] },
-            "avgOrderValue": 1,
-            "uniqueCustomerCount": { "$size": "$uniqueCustomers" },
-            "reviewRate": 1,
-            "avgReviewRating": { "$round": [{ "$ifNull": ["$avgReviewRating", 0] }, 2] },
-            "positiveReviewPercentage": {
-              "$cond": [
-                { "$gt": ["$reviewCount", 0] },
-                { "$round": [{ "$multiply": [{ "$divide": ["$positiveReviews", "$reviewCount"] }, 100] }, 1] },
-                0
+            },
+            "shippingPercent": {
+              "$round": [
+                { "$cond": [
+                  { "$gt": ["$totalRevenue", 0] },
+                  { "$multiply": [{ "$divide": ["$totalShipping", "$totalRevenue"] }, 100] },
+                  0
+                ] },
+                1
               ]
             }
           }

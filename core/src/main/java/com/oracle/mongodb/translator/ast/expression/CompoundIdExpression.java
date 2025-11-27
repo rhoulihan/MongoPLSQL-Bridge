@@ -76,7 +76,7 @@ public final class CompoundIdExpression implements Expression {
             }
             ctx.visit(entry.getValue());
             ctx.sql(" AS ");
-            ctx.sql(entry.getKey());
+            ctx.identifier(entry.getKey());
             first = false;
         }
     }

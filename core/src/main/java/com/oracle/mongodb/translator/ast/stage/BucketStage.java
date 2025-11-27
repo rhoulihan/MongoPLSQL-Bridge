@@ -122,14 +122,15 @@ public final class BucketStage implements Stage {
             ctx.sql(" ELSE ");
             renderLiteral(ctx, defaultBucket);
         }
-        ctx.sql(" END AS _id");
+        ctx.sql(" END AS ");
+        ctx.identifier("_id");
 
         // Render output accumulators
         for (Map.Entry<String, AccumulatorExpression> entry : output.entrySet()) {
             ctx.sql(", ");
             ctx.visit(entry.getValue());
             ctx.sql(" AS ");
-            ctx.sql(entry.getKey());
+            ctx.identifier(entry.getKey());
         }
     }
 

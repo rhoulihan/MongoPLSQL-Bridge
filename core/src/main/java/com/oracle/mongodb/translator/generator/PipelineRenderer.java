@@ -6,8 +6,14 @@
 package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
+import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
+import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
+import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
+import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
+import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
@@ -67,6 +73,21 @@ public final class PipelineRenderer {
         // Render WITH clause for CTEs ($graphLookup stages)
         renderCteClause(components, ctx);
 
+        // If we have post-group $addFields, we need to wrap the GROUP query in a subquery
+        if (components.hasPostGroupAddFields) {
+            renderWithPostGroupAddFields(components, ctx);
+        } else {
+            renderStandardQuery(components, ctx);
+        }
+
+        // Render UNION ALL clauses ($unionWith stages)
+        renderUnionWithClauses(components, ctx);
+    }
+
+    /**
+     * Renders the standard query without post-group $addFields wrapping.
+     */
+    private void renderStandardQuery(PipelineComponents components, SqlGenerationContext ctx) {
         // Render SELECT clause
         renderSelectClause(components, ctx);
 
@@ -93,9 +114,159 @@ public final class PipelineRenderer {
 
         // Render FETCH clause
         renderFetchClause(components, ctx);
+    }
 
-        // Render UNION ALL clauses ($unionWith stages)
-        renderUnionWithClauses(components, ctx);
+    /**
+     * Renders a query where $addFields follows $group.
+     * Wraps the GROUP query as a subquery and applies $addFields to the result.
+     */
+    private void renderWithPostGroupAddFields(PipelineComponents components, SqlGenerationContext ctx) {
+        // Outer SELECT: columns from inner query + computed fields from $addFields
+        ctx.sql("SELECT inner_query.*");
+
+        // Render post-group $addFields computed columns
+        for (AddFieldsStage addFields : components.postGroupAddFieldsStages) {
+            for (var entry : addFields.getFields().entrySet()) {
+                ctx.sql(", ");
+                // Render expression, but field references should resolve to inner query columns
+                renderPostGroupExpression(entry.getValue(), ctx);
+                ctx.sql(" AS ");
+                ctx.identifier(entry.getKey());
+            }
+        }
+
+        // FROM subquery
+        ctx.sql(" FROM (");
+
+        // Inner query: the GROUP BY query
+        renderSelectClause(components, ctx);
+        renderFromClause(components, ctx);
+        renderJoinClauses(components, ctx);
+        renderGraphLookupJoins(components, ctx);
+        renderWhereClause(components, ctx);
+        renderGroupByClause(components, ctx);
+
+        ctx.sql(") inner_query");
+
+        // ORDER BY, OFFSET, FETCH apply to the outer query
+        renderOrderByClauseForOuterQuery(components, ctx);
+        renderOffsetClause(components, ctx);
+        renderFetchClause(components, ctx);
+    }
+
+    /**
+     * Renders an expression in post-group $addFields context.
+     * Field paths resolve to column names, not JSON paths.
+     */
+    private void renderPostGroupExpression(Expression expr, SqlGenerationContext ctx) {
+        if (expr instanceof FieldPathExpression fieldPath) {
+            // In post-group context, field paths are column names
+            ctx.identifier(fieldPath.getPath());
+        } else if (expr instanceof ArithmeticExpression arith) {
+            renderPostGroupArithmetic(arith, ctx);
+        } else if (expr instanceof ConditionalExpression cond) {
+            renderPostGroupConditional(cond, ctx);
+        } else if (expr instanceof ComparisonExpression comp) {
+            renderPostGroupComparison(comp, ctx);
+        } else if (expr instanceof LiteralExpression) {
+            ctx.visit(expr);
+        } else {
+            // For other expressions, use standard rendering
+            // This may not always be correct but handles simple cases
+            ctx.visit(expr);
+        }
+    }
+
+    private void renderPostGroupArithmetic(ArithmeticExpression arith, SqlGenerationContext ctx) {
+        ArithmeticOp aop = arith.getOp();
+
+        // Function-style operators
+        if (aop.requiresFunctionCall()) {
+            ctx.sql(aop.getSqlOperator());
+            ctx.sql("(");
+            boolean first = true;
+            for (Expression operand : arith.getOperands()) {
+                if (!first) {
+                    ctx.sql(", ");
+                }
+                renderPostGroupExpression(operand, ctx);
+                first = false;
+            }
+            ctx.sql(")");
+            return;
+        }
+
+        // Infix operators (+, -, *, /)
+        String op = switch (aop) {
+            case ADD -> " + ";
+            case SUBTRACT -> " - ";
+            case MULTIPLY -> " * ";
+            case DIVIDE -> " / ";
+            default -> " " + aop.getSqlOperator() + " ";
+        };
+
+        ctx.sql("(");
+        boolean first = true;
+        for (Expression operand : arith.getOperands()) {
+            if (!first) {
+                ctx.sql(op);
+            }
+            renderPostGroupExpression(operand, ctx);
+            first = false;
+        }
+        ctx.sql(")");
+    }
+
+    private void renderPostGroupConditional(ConditionalExpression cond, SqlGenerationContext ctx) {
+        if (cond.getType() == ConditionalExpression.ConditionalType.IF_NULL) {
+            // $ifNull: [expr, replacement] -> NVL(expr, replacement)
+            ctx.sql("NVL(");
+            renderPostGroupExpression(cond.getThenExpr(), ctx);
+            ctx.sql(", ");
+            renderPostGroupExpression(cond.getElseExpr(), ctx);
+            ctx.sql(")");
+        } else {
+            // $cond: [if, then, else] -> CASE WHEN ... THEN ... ELSE ... END
+            ctx.sql("CASE WHEN ");
+            renderPostGroupExpression(cond.getCondition(), ctx);
+            ctx.sql(" THEN ");
+            renderPostGroupExpression(cond.getThenExpr(), ctx);
+            ctx.sql(" ELSE ");
+            renderPostGroupExpression(cond.getElseExpr(), ctx);
+            ctx.sql(" END");
+        }
+    }
+
+    private void renderPostGroupComparison(ComparisonExpression comp, SqlGenerationContext ctx) {
+        renderPostGroupExpression(comp.getLeft(), ctx);
+        ctx.sql(" ");
+        ctx.sql(comp.getOp().getSqlOperator());
+        ctx.sql(" ");
+        renderPostGroupExpression(comp.getRight(), ctx);
+    }
+
+    /**
+     * Renders ORDER BY for outer query - field paths should be column names.
+     */
+    private void renderOrderByClauseForOuterQuery(PipelineComponents components, SqlGenerationContext ctx) {
+        if (components.sortStage == null || components.sortStage.getSortFields().isEmpty()) {
+            return;
+        }
+
+        ctx.sql(" ORDER BY ");
+
+        boolean first = true;
+        for (SortStage.SortField field : components.sortStage.getSortFields()) {
+            if (!first) {
+                ctx.sql(", ");
+            }
+            // In outer query context, use column names directly
+            ctx.identifier(field.getFieldPath().getPath());
+            if (field.getDirection() == SortStage.SortDirection.DESC) {
+                ctx.sql(" DESC");
+            }
+            first = false;
+        }
     }
 
     private void renderCteClause(PipelineComponents components, SqlGenerationContext ctx) {
@@ -133,12 +304,14 @@ public final class PipelineRenderer {
 
     private PipelineComponents analyzePipeline(Pipeline pipeline) {
         PipelineComponents components = new PipelineComponents();
+        boolean sawGroupStage = false;
 
         for (Stage stage : pipeline.getStages()) {
             if (stage instanceof MatchStage match) {
                 components.matchStages.add(match);
             } else if (stage instanceof GroupStage group) {
                 components.groupStage = group;
+                sawGroupStage = true;
             } else if (stage instanceof ProjectStage project) {
                 components.projectStage = project;
             } else if (stage instanceof SortStage sort) {
@@ -152,13 +325,21 @@ public final class PipelineRenderer {
             } else if (stage instanceof UnwindStage unwind) {
                 components.unwindStages.add(unwind);
             } else if (stage instanceof AddFieldsStage addFields) {
-                components.addFieldsStages.add(addFields);
+                if (sawGroupStage) {
+                    // $addFields after $group needs special handling
+                    components.postGroupAddFieldsStages.add(addFields);
+                    components.hasPostGroupAddFields = true;
+                } else {
+                    components.addFieldsStages.add(addFields);
+                }
             } else if (stage instanceof UnionWithStage unionWith) {
                 components.unionWithStages.add(unionWith);
             } else if (stage instanceof BucketStage bucket) {
                 components.bucketStage = bucket;
+                sawGroupStage = true; // $bucket also produces grouped results
             } else if (stage instanceof BucketAutoStage bucketAuto) {
                 components.bucketAutoStage = bucketAuto;
+                sawGroupStage = true; // $bucketAuto also produces grouped results
             } else if (stage instanceof FacetStage facet) {
                 components.facetStage = facet;
             } else if (stage instanceof GraphLookupStage graphLookup) {
@@ -195,6 +376,12 @@ public final class PipelineRenderer {
             renderProjectSelectClause(components.projectStage, ctx);
         } else {
             // Default: select all data
+            // Use table alias if present
+            String baseAlias = ctx.getBaseTableAlias();
+            if (baseAlias != null && !baseAlias.isEmpty()) {
+                ctx.sql(baseAlias);
+                ctx.sql(".");
+            }
             ctx.sql(config.dataColumnName());
         }
 
@@ -219,18 +406,18 @@ public final class PipelineRenderer {
         // Render $graphLookup result columns
         for (GraphLookupStage graphLookup : components.graphLookupStages) {
             ctx.sql(", ");
-            ctx.sql(graphLookup.getAs());
-            ctx.sql("_cte.");
-            ctx.sql(graphLookup.getAs());
+            ctx.identifier(graphLookup.getAs() + "_cte");
+            ctx.sql(".");
+            ctx.identifier(graphLookup.getAs());
             ctx.sql(" AS ");
-            ctx.sql(graphLookup.getAs());
+            ctx.identifier(graphLookup.getAs());
             if (graphLookup.getDepthField() != null) {
                 ctx.sql(", ");
-                ctx.sql(graphLookup.getAs());
-                ctx.sql("_cte.");
-                ctx.sql(graphLookup.getDepthField());
+                ctx.identifier(graphLookup.getAs() + "_cte");
+                ctx.sql(".");
+                ctx.identifier(graphLookup.getDepthField());
                 ctx.sql(" AS ");
-                ctx.sql(graphLookup.getDepthField());
+                ctx.identifier(graphLookup.getDepthField());
             }
         }
     }
@@ -246,7 +433,8 @@ public final class PipelineRenderer {
                 compound.renderWithAliases(ctx);
             } else {
                 ctx.visit(idExpr);
-                ctx.sql(" AS _id");
+                ctx.sql(" AS ");
+                ctx.identifier("_id");
             }
             first = false;
         }
@@ -258,7 +446,7 @@ public final class PipelineRenderer {
             }
             ctx.visit(entry.getValue());
             ctx.sql(" AS ");
-            ctx.sql(entry.getKey());
+            ctx.identifier(entry.getKey());
             first = false;
         }
 
@@ -287,7 +475,7 @@ public final class PipelineRenderer {
                 ctx.visit(field.getExpression());
             }
             ctx.sql(" AS ");
-            ctx.sql(alias);
+            ctx.identifier(alias);
             first = false;
         }
 
@@ -300,11 +488,10 @@ public final class PipelineRenderer {
         ctx.sql(" FROM ");
         ctx.sql(config.qualifiedTableName());
 
-        // Add alias if we have joins or unwinds (to disambiguate table references)
-        if (!components.lookupStages.isEmpty() || !components.unwindStages.isEmpty()) {
-            ctx.sql(" ");
-            ctx.sql(ctx.getBaseTableAlias());
-        }
+        // Always add alias to disambiguate table references
+        // This ensures JSON_VALUE(base.data, ...) works consistently
+        ctx.sql(" ");
+        ctx.sql(ctx.getBaseTableAlias());
 
         // Render unwind stages as cross joins with JSON_TABLE
         for (UnwindStage unwind : components.unwindStages) {
@@ -464,6 +651,7 @@ public final class PipelineRenderer {
         List<LookupStage> lookupStages = new ArrayList<>();
         List<UnwindStage> unwindStages = new ArrayList<>();
         List<AddFieldsStage> addFieldsStages = new ArrayList<>();
+        List<AddFieldsStage> postGroupAddFieldsStages = new ArrayList<>(); // $addFields after $group
         List<UnionWithStage> unionWithStages = new ArrayList<>();
         List<GraphLookupStage> graphLookupStages = new ArrayList<>();
         List<SetWindowFieldsStage> setWindowFieldsStages = new ArrayList<>();
@@ -475,5 +663,6 @@ public final class PipelineRenderer {
         SortStage sortStage;
         SkipStage skipStage;
         LimitStage limitStage;
+        boolean hasPostGroupAddFields = false; // Track if $addFields comes after $group
     }
 }

@@ -19,8 +19,11 @@ import java.util.regex.Pattern;
  */
 public class DefaultSqlGenerationContext implements SqlGenerationContext {
 
+    // Oracle identifiers must start with a letter (not underscore) to be unquoted
+    // Identifiers starting with underscore, containing special chars, or that are
+    // reserved words need to be quoted
     private static final Pattern SIMPLE_IDENTIFIER =
-        Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+        Pattern.compile("^[a-zA-Z][a-zA-Z0-9_]*$");
 
     private static final String DEFAULT_BASE_ALIAS = "base";
 
@@ -32,21 +35,21 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     private final String baseTableAlias;
 
     public DefaultSqlGenerationContext() {
-        this(false, Oracle26aiDialect.INSTANCE, DEFAULT_BASE_ALIAS);
+        this(false, Oracle26aiDialect.INSTANCE, null);
     }
 
     public DefaultSqlGenerationContext(boolean inlineValues) {
-        this(inlineValues, Oracle26aiDialect.INSTANCE, DEFAULT_BASE_ALIAS);
+        this(inlineValues, Oracle26aiDialect.INSTANCE, null);
     }
 
     public DefaultSqlGenerationContext(boolean inlineValues, OracleDialect dialect) {
-        this(inlineValues, dialect, DEFAULT_BASE_ALIAS);
+        this(inlineValues, dialect, null);
     }
 
     public DefaultSqlGenerationContext(boolean inlineValues, OracleDialect dialect, String baseTableAlias) {
         this.inlineValues = inlineValues;
         this.dialect = dialect != null ? dialect : Oracle26aiDialect.INSTANCE;
-        this.baseTableAlias = baseTableAlias != null ? baseTableAlias : DEFAULT_BASE_ALIAS;
+        this.baseTableAlias = baseTableAlias; // null means no alias needed
     }
 
     @Override

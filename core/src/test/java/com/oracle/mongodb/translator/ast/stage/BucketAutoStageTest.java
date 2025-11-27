@@ -95,7 +95,7 @@ class BucketAutoStageTest {
         String sql = context.toSql();
         assertThat(sql).contains("NTILE(4)");
         assertThat(sql).contains("OVER (ORDER BY");
-        assertThat(sql).contains("AS _id");
+        assertThat(sql).contains("AS \"_id\"");
     }
 
     @Test

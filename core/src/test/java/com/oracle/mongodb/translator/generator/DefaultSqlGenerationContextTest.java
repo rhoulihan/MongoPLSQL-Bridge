@@ -158,7 +158,8 @@ class DefaultSqlGenerationContextTest {
 
     @Test
     void shouldProvideDefaultBaseTableAlias() {
-        assertThat(context.getBaseTableAlias()).isEqualTo("base");
+        // Default context has null base alias (no table alias needed)
+        assertThat(context.getBaseTableAlias()).isNull();
     }
 
     @Test

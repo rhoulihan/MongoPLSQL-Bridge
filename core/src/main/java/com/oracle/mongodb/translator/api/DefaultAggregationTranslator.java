@@ -42,7 +42,12 @@ final class DefaultAggregationTranslator implements AggregationTranslator {
         Pipeline pipelineAst = pipelineParser.parse(config.collectionName(), pipeline);
 
         // Generate SQL using the pipeline renderer
-        var context = new DefaultSqlGenerationContext(options.inlineBindVariables());
+        // Always use "base" alias to ensure consistent table references
+        var context = new DefaultSqlGenerationContext(
+            options.inlineBindVariables(),
+            null,  // default dialect
+            "base" // base table alias
+        );
         pipelineRenderer.render(pipelineAst, context);
 
         return TranslationResult.of(

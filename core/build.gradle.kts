@@ -60,6 +60,7 @@ tasks.register<JavaExec>("translatePipeline") {
         val collectionName = project.findProperty("collectionName")?.toString() ?: ""
         val pipelineFile = project.findProperty("pipelineFile")?.toString() ?: ""
         val pipelineJson = project.findProperty("pipelineJson")?.toString() ?: ""
+        val inlineValues = project.findProperty("inline")?.toString()?.toBoolean() ?: false
 
         if (collectionName.isNotEmpty()) {
             argsList.add(collectionName)
@@ -69,6 +70,9 @@ tasks.register<JavaExec>("translatePipeline") {
             argsList.add(pipelineFile)
         } else if (pipelineJson.isNotEmpty()) {
             argsList.add(pipelineJson)
+        }
+        if (inlineValues) {
+            argsList.add("--inline")
         }
         args = argsList
     }

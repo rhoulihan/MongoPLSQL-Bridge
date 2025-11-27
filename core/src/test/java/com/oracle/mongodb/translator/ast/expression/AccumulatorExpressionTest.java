@@ -149,7 +149,10 @@ class AccumulatorExpressionTest {
 
         expr.render(context);
 
-        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(DISTINCT JSON_VALUE(data, '$.category'))");
+        // Uses LISTAGG workaround since Oracle doesn't support JSON_ARRAYAGG(DISTINCT ...)
+        assertThat(context.toSql()).isEqualTo(
+            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || JSON_VALUE(data, '$.category') || '\"', ',') " +
+            "WITHIN GROUP (ORDER BY JSON_VALUE(data, '$.category')) || ']', '$' RETURNING CLOB)");
     }
 
     @Test
@@ -158,7 +161,10 @@ class AccumulatorExpressionTest {
 
         expr.render(context);
 
-        assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(DISTINCT JSON_VALUE(data, '$.metadata.tag'))");
+        // Uses LISTAGG workaround since Oracle doesn't support JSON_ARRAYAGG(DISTINCT ...)
+        assertThat(context.toSql()).isEqualTo(
+            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || JSON_VALUE(data, '$.metadata.tag') || '\"', ',') " +
+            "WITHIN GROUP (ORDER BY JSON_VALUE(data, '$.metadata.tag')) || ']', '$' RETURNING CLOB)");
     }
 
     @Test

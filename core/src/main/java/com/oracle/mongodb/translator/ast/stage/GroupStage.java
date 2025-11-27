@@ -83,7 +83,8 @@ public final class GroupStage implements Stage {
                 compound.renderWithAliases(ctx);
             } else {
                 ctx.visit(idExpression);
-                ctx.sql(" AS _id");
+                ctx.sql(" AS ");
+                ctx.identifier("_id");
             }
             first = false;
         }
@@ -95,7 +96,7 @@ public final class GroupStage implements Stage {
             }
             ctx.visit(entry.getValue());
             ctx.sql(" AS ");
-            ctx.sql(entry.getKey());
+            ctx.identifier(entry.getKey());
             first = false;
         }
     }

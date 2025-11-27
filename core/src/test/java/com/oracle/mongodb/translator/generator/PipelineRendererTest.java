@@ -52,7 +52,8 @@ class PipelineRendererTest {
             .collectionName("orders")
             .build();
         renderer = new PipelineRenderer(config);
-        context = new DefaultSqlGenerationContext();
+        // Use context with "base" alias to match actual translator behavior
+        context = new DefaultSqlGenerationContext(false, null, "base");
     }
 
     @Test
@@ -61,7 +62,7 @@ class PipelineRendererTest {
 
         renderer.render(pipeline, context);
 
-        assertThat(context.toSql()).isEqualTo("SELECT data FROM orders");
+        assertThat(context.toSql()).isEqualTo("SELECT base.data FROM orders base");
     }
 
     @Test
@@ -70,7 +71,7 @@ class PipelineRendererTest {
 
         renderer.render(pipeline, context);
 
-        assertThat(context.toSql()).isEqualTo("SELECT data FROM orders FETCH FIRST 10 ROWS ONLY");
+        assertThat(context.toSql()).isEqualTo("SELECT base.data FROM orders base FETCH FIRST 10 ROWS ONLY");
     }
 
     @Test
@@ -79,7 +80,7 @@ class PipelineRendererTest {
 
         renderer.render(pipeline, context);
 
-        assertThat(context.toSql()).isEqualTo("SELECT data FROM orders OFFSET 5 ROWS");
+        assertThat(context.toSql()).isEqualTo("SELECT base.data FROM orders base OFFSET 5 ROWS");
     }
 
     @Test
@@ -92,7 +93,7 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .isEqualTo("SELECT data FROM orders OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY");
+            .isEqualTo("SELECT base.data FROM orders base OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY");
     }
 
     @Test
@@ -107,7 +108,7 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .startsWith("SELECT data FROM orders WHERE")
+            .startsWith("SELECT base.data FROM orders base WHERE")
             .contains("$.status");
     }
 
@@ -149,7 +150,7 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .isEqualTo("SELECT data FROM orders ORDER BY JSON_VALUE(data, '$.createdAt') DESC");
+            .isEqualTo("SELECT base.data FROM orders base ORDER BY JSON_VALUE(base.data, '$.createdAt') DESC");
     }
 
     @Test
@@ -184,7 +185,7 @@ class PipelineRendererTest {
 
         assertThat(context.toSql())
             .contains("SELECT")
-            .contains("AS _id")
+            .contains("AS \"_id\"")
             .contains("SUM(")
             .contains("AS total")
             .contains("GROUP BY");
@@ -292,7 +293,7 @@ class PipelineRendererTest {
         String sql = context.toSql();
 
         assertThat(sql)
-            .contains("SELECT data")
+            .contains("SELECT base.data")
             .contains("WHERE")
             .contains("ORDER BY")
             .contains("OFFSET 10 ROWS")
@@ -316,13 +317,13 @@ class PipelineRendererTest {
             .schemaName("myschema")
             .build();
         PipelineRenderer schemaRenderer = new PipelineRenderer(config);
-        var ctx = new DefaultSqlGenerationContext();
+        var ctx = new DefaultSqlGenerationContext(false, null, "base");
 
         Pipeline pipeline = Pipeline.of("order_collection");
 
         schemaRenderer.render(pipeline, ctx);
 
-        assertThat(ctx.toSql()).isEqualTo("SELECT data FROM myschema.order_collection");
+        assertThat(ctx.toSql()).isEqualTo("SELECT base.data FROM myschema.order_collection base");
     }
 
     // Additional tests for better coverage
@@ -660,7 +661,7 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .isEqualTo("SELECT data FROM orders");
+            .isEqualTo("SELECT base.data FROM orders base");
     }
 
     @Test

@@ -103,7 +103,7 @@ class BucketStageTest {
         assertThat(sql).contains("< 200");
         assertThat(sql).contains("THEN 100");
         assertThat(sql).contains("ELSE 'Other'");
-        assertThat(sql).contains("END AS _id");
+        assertThat(sql).contains("END AS \"_id\"");
     }
 
     @Test
@@ -120,7 +120,7 @@ class BucketStageTest {
         String sql = context.toSql();
         assertThat(sql).contains("CASE");
         assertThat(sql).doesNotContain("ELSE");
-        assertThat(sql).contains("END AS _id");
+        assertThat(sql).contains("END AS \"_id\"");
     }
 
     @Test

@@ -129,12 +129,18 @@ public final class AccumulatorExpression implements Expression {
             }
             ctx.sql(")");
         } else if (op == AccumulatorOp.ADD_TO_SET) {
-            // JSON_ARRAYAGG with DISTINCT for $addToSet - collects unique values
-            ctx.sql("JSON_ARRAYAGG(DISTINCT ");
+            // $addToSet collects unique values into an array
+            // Oracle doesn't support JSON_ARRAYAGG(DISTINCT ...), so we use a workaround:
+            // Build JSON array using LISTAGG with quoted string values
+            ctx.sql("JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || ");
             if (argument != null) {
                 ctx.visit(argument);
             }
-            ctx.sql(")");
+            ctx.sql(" || '\"', ',') WITHIN GROUP (ORDER BY ");
+            if (argument != null) {
+                ctx.visit(argument);
+            }
+            ctx.sql(") || ']', '$' RETURNING CLOB)");
         } else {
             ctx.sql(op.getSqlFunction());
             ctx.sql("(");

@@ -106,14 +106,15 @@ public final class BucketAutoStage implements Stage {
         ctx.sql(String.valueOf(buckets));
         ctx.sql(") OVER (ORDER BY ");
         ctx.visit(groupBy);
-        ctx.sql(") AS _id");
+        ctx.sql(") AS ");
+        ctx.identifier("_id");
 
         // Render output accumulators
         for (Map.Entry<String, AccumulatorExpression> entry : output.entrySet()) {
             ctx.sql(", ");
             ctx.visit(entry.getValue());
             ctx.sql(" AS ");
-            ctx.sql(entry.getKey());
+            ctx.identifier(entry.getKey());
         }
 
         if (hasGranularity()) {

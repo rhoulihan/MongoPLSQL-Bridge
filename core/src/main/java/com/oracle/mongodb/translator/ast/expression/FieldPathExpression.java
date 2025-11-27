@@ -70,6 +70,12 @@ public final class FieldPathExpression implements Expression {
     @Override
     public void render(SqlGenerationContext ctx) {
         ctx.sql("JSON_VALUE(");
+        // Use table alias qualified column name when there's a base alias
+        String baseAlias = ctx.getBaseTableAlias();
+        if (baseAlias != null && !baseAlias.isEmpty() && "data".equals(dataColumn)) {
+            ctx.sql(baseAlias);
+            ctx.sql(".");
+        }
         ctx.sql(dataColumn);
         ctx.sql(", '");
         ctx.sql(getJsonPath());

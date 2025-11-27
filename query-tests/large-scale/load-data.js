@@ -3,6 +3,7 @@
  * Data Loader for Large-Scale Cross-Database Testing
  *
  * Loads generated data into MongoDB and Oracle databases for comparison testing.
+ * Oracle data is loaded using SQL with PL/SQL for CLOB handling.
  *
  * Usage:
  *   node load-data.js --target mongodb|oracle|both [--data-dir <dir>] [--drop]
@@ -10,19 +11,20 @@
  * Options:
  *   --target    Target database(s): mongodb, oracle, or both (default: both)
  *   --data-dir  Directory containing generated data (default: ./data)
- *   --drop      Drop existing collections before loading
- *   --batch     Batch size for inserts (default: 1000)
+ *   --drop      Drop existing collections/tables before loading
+ *   --batch     Batch size for inserts (default: 100)
  */
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
 let target = 'both';
 let dataDir = path.join(__dirname, 'data');
 let dropExisting = false;
-let batchSize = 1000;
+let batchSize = 100;
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--target' && args[i + 1]) {
@@ -43,9 +45,11 @@ for (let i = 0; i < args.length; i++) {
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:admin123@localhost:27017';
 const MONGODB_DB = process.env.MONGODB_DB || 'largescale_test';
 
-const ORACLE_USER = process.env.ORACLE_USER || 'mongouser';
-const ORACLE_PASSWORD = process.env.ORACLE_PASSWORD || 'mongopass';
-const ORACLE_CONNECT_STRING = process.env.ORACLE_CONNECT_STRING || 'localhost:1521/FREEPDB1';
+// Oracle connection via Docker
+const ORACLE_CONTAINER = 'mongo-translator-oracle';
+const ORACLE_USER = 'translator';
+const ORACLE_PASSWORD = 'translator123';
+const ORACLE_CONNECT_STRING = '//localhost:1521/FREEPDB1';
 
 /**
  * Load data into MongoDB
@@ -136,115 +140,172 @@ async function loadMongoDb(dataDir, dropExisting, batchSize) {
 }
 
 /**
- * Load data into Oracle
+ * Generate SQL for loading a collection into Oracle
+ * Uses PL/SQL with CLOB concatenation for large JSON documents
+ */
+function generateOracleSql(collectionName, documents, dropExisting) {
+    const chunkSize = 2000; // Characters per chunk to avoid SQL*Plus line limits
+
+    let sql = '';
+    sql += 'SET DEFINE OFF\n';
+    sql += 'SET SERVEROUTPUT ON SIZE UNLIMITED\n';
+    sql += 'SET FEEDBACK OFF\n';
+    sql += '\n';
+
+    if (dropExisting) {
+        sql += `-- Drop existing table\n`;
+        sql += `BEGIN EXECUTE IMMEDIATE 'DROP TABLE ${collectionName} CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;\n`;
+        sql += '/\n';
+    }
+
+    sql += `-- Create table if not exists\n`;
+    sql += `BEGIN\n`;
+    sql += `  EXECUTE IMMEDIATE 'CREATE TABLE ${collectionName} (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, data CLOB CONSTRAINT ${collectionName}_json CHECK (data IS JSON))';\n`;
+    sql += `EXCEPTION\n`;
+    sql += `  WHEN OTHERS THEN\n`;
+    sql += `    IF SQLCODE != -955 THEN RAISE; END IF; -- Ignore "table already exists"\n`;
+    sql += `END;\n`;
+    sql += '/\n\n';
+
+    sql += `DECLARE\n`;
+    sql += `  v_clob CLOB;\n`;
+    sql += `  v_count NUMBER := 0;\n`;
+    sql += `BEGIN\n`;
+
+    documents.forEach((doc, i) => {
+        // Escape single quotes in JSON
+        const jsonStr = JSON.stringify(doc).replace(/'/g, "''");
+
+        // Split into chunks
+        const chunks = [];
+        for (let j = 0; j < jsonStr.length; j += chunkSize) {
+            chunks.push(jsonStr.substring(j, j + chunkSize));
+        }
+
+        sql += `  -- Document ${i + 1}\n`;
+        sql += `  v_clob := '';\n`;
+        chunks.forEach(chunk => {
+            sql += `  v_clob := v_clob || '${chunk}';\n`;
+        });
+        sql += `  INSERT INTO ${collectionName} (data) VALUES (v_clob);\n`;
+        sql += `  v_count := v_count + 1;\n`;
+
+        // Commit every 50 documents to avoid undo segment issues
+        if ((i + 1) % 50 === 0) {
+            sql += `  COMMIT;\n`;
+        }
+        sql += '\n';
+    });
+
+    sql += `  COMMIT;\n`;
+    sql += `  DBMS_OUTPUT.PUT_LINE('Inserted ' || v_count || ' documents into ${collectionName}');\n`;
+    sql += `END;\n`;
+    sql += `/\n\n`;
+
+    return sql;
+}
+
+/**
+ * Execute SQL in Oracle via Docker
+ */
+function executeOracleSql(sqlFile) {
+    try {
+        // Copy SQL file to container
+        execSync(`docker cp "${sqlFile}" ${ORACLE_CONTAINER}:/tmp/load_data.sql`, { encoding: 'utf8' });
+
+        // Execute SQL
+        const result = execSync(
+            `docker exec ${ORACLE_CONTAINER} sqlplus -s ${ORACLE_USER}/${ORACLE_PASSWORD}@${ORACLE_CONNECT_STRING} @/tmp/load_data.sql`,
+            { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
+        );
+
+        return result;
+    } catch (err) {
+        throw new Error(`Oracle execution failed: ${err.message}`);
+    }
+}
+
+/**
+ * Load data into Oracle using SQL
  */
 async function loadOracle(dataDir, dropExisting, batchSize) {
-    const oracledb = require('oracledb');
-
     console.log('\n=== Loading data into Oracle ===');
-    console.log(`Connect string: ${ORACLE_CONNECT_STRING}`);
+    console.log(`Container: ${ORACLE_CONTAINER}`);
     console.log(`User: ${ORACLE_USER}`);
 
-    let connection;
+    // Read manifest
+    const manifestPath = path.join(dataDir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+        throw new Error(`Manifest not found at ${manifestPath}. Run generate-data.js first.`);
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-    try {
-        // Initialize Oracle client (thick mode for SODA)
-        try {
-            oracledb.initOracleClient();
-        } catch (err) {
-            // Already initialized or thin mode
+    console.log(`\nDataset size: ${manifest.size}`);
+    console.log(`Generated: ${manifest.generated}`);
+    console.log(`Collections: ${manifest.collections.length}`);
+
+    for (const collectionInfo of manifest.collections) {
+        const collectionName = collectionInfo.name;
+        const expectedCount = collectionInfo.count;
+
+        console.log(`\n--- ${collectionName} (${expectedCount.toLocaleString()} documents) ---`);
+
+        // Get batch files
+        const collectionDir = path.join(dataDir, collectionName);
+        if (!fs.existsSync(collectionDir)) {
+            console.log(`  WARNING: Data directory not found: ${collectionDir}`);
+            continue;
         }
 
-        connection = await oracledb.getConnection({
-            user: ORACLE_USER,
-            password: ORACLE_PASSWORD,
-            connectString: ORACLE_CONNECT_STRING
-        });
+        const batchFiles = fs.readdirSync(collectionDir)
+            .filter(f => f.endsWith('.json'))
+            .sort();
 
-        // Get SODA database
-        const soda = connection.getSodaDatabase();
+        let totalInserted = 0;
+        const startTime = Date.now();
+        let isFirstBatch = true;
 
-        // Read manifest
-        const manifestPath = path.join(dataDir, 'manifest.json');
-        if (!fs.existsSync(manifestPath)) {
-            throw new Error(`Manifest not found at ${manifestPath}. Run generate-data.js first.`);
-        }
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        for (const batchFile of batchFiles) {
+            const batchPath = path.join(collectionDir, batchFile);
+            const documents = JSON.parse(fs.readFileSync(batchPath, 'utf8'));
 
-        console.log(`\nDataset size: ${manifest.size}`);
-        console.log(`Generated: ${manifest.generated}`);
-        console.log(`Collections: ${manifest.collections.length}`);
+            // Process in smaller batches for Oracle
+            const oracleBatchSize = Math.min(batchSize, 50); // Oracle is slower, use smaller batches
 
-        for (const collectionInfo of manifest.collections) {
-            const collectionName = collectionInfo.name;
-            const expectedCount = collectionInfo.count;
+            for (let i = 0; i < documents.length; i += oracleBatchSize) {
+                const batch = documents.slice(i, i + oracleBatchSize);
 
-            console.log(`\n--- ${collectionName} (${expectedCount.toLocaleString()} documents) ---`);
+                // Generate SQL for this batch
+                const sql = generateOracleSql(collectionName, batch, isFirstBatch && dropExisting);
+                isFirstBatch = false;
 
-            if (dropExisting) {
-                console.log('  Dropping existing collection...');
+                // Write to temp file
+                const tempFile = '/tmp/oracle_batch.sql';
+                fs.writeFileSync(tempFile, sql);
+
+                // Execute
                 try {
-                    const existingColl = await soda.openCollection(collectionName);
-                    if (existingColl) {
-                        await existingColl.drop();
-                    }
-                } catch (err) {
-                    // Ignore if doesn't exist
-                }
-            }
-
-            // Create collection
-            const collection = await soda.createCollection(collectionName);
-
-            // Get batch files
-            const collectionDir = path.join(dataDir, collectionName);
-            if (!fs.existsSync(collectionDir)) {
-                console.log(`  WARNING: Data directory not found: ${collectionDir}`);
-                continue;
-            }
-
-            const batchFiles = fs.readdirSync(collectionDir)
-                .filter(f => f.endsWith('.json'))
-                .sort();
-
-            let totalInserted = 0;
-            const startTime = Date.now();
-
-            for (const batchFile of batchFiles) {
-                const batchPath = path.join(collectionDir, batchFile);
-                const documents = JSON.parse(fs.readFileSync(batchPath, 'utf8'));
-
-                // Insert in batches
-                for (let i = 0; i < documents.length; i += batchSize) {
-                    const batch = documents.slice(i, i + batchSize);
-
-                    // SODA bulk insert
-                    await collection.insertManyAndGet(batch);
-                    await connection.commit();
-
+                    executeOracleSql(tempFile);
                     totalInserted += batch.length;
 
                     const progress = ((totalInserted / expectedCount) * 100).toFixed(1);
                     process.stdout.write(`\r  Progress: ${progress}% (${totalInserted.toLocaleString()}/${expectedCount.toLocaleString()})`);
+                } catch (err) {
+                    console.error(`\n  Error inserting batch: ${err.message}`);
                 }
             }
-
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            const rate = (totalInserted / (elapsed || 1)).toFixed(0);
-            console.log(`\n  Completed: ${totalInserted.toLocaleString()} docs in ${elapsed}s (${rate} docs/sec)`);
-
-            // Create index on _id
-            console.log('  Creating indexes...');
-            await createOracleIndexes(connection, collectionName);
         }
 
-        console.log('\n=== Oracle loading complete ===\n');
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const rate = (totalInserted / (elapsed || 1)).toFixed(0);
+        console.log(`\n  Completed: ${totalInserted.toLocaleString()} docs in ${elapsed}s (${rate} docs/sec)`);
 
-    } finally {
-        if (connection) {
-            await connection.close();
-        }
+        // Create indexes
+        console.log('  Creating indexes...');
+        createOracleIndexes(collectionName);
     }
+
+    console.log('\n=== Oracle loading complete ===\n');
 }
 
 /**
@@ -357,33 +418,30 @@ async function createIndexes(collection, collectionName) {
 }
 
 /**
- * Create indexes for Oracle collection
+ * Create indexes for Oracle table
  */
-async function createOracleIndexes(connection, collectionName) {
-    // Oracle SODA automatically creates indexes on key fields
-    // Additional indexes can be created using SQL
-    const indexStatements = {
-        'ecommerce_orders': [
-            `CREATE INDEX idx_${collectionName}_customer ON "${collectionName}" (JSON_VALUE(data, '$._id'))`,
-            `CREATE SEARCH INDEX idx_${collectionName}_search ON "${collectionName}" (data) FOR JSON`
-        ],
-        'ecommerce_products': [
-            `CREATE INDEX idx_${collectionName}_category ON "${collectionName}" (JSON_VALUE(data, '$.category.primary'))`,
-            `CREATE SEARCH INDEX idx_${collectionName}_search ON "${collectionName}" (data) FOR JSON`
-        ]
-        // Add more as needed
-    };
+function createOracleIndexes(collectionName) {
+    const indexSql = `
+SET FEEDBACK OFF
+BEGIN
+  -- Create JSON search index for better query performance
+  BEGIN
+    EXECUTE IMMEDIATE 'CREATE SEARCH INDEX idx_${collectionName}_json ON ${collectionName} (data) FOR JSON';
+  EXCEPTION
+    WHEN OTHERS THEN NULL; -- Ignore if exists
+  END;
+END;
+/
+EXIT;
+`;
 
-    const statements = indexStatements[collectionName] || [];
-    for (const stmt of statements) {
-        try {
-            await connection.execute(stmt);
-        } catch (err) {
-            // Ignore if index already exists
-            if (!err.message.includes('ORA-00955') && !err.message.includes('ORA-29879')) {
-                console.log(`    Warning: ${err.message}`);
-            }
-        }
+    const tempFile = '/tmp/oracle_index.sql';
+    fs.writeFileSync(tempFile, indexSql);
+
+    try {
+        executeOracleSql(tempFile);
+    } catch (err) {
+        // Ignore index creation errors
     }
 }
 

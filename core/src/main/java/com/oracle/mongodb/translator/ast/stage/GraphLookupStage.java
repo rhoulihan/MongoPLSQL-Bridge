@@ -205,11 +205,11 @@ public final class GraphLookupStage implements Stage {
         ctx.sql("SELECT ");
         if (depthField != null) {
             ctx.sql("g.graph_depth AS ");
-            ctx.sql(depthField);
+            ctx.identifier(depthField);
             ctx.sql(", ");
         }
         ctx.sql("JSON_ARRAYAGG(g.data) AS ");
-        ctx.sql(as);
+        ctx.identifier(as);
         ctx.sql(" FROM ");
         ctx.sql(cteName);
         ctx.sql(" g");
