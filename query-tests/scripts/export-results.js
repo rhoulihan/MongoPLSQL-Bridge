@@ -147,6 +147,91 @@ function formatResult(result) {
 }
 
 /**
+ * Convert a SELECT statement to return JSON array using Oracle JSON functions
+ */
+function wrapSqlAsJson(sql) {
+    // Parse the SELECT statement to extract column aliases and convert to JSON_OBJECT
+    const trimmedSql = sql.trim().replace(/;$/, '');
+
+    // Extract the SELECT ... FROM portion
+    const selectMatch = trimmedSql.match(/^SELECT\s+(.*?)\s+FROM\s+(.*)$/is);
+    if (!selectMatch) {
+        // Can't parse, return original
+        return sql;
+    }
+
+    const selectPart = selectMatch[1];
+    const fromPart = selectMatch[2];
+
+    // Parse column expressions and their aliases
+    // Handle: expr AS alias, expr alias, or just expr
+    const columns = [];
+    let depth = 0;
+    let current = '';
+
+    for (let i = 0; i < selectPart.length; i++) {
+        const ch = selectPart[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        else if (ch === ',' && depth === 0) {
+            columns.push(current.trim());
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    if (current.trim()) columns.push(current.trim());
+
+    // Build JSON_OBJECT key-value pairs
+    const jsonPairs = columns.map(col => {
+        // Check for "expr AS alias" pattern
+        const asMatch = col.match(/^(.+?)\s+AS\s+(\w+)$/i);
+        if (asMatch) {
+            const expr = asMatch[1].trim();
+            const alias = asMatch[2].trim();
+            return `'${alias}' VALUE ${expr}`;
+        }
+
+        // Check for simple column name (no spaces, no functions)
+        if (/^\w+$/.test(col)) {
+            return `'${col}' VALUE ${col}`;
+        }
+
+        // Check for "expr alias" pattern (no AS keyword)
+        const spaceMatch = col.match(/^(.+?)\s+(\w+)$/);
+        if (spaceMatch && !spaceMatch[1].includes('(')) {
+            // Simple case without function
+            const expr = spaceMatch[1].trim();
+            const alias = spaceMatch[2].trim();
+            return `'${alias}' VALUE ${expr}`;
+        }
+
+        // For complex expressions, try to extract trailing alias
+        const lastSpaceIdx = col.lastIndexOf(' ');
+        if (lastSpaceIdx > 0) {
+            const possibleAlias = col.substring(lastSpaceIdx + 1).trim();
+            if (/^\w+$/.test(possibleAlias) && !['FROM', 'WHERE', 'AND', 'OR', 'AS', 'RETURNING', 'NUMBER'].includes(possibleAlias.toUpperCase())) {
+                const expr = col.substring(0, lastSpaceIdx).trim();
+                return `'${possibleAlias}' VALUE ${expr}`;
+            }
+        }
+
+        // Just use expression as both key and value
+        // Extract field name from JSON_VALUE if present
+        const jsonValueMatch = col.match(/JSON_VALUE\s*\([^,]+,\s*'\$\.(\w+)'/i);
+        if (jsonValueMatch) {
+            return `'${jsonValueMatch[1]}' VALUE ${col}`;
+        }
+
+        // Use column as-is with generic name
+        return `'col' VALUE ${col}`;
+    });
+
+    // Build the JSON query
+    return `SELECT JSON_OBJECT(${jsonPairs.join(', ')} RETURNING CLOB) AS json_row FROM ${fromPart}`;
+}
+
+/**
  * Run Oracle query via docker exec
  */
 function runOracleQuery(sql) {
@@ -155,6 +240,9 @@ function runOracleQuery(sql) {
     }
 
     try {
+        // Wrap the SQL to return JSON
+        const jsonSql = wrapSqlAsJson(sql);
+
         const sqlCommand = `
 SET PAGESIZE 0
 SET LINESIZE 32767
@@ -164,7 +252,7 @@ SET FEEDBACK OFF
 SET HEADING OFF
 SET LONG 1000000
 SET LONGCHUNKSIZE 1000000
-${sql};
+${jsonSql};
 EXIT;
 `;
         const result = execSync(
@@ -172,27 +260,30 @@ EXIT;
             { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
         );
 
-        // Parse results - each non-empty line is a result row
+        // Parse results - each non-empty line is a JSON row
         const lines = result.split('\n').filter(line => line.trim() !== '');
 
-        // Try to parse as JSON if it looks like JSON
-        const results = lines.map(line => {
+        // Parse JSON results
+        const results = [];
+        for (const line of lines) {
             const trimmed = line.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            if (trimmed.startsWith('{')) {
                 try {
-                    return JSON.parse(trimmed);
+                    results.push(JSON.parse(trimmed));
                 } catch {
-                    return { raw: trimmed };
+                    // If JSON parse fails, include as raw
+                    results.push({ _parseError: true, raw: trimmed });
                 }
+            } else if (trimmed.length > 0) {
+                // Non-JSON output (errors, etc.)
+                results.push({ _raw: trimmed });
             }
-            return { raw: trimmed };
-        });
+        }
 
         return {
             success: true,
             results: results,
-            count: results.length,
-            raw: result.trim()
+            count: results.length
         };
     } catch (err) {
         return {
