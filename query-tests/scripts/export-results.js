@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * Export Test Query Results
+ * Export Test Query Results - MongoDB and Oracle
  *
- * Runs all test queries against MongoDB and exports results to individual files
- * for physical validation.
+ * Runs all test queries against both MongoDB and Oracle databases,
+ * exports results to individual files for physical validation.
  *
  * Usage:
- *   node export-results.js [--output-dir <dir>]
+ *   node export-results.js [--output-dir <dir>] [--mongodb-only] [--oracle-only]
  */
 
 const { MongoClient } = require('mongodb');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -20,11 +21,20 @@ const MONGODB_DB = process.env.MONGODB_DB || 'testdb';
 // Parse arguments
 const args = process.argv.slice(2);
 let outputDir = path.join(__dirname, '../output');
+let mongodbOnly = false;
+let oracleOnly = false;
+let includeLargeScale = false;
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--output-dir' && args[i + 1]) {
         outputDir = args[i + 1];
         i++;
+    } else if (args[i] === '--mongodb-only') {
+        mongodbOnly = true;
+    } else if (args[i] === '--oracle-only') {
+        oracleOnly = true;
+    } else if (args[i] === '--include-large-scale' || args[i] === '--large-scale') {
+        includeLargeScale = true;
     }
 }
 
@@ -36,9 +46,10 @@ if (!fs.existsSync(outputDir)) {
 /**
  * Load test cases from JSON file
  */
-function loadTestCases() {
+function loadTestCases(includeLargeScale = false) {
     const testCasesPath = path.join(__dirname, '../tests/test-cases.json');
     const curatedTestsPath = path.join(__dirname, '../import/curated-tests.json');
+    const largeScalePath = path.join(__dirname, '../large-scale/complex-pipelines.json');
 
     const testCases = [];
 
@@ -46,14 +57,15 @@ function loadTestCases() {
     if (fs.existsSync(testCasesPath)) {
         const data = JSON.parse(fs.readFileSync(testCasesPath, 'utf8'));
         const cases = data.test_cases || data.tests || [];
-        // Normalize format
         for (const tc of cases) {
             testCases.push({
                 id: tc.id,
                 name: tc.name,
                 description: tc.description,
                 collection: tc.collection,
-                pipeline: tc.mongodb_pipeline || tc.pipeline
+                pipeline: tc.mongodb_pipeline || tc.pipeline,
+                oracleSql: tc.oracle_sql,
+                database: 'testdb'
             });
         }
     }
@@ -62,14 +74,32 @@ function loadTestCases() {
     if (fs.existsSync(curatedTestsPath)) {
         const data = JSON.parse(fs.readFileSync(curatedTestsPath, 'utf8'));
         const cases = data.test_cases || data.tests || [];
-        // Normalize format
         for (const tc of cases) {
             testCases.push({
                 id: tc.id,
                 name: tc.name,
                 description: tc.description,
                 collection: tc.collection,
-                pipeline: tc.mongodb_pipeline || tc.pipeline
+                pipeline: tc.mongodb_pipeline || tc.pipeline,
+                oracleSql: tc.oracle_sql,
+                database: 'testdb'
+            });
+        }
+    }
+
+    // Load large-scale tests
+    if (includeLargeScale && fs.existsSync(largeScalePath)) {
+        const data = JSON.parse(fs.readFileSync(largeScalePath, 'utf8'));
+        const pipelines = data.pipelines || [];
+        for (const p of pipelines) {
+            testCases.push({
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                collection: p.collection,
+                pipeline: p.pipeline,
+                oracleSql: null, // Large-scale tests don't have pre-written Oracle SQL
+                database: 'largescale_test'
             });
         }
     }
@@ -117,52 +147,137 @@ function formatResult(result) {
 }
 
 /**
- * Run a single test and export results
+ * Run Oracle query via docker exec
  */
-async function runTest(db, test, outputDir) {
-    const collection = db.collection(test.collection);
-    const pipeline = preprocessPipeline(test.pipeline);
+function runOracleQuery(sql) {
+    if (!sql) {
+        return { success: false, error: 'No Oracle SQL provided', results: [] };
+    }
 
     try {
-        const cursor = collection.aggregate(pipeline, { allowDiskUse: true });
+        const sqlCommand = `
+SET PAGESIZE 0
+SET LINESIZE 32767
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING OFF
+SET LONG 1000000
+SET LONGCHUNKSIZE 1000000
+${sql};
+EXIT;
+`;
+        const result = execSync(
+            `docker exec mongo-translator-oracle bash -c "echo '${sqlCommand.replace(/'/g, "'\\''")}' | sqlplus -s translator/translator123@//localhost:1521/FREEPDB1"`,
+            { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
+        );
+
+        // Parse results - each non-empty line is a result row
+        const lines = result.split('\n').filter(line => line.trim() !== '');
+
+        // Try to parse as JSON if it looks like JSON
+        const results = lines.map(line => {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    return JSON.parse(trimmed);
+                } catch {
+                    return { raw: trimmed };
+                }
+            }
+            return { raw: trimmed };
+        });
+
+        return {
+            success: true,
+            results: results,
+            count: results.length,
+            raw: result.trim()
+        };
+    } catch (err) {
+        return {
+            success: false,
+            error: err.message,
+            results: [],
+            count: 0
+        };
+    }
+}
+
+/**
+ * Run MongoDB query
+ */
+async function runMongoQuery(db, collection, pipeline) {
+    try {
+        const coll = db.collection(collection);
+        const processedPipeline = preprocessPipeline(pipeline);
+        const cursor = coll.aggregate(processedPipeline, { allowDiskUse: true });
         const results = await cursor.toArray();
 
-        // Create output object with metadata
-        const output = {
-            testId: test.id,
-            testName: test.name,
-            description: test.description,
-            collection: test.collection,
-            pipeline: test.pipeline,
-            resultCount: results.length,
-            executedAt: new Date().toISOString(),
-            results: results
+        return {
+            success: true,
+            results: results,
+            count: results.length
         };
-
-        // Write to file
-        const filename = `${test.id}.json`;
-        const filepath = path.join(outputDir, filename);
-        fs.writeFileSync(filepath, formatResult(output));
-
-        return { success: true, count: results.length };
     } catch (err) {
-        // Write error to file
-        const output = {
-            testId: test.id,
-            testName: test.name,
-            description: test.description,
-            collection: test.collection,
-            pipeline: test.pipeline,
+        return {
+            success: false,
             error: err.message,
-            executedAt: new Date().toISOString()
+            results: [],
+            count: 0
         };
-
-        const filename = `${test.id}.error.json`;
-        const filepath = path.join(outputDir, filename);
-        fs.writeFileSync(filepath, formatResult(output));
-
-        return { success: false, error: err.message };
     }
+}
+
+/**
+ * Run a single test and export results
+ */
+async function runTest(db, test, outputDir, options) {
+    const output = {
+        testId: test.id,
+        testName: test.name,
+        description: test.description,
+        collection: test.collection,
+        pipeline: test.pipeline,
+        oracleSql: test.oracleSql,
+        executedAt: new Date().toISOString(),
+        mongodb: null,
+        oracle: null,
+        comparison: null
+    };
+
+    // Run MongoDB query
+    if (!options.oracleOnly) {
+        output.mongodb = await runMongoQuery(db, test.collection, test.pipeline);
+    }
+
+    // Run Oracle query
+    if (!options.mongodbOnly && test.oracleSql) {
+        output.oracle = runOracleQuery(test.oracleSql);
+    }
+
+    // Compare results if both ran
+    if (output.mongodb && output.oracle) {
+        output.comparison = {
+            mongodbCount: output.mongodb.count,
+            oracleCount: output.oracle.count,
+            countsMatch: output.mongodb.count === output.oracle.count,
+            bothSucceeded: output.mongodb.success && output.oracle.success
+        };
+    }
+
+    // Write to file
+    const filename = `${test.id}.json`;
+    const filepath = path.join(outputDir, filename);
+    fs.writeFileSync(filepath, formatResult(output));
+
+    return {
+        success: (output.mongodb?.success !== false) && (output.oracle?.success !== false),
+        mongoCount: output.mongodb?.count,
+        oracleCount: output.oracle?.count,
+        countsMatch: output.comparison?.countsMatch,
+        error: output.mongodb?.error || output.oracle?.error
+    };
 }
 
 /**
@@ -170,21 +285,22 @@ async function runTest(db, test, outputDir) {
  */
 async function main() {
     console.log('==============================================');
-    console.log('Export Test Query Results');
+    console.log('Export Test Query Results (MongoDB + Oracle)');
     console.log('==============================================');
     console.log(`Output directory: ${outputDir}`);
     console.log(`MongoDB: ${MONGODB_URI}`);
-    console.log(`Database: ${MONGODB_DB}`);
+    if (mongodbOnly) console.log('Mode: MongoDB only');
+    if (oracleOnly) console.log('Mode: Oracle only');
+    if (includeLargeScale) console.log('Including large-scale tests');
     console.log('');
 
     const client = new MongoClient(MONGODB_URI);
 
     try {
         await client.connect();
-        const db = client.db(MONGODB_DB);
 
         // Load test cases
-        const testCases = loadTestCases();
+        const testCases = loadTestCases(includeLargeScale);
         console.log(`Loaded ${testCases.length} test cases\n`);
 
         // Summary tracking
@@ -192,18 +308,40 @@ async function main() {
             total: testCases.length,
             success: 0,
             failed: 0,
+            countsMatch: 0,
+            countsMismatch: 0,
             results: []
         };
 
+        // Track current database to minimize switching
+        let currentDbName = null;
+        let db = null;
+
         // Run each test
         for (const test of testCases) {
+            // Switch database if needed
+            const testDb = test.database || MONGODB_DB;
+            if (testDb !== currentDbName) {
+                db = client.db(testDb);
+                currentDbName = testDb;
+                console.log(`\n--- Database: ${testDb} ---\n`);
+            }
+
             process.stdout.write(`Running ${test.id}: ${test.name}... `);
 
-            const result = await runTest(db, test, outputDir);
+            const result = await runTest(db, test, outputDir, { mongodbOnly, oracleOnly });
 
             if (result.success) {
-                console.log(`OK (${result.count} results)`);
                 summary.success++;
+                if (result.countsMatch === true) {
+                    summary.countsMatch++;
+                    console.log(`OK (MongoDB: ${result.mongoCount}, Oracle: ${result.oracleCount}) ✓`);
+                } else if (result.countsMatch === false) {
+                    summary.countsMismatch++;
+                    console.log(`MISMATCH (MongoDB: ${result.mongoCount}, Oracle: ${result.oracleCount}) ✗`);
+                } else {
+                    console.log(`OK (${result.mongoCount ?? result.oracleCount} results)`);
+                }
             } else {
                 console.log(`FAILED: ${result.error}`);
                 summary.failed++;
@@ -212,8 +350,11 @@ async function main() {
             summary.results.push({
                 id: test.id,
                 name: test.name,
+                database: test.database,
                 success: result.success,
-                count: result.count,
+                mongoCount: result.mongoCount,
+                oracleCount: result.oracleCount,
+                countsMatch: result.countsMatch,
                 error: result.error
             });
         }
@@ -226,9 +367,13 @@ async function main() {
         console.log('\n==============================================');
         console.log('SUMMARY');
         console.log('==============================================');
-        console.log(`Total:   ${summary.total}`);
-        console.log(`Success: ${summary.success}`);
-        console.log(`Failed:  ${summary.failed}`);
+        console.log(`Total:          ${summary.total}`);
+        console.log(`Success:        ${summary.success}`);
+        console.log(`Failed:         ${summary.failed}`);
+        if (!mongodbOnly && !oracleOnly) {
+            console.log(`Counts Match:   ${summary.countsMatch}`);
+            console.log(`Counts Differ:  ${summary.countsMismatch}`);
+        }
         console.log(`\nResults exported to: ${outputDir}`);
         console.log(`Summary file: ${summaryPath}`);
 
