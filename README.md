@@ -209,49 +209,200 @@ var translator = AggregationTranslator.create(config, options);
 var result = translator.translate(pipeline);
 ```
 
-## Development Setup
+## Building and Testing
 
 ### Prerequisites
 
-- JDK 17+
-- Docker and Docker Compose
-- Git
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| JDK | 17+ | Required for building and running |
+| Docker | 20.10+ | Required for test databases |
+| Docker Compose | 2.0+ | Required for test environment |
+| Git | 2.30+ | For cloning the repository |
+| Node.js | 16+ | Optional, for large-scale tests only |
 
-### Local Development
+### Quick Start (Build Only)
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/rhoulihan/MongoPLSQL-Bridge.git
-   cd MongoPLSQL-Bridge
-   ```
+If you just want to build the library without running integration tests:
 
-2. **Start test environment (MongoDB + Oracle):**
-   ```bash
-   ./scripts/start-env.sh
-   ```
+```bash
+git clone https://github.com/rhoulihan/MongoPLSQL-Bridge.git
+cd MongoPLSQL-Bridge
+./gradlew build -x test
+```
 
-3. **Wait for databases to be ready:**
-   ```bash
-   ./scripts/validate-env.sh
-   ```
+The built JAR will be at `core/build/libs/core.jar`.
 
-4. **Build the project:**
-   ```bash
-   ./gradlew build
-   ```
+### Full Build with Unit Tests
 
-5. **Run tests:**
-   ```bash
-   ./gradlew test                                           # Unit tests
-   ./gradlew :integration-tests:test -PrunIntegrationTests  # Integration tests (requires Docker)
-   ./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh  # Cross-database validation
-   ```
+```bash
+git clone https://github.com/rhoulihan/MongoPLSQL-Bridge.git
+cd MongoPLSQL-Bridge
+./gradlew build
+```
 
-6. **Run large-scale comparison tests (optional):**
-   ```bash
-   cd query-tests/large-scale
-   ./run-comparison.sh --size small  # Generate data and compare results
-   ```
+This runs all unit tests (749 tests) and produces the library JAR.
+
+### Setting Up the Test Environment
+
+The test environment uses Docker to run MongoDB 8.0 and Oracle 23.6 Free:
+
+```bash
+# Start both databases
+docker compose up -d
+
+# Wait for Oracle to be ready (takes 1-2 minutes on first run)
+docker compose logs -f oracle
+# Wait until you see "DATABASE IS READY TO USE!"
+
+# Alternatively, use the validation script
+./scripts/validate-env.sh
+```
+
+**Container Details:**
+
+| Service | Container Name | Port | Credentials |
+|---------|---------------|------|-------------|
+| Oracle 23.6 | mongo-translator-oracle | 1521 | user: `translator`, pass: `translator123` |
+| MongoDB 8.0 | mongo-translator-mongodb | 27017 | user: `admin`, pass: `admin123` |
+
+**Environment Management Scripts:**
+
+```bash
+./scripts/start-env.sh    # Start databases
+./scripts/stop-env.sh     # Stop databases (preserves data)
+./scripts/reset-env.sh    # Stop and remove all data
+./scripts/validate-env.sh # Check database health
+```
+
+### Running Tests
+
+#### Unit Tests (No Docker Required)
+
+```bash
+./gradlew :core:test
+```
+
+Runs 749 unit tests covering all operators and parsers.
+
+#### Integration Tests (Requires Docker)
+
+```bash
+# Start test environment first
+docker compose up -d
+./scripts/validate-env.sh
+
+# Run integration tests
+./gradlew :integration-tests:test -PrunIntegrationTests
+```
+
+Tests actual SQL execution against Oracle database.
+
+#### Cross-Database Validation Tests (Requires Docker)
+
+These tests execute the same aggregation pipelines against both MongoDB and Oracle, comparing results:
+
+```bash
+# Start test environment
+docker compose up -d
+./scripts/validate-env.sh
+
+# Load test data and run validation
+./query-tests/scripts/setup.sh
+./query-tests/scripts/run-tests.sh
+```
+
+**Expected Output:**
+```
+Running 102 cross-database validation tests...
+✅ PASS: CMP001 - Basic equality match
+✅ PASS: CMP002 - Greater than comparison
+...
+============================================
+Results: 102 passed, 0 failed, 0 errors
+============================================
+```
+
+#### Large-Scale Comparison Tests (Optional)
+
+Test with larger datasets (100MB - 4GB) and complex pipelines:
+
+```bash
+cd query-tests/large-scale
+
+# Install Node.js dependencies
+npm install
+
+# Generate test data and run comparison
+./run-comparison.sh --size small   # ~100MB, ~219K documents
+./run-comparison.sh --size medium  # ~500MB, ~1M documents
+./run-comparison.sh --size large   # ~2GB, ~4.5M documents
+./run-comparison.sh --size xlarge  # ~4GB, ~10M documents
+```
+
+Or run steps individually:
+
+```bash
+node generate-data.js --size small --output ./data
+node load-data.js --target mongodb --data-dir ./data --drop
+node compare-pipelines.js --verbose
+```
+
+### Test Coverage Report
+
+Generate an HTML coverage report:
+
+```bash
+./gradlew :core:jacocoTestReport
+```
+
+Report location: `core/build/reports/jacoco/test/html/index.html`
+
+### Performance Benchmarks
+
+Run JMH benchmarks to measure translation performance:
+
+```bash
+./gradlew :benchmarks:jmh
+
+# Quick benchmark (less warmup)
+./gradlew :benchmarks:benchmarkQuick
+```
+
+Results: `benchmarks/build/reports/jmh/results.json`
+
+### Troubleshooting
+
+**Oracle container won't start:**
+```bash
+# Check logs
+docker compose logs oracle
+
+# Ensure sufficient memory (Oracle needs ~2GB)
+docker stats
+
+# Reset and try again
+docker compose down -v
+docker compose up -d
+```
+
+**MongoDB authentication errors:**
+```bash
+# Verify MongoDB is running
+docker exec mongo-translator-mongodb mongosh --eval "db.adminCommand('ping')"
+
+# Check credentials in docker-compose.yml
+# Default: admin:admin123
+```
+
+**Tests failing with connection errors:**
+```bash
+# Ensure both containers are healthy
+docker compose ps
+
+# Should show both as "healthy"
+# If not, wait and check logs
+```
 
 ### Pre-commit Hooks (Recommended)
 
@@ -259,6 +410,8 @@ var result = translator.translate(pipeline);
 pip install pre-commit
 pre-commit install
 ```
+
+This runs Checkstyle and SpotBugs before each commit.
 
 ## Project Structure
 
