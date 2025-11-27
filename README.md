@@ -79,67 +79,6 @@ All 102 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See 
 - `$merge` - MERGE statement (stub)
 - `$out` - INSERT statement (stub)
 
-## Requirements
-
-- Java 17 or higher
-- Oracle Database 23ai or 26ai with JSON Collections
-- Oracle JDBC Driver 23.3+
-
-## Quick Start
-
-### Installation
-
-**Maven:**
-```xml
-<dependency>
-    <groupId>com.oracle.mongodb</groupId>
-    <artifactId>mongo-oracle-translator</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
-**Gradle:**
-```kotlin
-implementation("com.oracle.mongodb:mongo-oracle-translator:1.0.0")
-```
-
-### Basic Usage
-
-```java
-import com.oracle.mongodb.translator.api.AggregationTranslator;
-import com.oracle.mongodb.translator.api.OracleConfiguration;
-import org.bson.Document;
-
-// Configure the translator
-var config = OracleConfiguration.builder()
-    .collectionName("orders")
-    .build();
-
-var translator = AggregationTranslator.create(config);
-
-// Define a MongoDB aggregation pipeline (currently supports $limit and $skip)
-var pipeline = List.of(
-    Document.parse("{\"$skip\": 10}"),
-    Document.parse("{\"$limit\": 5}")
-);
-
-// Translate to Oracle SQL
-var result = translator.translate(pipeline);
-
-System.out.println(result.sql());
-// Output:
-// SELECT data FROM orders OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY
-
-// Execute against Oracle
-try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
-    for (int i = 0; i < result.bindVariables().size(); i++) {
-        ps.setObject(i + 1, result.bindVariables().get(i));
-    }
-    ResultSet rs = ps.executeQuery();
-    // Process results...
-}
-```
-
 ## Supported Operators
 
 ### Stage Operators
@@ -193,21 +132,6 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | `$last` | ✅ Implemented | `LAST_VALUE()` |
 | `$push` | ✅ Implemented | `JSON_ARRAYAGG()` |
 | `$addToSet` | ✅ Implemented | `JSON_ARRAYAGG(DISTINCT)` |
-
-## Configuration Options
-
-```java
-var options = TranslationOptions.builder()
-    .inlineBindVariables(false)  // Use bind variables (default)
-    .prettyPrint(true)           // Format generated SQL
-    .includeHints(true)          // Add Oracle optimizer hints
-    .strictMode(false)           // Fail on unsupported operators
-    .dataColumnName("data")      // Name of JSON column (default: "data")
-    .build();
-
-var translator = AggregationTranslator.create(config, options);
-var result = translator.translate(pipeline);
-```
 
 ## Building and Testing
 
@@ -412,6 +336,89 @@ pre-commit install
 ```
 
 This runs Checkstyle and SpotBugs before each commit.
+
+## Usage
+
+### Installation
+
+**Maven:**
+```xml
+<dependency>
+    <groupId>com.oracle.mongodb</groupId>
+    <artifactId>mongo-oracle-translator</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+**Gradle:**
+```kotlin
+implementation("com.oracle.mongodb:mongo-oracle-translator:1.0.0")
+```
+
+### Basic Example
+
+```java
+import com.oracle.mongodb.translator.api.AggregationTranslator;
+import com.oracle.mongodb.translator.api.OracleConfiguration;
+import org.bson.Document;
+
+// Configure the translator
+var config = OracleConfiguration.builder()
+    .collectionName("orders")
+    .build();
+
+var translator = AggregationTranslator.create(config);
+
+// Define a MongoDB aggregation pipeline
+var pipeline = List.of(
+    Document.parse("{\"$match\": {\"status\": \"active\"}}"),
+    Document.parse("{\"$group\": {\"_id\": \"$category\", \"total\": {\"$sum\": \"$amount\"}}}"),
+    Document.parse("{\"$sort\": {\"total\": -1}}"),
+    Document.parse("{\"$limit\": 10}")
+);
+
+// Translate to Oracle SQL
+var result = translator.translate(pipeline);
+
+System.out.println(result.sql());
+// Output:
+// SELECT JSON_VALUE(data, '$.category') AS "_id", SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS "total"
+// FROM orders
+// WHERE JSON_VALUE(data, '$.status') = :1
+// GROUP BY JSON_VALUE(data, '$.category')
+// ORDER BY "total" DESC
+// FETCH FIRST 10 ROWS ONLY
+
+// Execute against Oracle
+try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
+    for (int i = 0; i < result.bindVariables().size(); i++) {
+        ps.setObject(i + 1, result.bindVariables().get(i));
+    }
+    ResultSet rs = ps.executeQuery();
+    // Process results...
+}
+```
+
+### Configuration Options
+
+```java
+var options = TranslationOptions.builder()
+    .inlineBindVariables(false)  // Use bind variables (default)
+    .prettyPrint(true)           // Format generated SQL
+    .includeHints(true)          // Add Oracle optimizer hints
+    .strictMode(false)           // Fail on unsupported operators
+    .dataColumnName("data")      // Name of JSON column (default: "data")
+    .build();
+
+var translator = AggregationTranslator.create(config, options);
+var result = translator.translate(pipeline);
+```
+
+### Requirements
+
+- Java 17 or higher
+- Oracle Database 23ai or 26ai with JSON Collections
+- Oracle JDBC Driver 23.3+
 
 ## Project Structure
 
