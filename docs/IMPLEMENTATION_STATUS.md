@@ -278,7 +278,8 @@ generator/dialect/
 
 **Unit Tests:** 749 test methods across 50+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 79 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
 All tests passing: ✅ Yes
 
@@ -494,6 +495,37 @@ Run validation tests:
 ./query-tests/scripts/run-tests.sh
 ```
 
+### Large-Scale Comparison Tests
+
+The `query-tests/large-scale/` directory contains infrastructure for testing with large datasets (~4GB) and complex pipelines:
+
+**Data Collections (10 types with deep nesting):**
+- E-commerce: products (6 levels), customers, orders, reviews
+- Analytics: sessions, events (with device/location context)
+- Social: users (with nested settings), posts (recursive comments)
+- IoT: devices (with sensors), time-series readings
+
+**Complex Pipelines (10 tests):**
+1. E-commerce revenue analysis with nested aggregations
+2. Product variant analysis with inventory metrics
+3. Customer LTV analysis with loyalty tiers
+4. Review sentiment and quality analysis
+5. Analytics funnel analysis by device/source
+6. Social engagement with nested comments
+7. IoT device health and sensor analysis
+8. IoT time-series aggregation with alerts
+9. User follower network analysis with $bucket
+10. Multi-collection order-to-review journey
+
+Run large-scale tests:
+```bash
+cd query-tests/large-scale
+./run-comparison.sh --size small   # ~100MB
+./run-comparison.sh --size medium  # ~500MB
+./run-comparison.sh --size large   # ~2GB
+./run-comparison.sh --size xlarge  # ~4GB
+```
+
 ## Next Steps
 
 1. ~~Add additional MongoDB expression operators ($type, $toInt, $toString, etc.)~~ ✅ Done
@@ -501,8 +533,9 @@ Run validation tests:
 3. ~~Expand documentation with more examples~~ ✅ Done
 4. ~~Create performance benchmark suite~~ ✅ Done (benchmarks/ module with JMH)
 5. ~~Add query test cases for new operators~~ ✅ Done (23 new test cases)
-6. Add more complex window function tests
-7. Implement additional operators as needed
+6. ~~Create large-scale comparison tests~~ ✅ Done (10 complex pipelines, ~4GB data)
+7. Add more complex window function tests
+8. Implement additional operators as needed
 
 ## Git Commits
 

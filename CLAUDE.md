@@ -170,6 +170,9 @@ core/src/main/java/com/oracle/mongodb/translator/
 
 # Run cross-database validation tests (requires Docker)
 ./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh
+
+# Run large-scale comparison tests (requires Docker)
+cd query-tests/large-scale && ./run-comparison.sh --size small
 ```
 
 ### Performance Benchmarks (JMH)
@@ -274,6 +277,7 @@ Both databases contain matching test data:
 **Test Coverage:**
 - Unit Tests: 90% line coverage, 78% branch coverage
 - Cross-Database Validation: 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
+- Large-Scale Tests: 10 complex pipelines with deeply nested documents (~4GB data)
 
 ## Development Guidelines
 
@@ -352,6 +356,7 @@ void shouldExecuteMatchPipeline() {
 | Technical spec | `docs/MONGODB_AGGREGATION_SPEC.md` |
 | Query test cases | `query-tests/tests/test-cases.json` |
 | Curated tests | `query-tests/import/curated-tests.json` |
+| Large-scale tests | `query-tests/large-scale/` |
 | Benchmarks | `benchmarks/src/main/java/.../benchmark/*.java` |
 
 ## Oracle SQL/JSON Patterns

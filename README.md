@@ -247,6 +247,12 @@ var result = translator.translate(pipeline);
    ./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh  # Cross-database validation
    ```
 
+6. **Run large-scale comparison tests (optional):**
+   ```bash
+   cd query-tests/large-scale
+   ./run-comparison.sh --size small  # Generate data and compare results
+   ```
+
 ### Pre-commit Hooks (Recommended)
 
 ```bash
@@ -278,6 +284,7 @@ mongo-oracle-translator/
 │   ├── data/                # Test data loaders
 │   ├── tests/               # Test case definitions
 │   ├── scripts/             # Test runner scripts
+│   ├── large-scale/         # Large-scale comparison tests (~4GB)
 │   └── results/             # Test output
 ├── benchmarks/              # JMH performance benchmarks
 ├── docs/                    # Documentation
