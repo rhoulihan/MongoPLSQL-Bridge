@@ -236,9 +236,28 @@ parser/
 
 **Unit Tests:** 300+ test methods across 45+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 39 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 65 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 All tests passing: ✅ Yes
+
+### Cross-Database Validation Test Categories
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Comparison operators | 8 | ✅ Pass |
+| Logical operators | 5 | ✅ Pass |
+| Accumulator operators | 8 | ✅ Pass |
+| Stage operators | 7 | ✅ Pass |
+| Arithmetic operators | 5 | ✅ Pass |
+| Conditional operators | 3 | ✅ Pass |
+| String operators | 6 | ✅ Pass |
+| Date operators | 5 | ✅ Pass |
+| Array operators | 4 | ✅ Pass |
+| $lookup/$unwind | 4 | ✅ Pass |
+| $addFields/$set | 2 | ✅ Pass |
+| Complex pipelines | 5 | ✅ Pass |
+| Edge cases | 3 | ✅ Pass |
+| **Total** | **65** | **✅ 100%** |
 
 ## Example Translations
 
@@ -279,18 +298,33 @@ FETCH FIRST 5 ROWS ONLY
 
 ## Cross-Database Validation
 
-The `query-tests/` directory contains comprehensive validation tests that execute queries against both MongoDB 8.0 and Oracle 23.6 to ensure consistent results:
+The `query-tests/` directory contains comprehensive validation tests that execute queries against both MongoDB 8.0 and Oracle 23.6 to ensure consistent results.
 
-| Category | Tests | Status |
-|----------|-------|--------|
-| Comparison operators | 8 | ✅ Pass |
-| Logical operators | 5 | ✅ Pass |
-| Accumulator operators | 8 | ✅ Pass |
-| Stage operators | 7 | ✅ Pass |
-| Arithmetic operators | 5 | ✅ Pass |
-| Conditional operators | 3 | ✅ Pass |
-| Complex combinations | 3 | ✅ Pass |
-| **Total** | **39** | **✅ 100%** |
+### Test Collections
+
+| Collection | Documents | Purpose |
+|------------|-----------|---------|
+| sales | 10 | Orders with items, tags, metadata |
+| employees | 10 | Employee records with departments |
+| products | 8 | Product catalog |
+| customers | 7 | Customer records for $lookup |
+| events | 8 | Events with ISODate for date operators |
+| inventory | 12 | Inventory for $lookup joins |
+
+### MongoDB Test Importer
+
+The `query-tests/import/` directory contains tools for importing tests from MongoDB's official jstests:
+
+```bash
+# List available operators to import
+node query-tests/import/mongodb-test-importer.js --list-operators
+
+# Fetch and import tests from MongoDB repo
+node query-tests/import/mongodb-test-importer.js --fetch size,arrayElemAt,cond --output tests.json
+
+# Generate curated test cases (39 tests with edge cases)
+node query-tests/import/curated-mongodb-tests.js --output curated-tests.json
+```
 
 Run validation tests:
 ```bash

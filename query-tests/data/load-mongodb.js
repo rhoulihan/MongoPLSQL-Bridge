@@ -267,6 +267,75 @@ db.products.createIndex({price: 1});
 db.products.createIndex({active: 1});
 
 // ============================================================
+// Customers Collection (for $lookup tests)
+// ============================================================
+print('Loading customers collection...');
+db.customers.drop();
+
+db.customers.insertMany([
+  {_id: "C001", name: "John Doe", email: "john.doe@example.com", tier: "gold", joinDate: "2023-06-15T10:30:00.000Z", address: {city: "New York", state: "NY", zip: "10001"}},
+  {_id: "C002", name: "Jane Smith", email: "jane.smith@example.com", tier: "silver", joinDate: "2023-08-20T14:45:00.000Z", address: {city: "Los Angeles", state: "CA", zip: "90001"}},
+  {_id: "C003", name: "Alice Brown", email: "alice.brown@example.com", tier: "gold", joinDate: "2023-03-10T09:00:00.000Z", address: {city: "Chicago", state: "IL", zip: "60601"}},
+  {_id: "C004", name: "Bob Wilson", email: "bob.wilson@example.com", tier: "bronze", joinDate: "2024-01-05T16:20:00.000Z", address: {city: "Houston", state: "TX", zip: "77001"}},
+  {_id: "C005", name: "Charlie Green", email: "charlie.green@example.com", tier: "silver", joinDate: "2023-11-30T11:15:00.000Z", address: {city: "Phoenix", state: "AZ", zip: "85001"}},
+  {_id: "C006", name: "Diana Prince", email: "diana.prince@example.com", tier: "platinum", joinDate: "2022-12-01T08:00:00.000Z", address: {city: "Miami", state: "FL", zip: "33101"}},
+  {_id: "C007", name: "Eve Johnson", email: "eve.johnson@example.com", tier: "bronze", joinDate: "2024-01-20T13:30:00.000Z", address: {city: "Seattle", state: "WA", zip: "98101"}}
+]);
+
+print('  Inserted ' + db.customers.countDocuments() + ' customer documents');
+
+db.customers.createIndex({tier: 1});
+db.customers.createIndex({email: 1});
+
+// ============================================================
+// Events Collection (for date operator tests with ISODate)
+// ============================================================
+print('Loading events collection...');
+db.events.drop();
+
+db.events.insertMany([
+  {_id: "EV001", title: "Product Launch", eventDate: new Date("2024-03-15T14:30:00.000Z"), category: "marketing", attendees: 150, tags: ["launch", "product"]},
+  {_id: "EV002", title: "Team Meeting", eventDate: new Date("2024-01-22T09:00:00.000Z"), category: "internal", attendees: 25, tags: ["recurring", "team"]},
+  {_id: "EV003", title: "Customer Webinar", eventDate: new Date("2024-06-10T16:00:00.000Z"), category: "sales", attendees: 500, tags: ["webinar", "customers"]},
+  {_id: "EV004", title: "Q1 Review", eventDate: new Date("2024-04-01T10:00:00.000Z"), category: "internal", attendees: 50, tags: ["quarterly", "review"]},
+  {_id: "EV005", title: "Trade Show", eventDate: new Date("2024-09-20T08:00:00.000Z"), category: "marketing", attendees: 1000, tags: ["trade-show", "networking"]},
+  {_id: "EV006", title: "Holiday Party", eventDate: new Date("2024-12-20T18:00:00.000Z"), category: "social", attendees: 200, tags: ["party", "annual"]},
+  {_id: "EV007", title: "Training Session", eventDate: new Date("2024-02-28T13:00:00.000Z"), category: "internal", attendees: 30, tags: ["training", "onboarding"]},
+  {_id: "EV008", title: "Board Meeting", eventDate: new Date("2024-07-15T11:00:00.000Z"), category: "executive", attendees: 10, tags: ["board", "quarterly"]}
+]);
+
+print('  Inserted ' + db.events.countDocuments() + ' event documents');
+
+db.events.createIndex({eventDate: 1});
+db.events.createIndex({category: 1});
+
+// ============================================================
+// Inventory Collection (for $lookup with products)
+// ============================================================
+print('Loading inventory collection...');
+db.inventory.drop();
+
+db.inventory.insertMany([
+  {_id: "INV001", productId: "P001", warehouse: "WH-EAST", quantity: 50, lastRestocked: "2024-01-10"},
+  {_id: "INV002", productId: "P001", warehouse: "WH-WEST", quantity: 50, lastRestocked: "2024-01-12"},
+  {_id: "INV003", productId: "P002", warehouse: "WH-EAST", quantity: 40, lastRestocked: "2024-01-08"},
+  {_id: "INV004", productId: "P002", warehouse: "WH-CENTRAL", quantity: 35, lastRestocked: "2024-01-15"},
+  {_id: "INV005", productId: "P003", warehouse: "WH-EAST", quantity: 5, lastRestocked: "2024-01-05"},
+  {_id: "INV006", productId: "P003", warehouse: "WH-WEST", quantity: 5, lastRestocked: "2024-01-06"},
+  {_id: "INV007", productId: "P004", warehouse: "WH-CENTRAL", quantity: 500, lastRestocked: "2024-01-01"},
+  {_id: "INV008", productId: "P006", warehouse: "WH-EAST", quantity: 25, lastRestocked: "2024-01-18"},
+  {_id: "INV009", productId: "P006", warehouse: "WH-WEST", quantity: 25, lastRestocked: "2024-01-19"},
+  {_id: "INV010", productId: "P007", warehouse: "WH-CENTRAL", quantity: 1000, lastRestocked: "2024-01-20"},
+  {_id: "INV011", productId: "P008", warehouse: "WH-EAST", quantity: 15, lastRestocked: "2024-01-14"},
+  {_id: "INV012", productId: "P008", warehouse: "WH-WEST", quantity: 10, lastRestocked: "2024-01-16"}
+]);
+
+print('  Inserted ' + db.inventory.countDocuments() + ' inventory documents');
+
+db.inventory.createIndex({productId: 1});
+db.inventory.createIndex({warehouse: 1});
+
+// ============================================================
 // Summary
 // ============================================================
 print('');
@@ -277,4 +346,7 @@ print('  Collections:');
 print('    - sales: ' + db.sales.countDocuments() + ' documents');
 print('    - employees: ' + db.employees.countDocuments() + ' documents');
 print('    - products: ' + db.products.countDocuments() + ' documents');
+print('    - customers: ' + db.customers.countDocuments() + ' documents');
+print('    - events: ' + db.events.countDocuments() + ' documents');
+print('    - inventory: ' + db.inventory.countDocuments() + ' documents');
 print('============================================================');

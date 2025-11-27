@@ -32,6 +32,24 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE customers CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE events CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE inventory CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
 -- ============================================================
 -- Create Sales Table
 -- ============================================================
@@ -305,6 +323,81 @@ CREATE INDEX idx_prod_category ON products(JSON_VALUE(data, '$.category'));
 CREATE INDEX idx_prod_price ON products(JSON_VALUE(data, '$.price' RETURNING NUMBER));
 CREATE INDEX idx_prod_active ON products(JSON_VALUE(data, '$.active'));
 
+-- ============================================================
+-- Create Customers Table (for $lookup tests)
+-- ============================================================
+PROMPT Loading customers table...
+
+CREATE TABLE customers (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO customers (id, data) VALUES ('C001', '{"_id": "C001", "name": "John Doe", "email": "john.doe@example.com", "tier": "gold", "joinDate": "2023-06-15T10:30:00.000Z", "address": {"city": "New York", "state": "NY", "zip": "10001"}}');
+INSERT INTO customers (id, data) VALUES ('C002', '{"_id": "C002", "name": "Jane Smith", "email": "jane.smith@example.com", "tier": "silver", "joinDate": "2023-08-20T14:45:00.000Z", "address": {"city": "Los Angeles", "state": "CA", "zip": "90001"}}');
+INSERT INTO customers (id, data) VALUES ('C003', '{"_id": "C003", "name": "Alice Brown", "email": "alice.brown@example.com", "tier": "gold", "joinDate": "2023-03-10T09:00:00.000Z", "address": {"city": "Chicago", "state": "IL", "zip": "60601"}}');
+INSERT INTO customers (id, data) VALUES ('C004', '{"_id": "C004", "name": "Bob Wilson", "email": "bob.wilson@example.com", "tier": "bronze", "joinDate": "2024-01-05T16:20:00.000Z", "address": {"city": "Houston", "state": "TX", "zip": "77001"}}');
+INSERT INTO customers (id, data) VALUES ('C005', '{"_id": "C005", "name": "Charlie Green", "email": "charlie.green@example.com", "tier": "silver", "joinDate": "2023-11-30T11:15:00.000Z", "address": {"city": "Phoenix", "state": "AZ", "zip": "85001"}}');
+INSERT INTO customers (id, data) VALUES ('C006', '{"_id": "C006", "name": "Diana Prince", "email": "diana.prince@example.com", "tier": "platinum", "joinDate": "2022-12-01T08:00:00.000Z", "address": {"city": "Miami", "state": "FL", "zip": "33101"}}');
+INSERT INTO customers (id, data) VALUES ('C007', '{"_id": "C007", "name": "Eve Johnson", "email": "eve.johnson@example.com", "tier": "bronze", "joinDate": "2024-01-20T13:30:00.000Z", "address": {"city": "Seattle", "state": "WA", "zip": "98101"}}');
+
+PROMPT   Inserted 7 customer records
+
+CREATE INDEX idx_cust_tier ON customers(JSON_VALUE(data, '$.tier'));
+CREATE INDEX idx_cust_state ON customers(JSON_VALUE(data, '$.address.state'));
+
+-- ============================================================
+-- Create Events Table (for date operator tests)
+-- ============================================================
+PROMPT Loading events table...
+
+CREATE TABLE events (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO events (id, data) VALUES ('EV001', '{"_id": "EV001", "title": "Product Launch", "eventDate": "2024-03-15T14:30:00.000Z", "category": "marketing", "attendees": 150, "tags": ["launch", "product"]}');
+INSERT INTO events (id, data) VALUES ('EV002', '{"_id": "EV002", "title": "Team Meeting", "eventDate": "2024-01-22T09:00:00.000Z", "category": "internal", "attendees": 25, "tags": ["recurring", "team"]}');
+INSERT INTO events (id, data) VALUES ('EV003', '{"_id": "EV003", "title": "Customer Webinar", "eventDate": "2024-06-10T16:00:00.000Z", "category": "sales", "attendees": 500, "tags": ["webinar", "customers"]}');
+INSERT INTO events (id, data) VALUES ('EV004', '{"_id": "EV004", "title": "Q1 Review", "eventDate": "2024-04-01T10:00:00.000Z", "category": "internal", "attendees": 50, "tags": ["quarterly", "review"]}');
+INSERT INTO events (id, data) VALUES ('EV005', '{"_id": "EV005", "title": "Trade Show", "eventDate": "2024-09-20T08:00:00.000Z", "category": "marketing", "attendees": 1000, "tags": ["trade-show", "networking"]}');
+INSERT INTO events (id, data) VALUES ('EV006', '{"_id": "EV006", "title": "Holiday Party", "eventDate": "2024-12-20T18:00:00.000Z", "category": "social", "attendees": 200, "tags": ["party", "annual"]}');
+INSERT INTO events (id, data) VALUES ('EV007', '{"_id": "EV007", "title": "Training Session", "eventDate": "2024-02-28T13:00:00.000Z", "category": "internal", "attendees": 30, "tags": ["training", "onboarding"]}');
+INSERT INTO events (id, data) VALUES ('EV008', '{"_id": "EV008", "title": "Board Meeting", "eventDate": "2024-07-15T11:00:00.000Z", "category": "executive", "attendees": 10, "tags": ["board", "quarterly"]}');
+
+PROMPT   Inserted 8 event records
+
+CREATE INDEX idx_event_category ON events(JSON_VALUE(data, '$.category'));
+CREATE INDEX idx_event_date ON events(JSON_VALUE(data, '$.eventDate'));
+
+-- ============================================================
+-- Create Inventory Table (for $lookup with products)
+-- ============================================================
+PROMPT Loading inventory table...
+
+CREATE TABLE inventory (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO inventory (id, data) VALUES ('INV001', '{"_id": "INV001", "productId": "P001", "warehouse": "WH-EAST", "quantity": 50, "lastRestocked": "2024-01-10"}');
+INSERT INTO inventory (id, data) VALUES ('INV002', '{"_id": "INV002", "productId": "P001", "warehouse": "WH-WEST", "quantity": 50, "lastRestocked": "2024-01-12"}');
+INSERT INTO inventory (id, data) VALUES ('INV003', '{"_id": "INV003", "productId": "P002", "warehouse": "WH-EAST", "quantity": 40, "lastRestocked": "2024-01-08"}');
+INSERT INTO inventory (id, data) VALUES ('INV004', '{"_id": "INV004", "productId": "P002", "warehouse": "WH-CENTRAL", "quantity": 35, "lastRestocked": "2024-01-15"}');
+INSERT INTO inventory (id, data) VALUES ('INV005', '{"_id": "INV005", "productId": "P003", "warehouse": "WH-EAST", "quantity": 5, "lastRestocked": "2024-01-05"}');
+INSERT INTO inventory (id, data) VALUES ('INV006', '{"_id": "INV006", "productId": "P003", "warehouse": "WH-WEST", "quantity": 5, "lastRestocked": "2024-01-06"}');
+INSERT INTO inventory (id, data) VALUES ('INV007', '{"_id": "INV007", "productId": "P004", "warehouse": "WH-CENTRAL", "quantity": 500, "lastRestocked": "2024-01-01"}');
+INSERT INTO inventory (id, data) VALUES ('INV008', '{"_id": "INV008", "productId": "P006", "warehouse": "WH-EAST", "quantity": 25, "lastRestocked": "2024-01-18"}');
+INSERT INTO inventory (id, data) VALUES ('INV009', '{"_id": "INV009", "productId": "P006", "warehouse": "WH-WEST", "quantity": 25, "lastRestocked": "2024-01-19"}');
+INSERT INTO inventory (id, data) VALUES ('INV010', '{"_id": "INV010", "productId": "P007", "warehouse": "WH-CENTRAL", "quantity": 1000, "lastRestocked": "2024-01-20"}');
+INSERT INTO inventory (id, data) VALUES ('INV011', '{"_id": "INV011", "productId": "P008", "warehouse": "WH-EAST", "quantity": 15, "lastRestocked": "2024-01-14"}');
+INSERT INTO inventory (id, data) VALUES ('INV012', '{"_id": "INV012", "productId": "P008", "warehouse": "WH-WEST", "quantity": 10, "lastRestocked": "2024-01-16"}');
+
+PROMPT   Inserted 12 inventory records
+
+CREATE INDEX idx_inv_product ON inventory(JSON_VALUE(data, '$.productId'));
+CREATE INDEX idx_inv_warehouse ON inventory(JSON_VALUE(data, '$.warehouse'));
+
 COMMIT;
 
 -- ============================================================
@@ -320,7 +413,13 @@ SELECT 'sales' AS table_name, COUNT(*) AS row_count FROM sales
 UNION ALL
 SELECT 'employees', COUNT(*) FROM employees
 UNION ALL
-SELECT 'products', COUNT(*) FROM products;
+SELECT 'products', COUNT(*) FROM products
+UNION ALL
+SELECT 'customers', COUNT(*) FROM customers
+UNION ALL
+SELECT 'events', COUNT(*) FROM events
+UNION ALL
+SELECT 'inventory', COUNT(*) FROM inventory;
 
 PROMPT ============================================================
 

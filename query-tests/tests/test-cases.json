@@ -601,6 +601,413 @@
       "oracle_sql": "SELECT id FROM sales WHERE JSON_VALUE(data, '$.status') = 'nonexistent_status'",
       "expected_count": 0,
       "sort_by": null
+    },
+    {
+      "id": "STR001",
+      "name": "String concatenation",
+      "category": "string",
+      "operator": "$concat",
+      "description": "Tests $concat operator to join strings",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "fullInfo": {"$concat": ["$name", " - ", "$department"]}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') || ' - ' || JSON_VALUE(data, '$.department') AS fullInfo FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR002",
+      "name": "String to lowercase",
+      "category": "string",
+      "operator": "$toLower",
+      "description": "Tests $toLower operator",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "deptLower": {"$toLower": "$department"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, LOWER(JSON_VALUE(data, '$.department')) AS deptLower FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR003",
+      "name": "String to uppercase",
+      "category": "string",
+      "operator": "$toUpper",
+      "description": "Tests $toUpper operator",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "nameUpper": {"$toUpper": "$name"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, UPPER(JSON_VALUE(data, '$.name')) AS nameUpper FROM products ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR004",
+      "name": "Substring extraction",
+      "category": "string",
+      "operator": "$substr",
+      "description": "Tests $substr operator to extract part of string",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "namePrefix": {"$substr": ["$name", 0, 4]}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, SUBSTR(JSON_VALUE(data, '$.name'), 1, 4) AS namePrefix FROM customers ORDER BY id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR005",
+      "name": "String length",
+      "category": "string",
+      "operator": "$strLenCP",
+      "description": "Tests $strLenCP operator to get string length",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "nameLength": {"$strLenCP": "$name"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, LENGTH(JSON_VALUE(data, '$.name')) AS nameLength FROM products ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR006",
+      "name": "String trim",
+      "category": "string",
+      "operator": "$trim",
+      "description": "Tests $trim operator (using existing data)",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "trimmedName": {"$trim": {"input": "$name"}}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, TRIM(JSON_VALUE(data, '$.name')) AS trimmedName FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE001",
+      "name": "Extract year from date",
+      "category": "date",
+      "operator": "$year",
+      "description": "Tests $year operator to extract year component",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "title": 1, "eventYear": {"$year": "$eventDate"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.title') AS title, EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) AS eventYear FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE002",
+      "name": "Extract month from date",
+      "category": "date",
+      "operator": "$month",
+      "description": "Tests $month operator to extract month component",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "title": 1, "eventMonth": {"$month": "$eventDate"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.title') AS title, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) AS eventMonth FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE003",
+      "name": "Extract day from date",
+      "category": "date",
+      "operator": "$dayOfMonth",
+      "description": "Tests $dayOfMonth operator to extract day component",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "title": 1, "eventDay": {"$dayOfMonth": "$eventDate"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.title') AS title, EXTRACT(DAY FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) AS eventDay FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE004",
+      "name": "Extract hour from date",
+      "category": "date",
+      "operator": "$hour",
+      "description": "Tests $hour operator to extract hour component",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "title": 1, "eventHour": {"$hour": "$eventDate"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.title') AS title, EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) AS eventHour FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE005",
+      "name": "Group events by month",
+      "category": "date",
+      "operator": "$month/$group",
+      "description": "Tests $month with $group for monthly aggregation",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$group": {"_id": {"$month": "$eventDate"}, "eventCount": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) AS grp_id, COUNT(*) AS eventCount FROM events GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')) ORDER BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"'))",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR001",
+      "name": "Get first array element",
+      "category": "array",
+      "operator": "$arrayElemAt",
+      "description": "Tests $arrayElemAt to get first element",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$ne": []}}},
+        {"$project": {"_id": 1, "name": 1, "firstTag": {"$arrayElemAt": ["$tags", 0]}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.tags[0]') AS firstTag FROM products WHERE JSON_EXISTS(data, '$.tags[0]') ORDER BY id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR002",
+      "name": "Get array size",
+      "category": "array",
+      "operator": "$size",
+      "description": "Tests $size operator to get array length",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "orderId": 1, "itemCount": {"$size": "$items"}}},
+        {"$sort": {"orderId": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.items.size()' RETURNING NUMBER) AS itemCount FROM sales ORDER BY JSON_VALUE(data, '$.orderId' RETURNING NUMBER)",
+      "expected_count": 10,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ARR003",
+      "name": "Array first element with $first",
+      "category": "array",
+      "operator": "$first",
+      "description": "Tests $first operator as array accessor",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$ne": []}}},
+        {"$project": {"_id": 1, "name": 1, "firstTag": {"$first": "$tags"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.tags[0]') AS firstTag FROM products WHERE JSON_EXISTS(data, '$.tags[0]') ORDER BY id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR004",
+      "name": "Array last element with $last",
+      "category": "array",
+      "operator": "$last",
+      "description": "Tests $last operator as array accessor",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"tags": {"$ne": []}}},
+        {"$project": {"_id": 1, "orderId": 1, "lastTag": {"$last": "$tags"}}},
+        {"$sort": {"orderId": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.tags[last]') AS lastTag FROM sales WHERE JSON_EXISTS(data, '$.tags[0]') ORDER BY JSON_VALUE(data, '$.orderId' RETURNING NUMBER)",
+      "expected_count": 8,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "LOOKUP001",
+      "name": "Basic $lookup join",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup stage for basic left outer join",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$lookup": {"from": "customers", "localField": "customerId", "foreignField": "_id", "as": "customerInfo"}},
+        {"$project": {"_id": 1, "orderId": 1, "customerTier": {"$arrayElemAt": ["$customerInfo.tier", 0]}}},
+        {"$sort": {"orderId": 1}}
+      ],
+      "oracle_sql": "SELECT s.id, JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(c.data, '$.tier') AS customerTier FROM sales s LEFT OUTER JOIN customers c ON JSON_VALUE(s.data, '$.customerId') = JSON_VALUE(c.data, '$._id') WHERE JSON_VALUE(s.data, '$.status') = 'completed' ORDER BY JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER)",
+      "expected_count": 5,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "LOOKUP002",
+      "name": "$lookup with inventory",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup stage joining products with inventory",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$lookup": {"from": "inventory", "localField": "_id", "foreignField": "productId", "as": "inventoryRecords"}},
+        {"$project": {"_id": 1, "name": 1, "warehouseCount": {"$size": "$inventoryRecords"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT p.id, JSON_VALUE(p.data, '$.name') AS name, (SELECT COUNT(*) FROM inventory i WHERE JSON_VALUE(i.data, '$.productId') = JSON_VALUE(p.data, '$._id')) AS warehouseCount FROM products p WHERE JSON_VALUE(p.data, '$.active') = 'true' ORDER BY p.id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "UNWIND001",
+      "name": "Basic $unwind array",
+      "category": "unwind",
+      "operator": "$unwind",
+      "description": "Tests $unwind stage to flatten array",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"orderId": 1001}},
+        {"$unwind": "$items"},
+        {"$project": {"_id": 1, "orderId": 1, "product": "$items.product", "qty": "$items.qty"}}
+      ],
+      "oracle_sql": "SELECT s.id, JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER) AS orderId, jt.product, jt.qty FROM sales s, JSON_TABLE(s.data, '$.items[*]' COLUMNS (product VARCHAR2(100) PATH '$.product', qty NUMBER PATH '$.qty')) jt WHERE JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER) = 1001",
+      "expected_count": 2,
+      "sort_by": null
+    },
+    {
+      "id": "UNWIND002",
+      "name": "$unwind with preserveNullAndEmptyArrays",
+      "category": "unwind",
+      "operator": "$unwind",
+      "description": "Tests $unwind with empty array preservation",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"orderId": {"$in": [1001, 1007]}}},
+        {"$unwind": {"path": "$tags", "preserveNullAndEmptyArrays": true}},
+        {"$project": {"_id": 1, "orderId": 1, "tag": "$tags"}},
+        {"$sort": {"orderId": 1}}
+      ],
+      "oracle_sql": "SELECT s.id, JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER) AS orderId, jt.tag FROM sales s LEFT OUTER JOIN JSON_TABLE(s.data, '$.tags[*]' COLUMNS (tag VARCHAR2(100) PATH '$')) jt ON 1=1 WHERE JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER) IN (1001, 1007) ORDER BY JSON_VALUE(s.data, '$.orderId' RETURNING NUMBER)",
+      "expected_count": 3,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "ADDFIELDS001",
+      "name": "Add computed field",
+      "category": "addFields",
+      "operator": "$addFields",
+      "description": "Tests $addFields stage to add computed column",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$addFields": {"totalCompensation": {"$add": ["$salary", "$bonus"]}}},
+        {"$project": {"_id": 1, "name": 1, "totalCompensation": 1}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, (JSON_VALUE(data, '$.salary' RETURNING NUMBER) + JSON_VALUE(data, '$.bonus' RETURNING NUMBER)) AS totalCompensation FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ADDFIELDS002",
+      "name": "$set as alias for $addFields",
+      "category": "addFields",
+      "operator": "$set",
+      "description": "Tests $set stage (alias for $addFields)",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$set": {"profitMargin": {"$subtract": ["$price", "$cost"]}}},
+        {"$project": {"_id": 1, "name": 1, "profitMargin": 1}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, (JSON_VALUE(data, '$.price' RETURNING NUMBER) - JSON_VALUE(data, '$.cost' RETURNING NUMBER)) AS profitMargin FROM products WHERE JSON_VALUE(data, '$.active') = 'true' ORDER BY id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "AGG007",
+      "name": "Group with $push",
+      "category": "accumulator",
+      "operator": "$push",
+      "description": "Tests $group with $push to collect values into array",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$department", "employees": {"$push": "$name"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(data, '$.department') AS grp_id, JSON_ARRAYAGG(JSON_VALUE(data, '$.name')) AS employees FROM employees GROUP BY JSON_VALUE(data, '$.department') ORDER BY JSON_VALUE(data, '$.department')",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "AGG008",
+      "name": "Group with $addToSet",
+      "category": "accumulator",
+      "operator": "$addToSet",
+      "description": "Tests $group with $addToSet to collect unique values",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$region", "statuses": {"$addToSet": "$status"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT region AS grp_id, JSON_ARRAYAGG(status ORDER BY status) AS statuses FROM (SELECT DISTINCT JSON_VALUE(data, '$.region') AS region, JSON_VALUE(data, '$.status') AS status FROM sales) GROUP BY region ORDER BY region",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COND003",
+      "name": "Nested $cond expressions",
+      "category": "conditional",
+      "operator": "$cond",
+      "description": "Tests nested $cond for multi-branch logic",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "priceRange": {"$cond": {"if": {"$gte": ["$price", 200]}, "then": "high", "else": {"$cond": {"if": {"$gte": ["$price", 50]}, "then": "medium", "else": "low"}}}}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, CASE WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 200 THEN 'high' WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 50 THEN 'medium' ELSE 'low' END AS priceRange FROM products ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX004",
+      "name": "Complex pipeline - lookup with group",
+      "category": "complex",
+      "operator": "multiple",
+      "description": "Tests complex pipeline combining $lookup and $group",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$lookup": {"from": "customers", "localField": "customerId", "foreignField": "_id", "as": "customer"}},
+        {"$unwind": "$customer"},
+        {"$group": {"_id": "$customer.tier", "totalAmount": {"$sum": "$amount"}, "orderCount": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(c.data, '$.tier') AS grp_id, SUM(JSON_VALUE(s.data, '$.amount' RETURNING NUMBER)) AS totalAmount, COUNT(*) AS orderCount FROM sales s INNER JOIN customers c ON JSON_VALUE(s.data, '$.customerId') = JSON_VALUE(c.data, '$._id') WHERE JSON_VALUE(s.data, '$.status') = 'completed' GROUP BY JSON_VALUE(c.data, '$.tier') ORDER BY JSON_VALUE(c.data, '$.tier')",
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX005",
+      "name": "Complex pipeline - string operations with grouping",
+      "category": "complex",
+      "operator": "multiple",
+      "description": "Tests complex pipeline with string operations and grouping",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$addFields": {"deptUpper": {"$toUpper": "$department"}}},
+        {"$group": {"_id": "$deptUpper", "avgSalary": {"$avg": "$salary"}, "headcount": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT UPPER(JSON_VALUE(data, '$.department')) AS grp_id, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS avgSalary, COUNT(*) AS headcount FROM employees GROUP BY UPPER(JSON_VALUE(data, '$.department')) ORDER BY UPPER(JSON_VALUE(data, '$.department'))",
+      "expected_count": 4,
+      "sort_by": "_id"
     }
   ]
 }

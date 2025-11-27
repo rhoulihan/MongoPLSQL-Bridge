@@ -1,0 +1,556 @@
+{
+  "version": "1.0",
+  "description": "Imported MongoDB aggregation tests",
+  "imported_at": "2025-11-26T23:54:04.928Z",
+  "sources": [
+    "/expressions/upperlower.js",
+    "/expressions/trim.js",
+    "/expressions/strlen.js",
+    "/expressions/first_last.js"
+  ],
+  "test_data": {
+    "jstests_aggregation_upperlower": [
+      {}
+    ],
+    "substr": [
+      {
+        "strField": "MyString",
+        "intField": 1,
+        "nullField": null,
+        "specialCharField": "é",
+        "specialCharField2": "匣6卜十戈大中金",
+        "specialCharField3": "i ♥ u"
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "id": "IMP001",
+      "name": "$project + $sort with $trim",
+      "category": "string",
+      "operator": "$trim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$trim": {
+                "input": "$trimTest"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": 2,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 33
+      },
+      "expected_result": [
+        {
+          "_id": 0,
+          "exp": "abc"
+        },
+        {
+          "_id": 1,
+          "exp": "a b\nc"
+        }
+      ]
+    },
+    {
+      "id": "IMP002",
+      "name": "$project with $ltrim",
+      "category": "imported",
+      "operator": "$ltrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$ltrim": {
+                "input": "$ltrimTest"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null,
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 40
+      },
+      "expected_result": [
+        {
+          "_id": 2,
+          "exp": "abc "
+        }
+      ]
+    },
+    {
+      "id": "IMP003",
+      "name": "$project with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$rtrim": {
+                "input": "$rtrimTest"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": 1,
+      "sort_by": null,
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 44
+      },
+      "expected_result": [
+        {
+          "_id": 3,
+          "exp": "\t abc"
+        }
+      ]
+    },
+    {
+      "id": "IMP004",
+      "name": "$project + $sort with $ltrim",
+      "category": "imported",
+      "operator": "$ltrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "title": {
+              "$ltrim": {
+                "input": "$poorlyParsedWebTitle"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 98
+      }
+    },
+    {
+      "id": "IMP005",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "∎"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": 5,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 117
+      },
+      "expected_result": [
+        {
+          "_id": 0,
+          "proof": "Left as an exercise for the reader"
+        },
+        {
+          "_id": 1,
+          "proof": "∎∃ proof"
+        },
+        {
+          "_id": 2,
+          "proof": "Just view the problem as a continuous DAG whose elements are taylor series"
+        },
+        {
+          "_id": 3,
+          "proof": null
+        },
+        {
+          "_id": 4,
+          "proof": null
+        }
+      ]
+    },
+    {
+      "id": "IMP006",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "$extra"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 143
+      }
+    },
+    {
+      "id": "IMP007",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "$extra"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 164
+      }
+    },
+    {
+      "id": "IMP008",
+      "name": "$project + $sort with $trim",
+      "category": "string",
+      "operator": "$trim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$trim": {
+                "input": "$trimTest"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 33
+      }
+    },
+    {
+      "id": "IMP009",
+      "name": "$project with $ltrim",
+      "category": "imported",
+      "operator": "$ltrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$ltrim": {
+                "input": "$ltrimTest"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": null,
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 40
+      }
+    },
+    {
+      "id": "IMP010",
+      "name": "$project with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "exp": {
+              "$rtrim": {
+                "input": "$rtrimTest"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": null,
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 44
+      }
+    },
+    {
+      "id": "IMP011",
+      "name": "$project + $sort with $ltrim",
+      "category": "imported",
+      "operator": "$ltrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "title": {
+              "$ltrim": {
+                "input": "$poorlyParsedWebTitle"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 99
+      }
+    },
+    {
+      "id": "IMP012",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "∎"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 117
+      }
+    },
+    {
+      "id": "IMP013",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "$extra"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 144
+      }
+    },
+    {
+      "id": "IMP014",
+      "name": "$project + $sort with $rtrim",
+      "category": "imported",
+      "operator": "$rtrim",
+      "description": "Imported from MongoDB jstest: /expressions/trim.js",
+      "collection": "trim_expressions",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "proof": {
+              "$rtrim": {
+                "input": "$proof",
+                "chars": "$extra"
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/trim.js",
+        "line": 165
+      }
+    },
+    {
+      "id": "IMP015",
+      "name": "$sort + $project with $first, $last",
+      "category": "array",
+      "operator": "$first",
+      "description": "Imported from MongoDB jstest: /expressions/first_last.js",
+      "collection": "expression_first_last",
+      "mongodb_pipeline": [
+        {
+          "$sort": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "f": {
+              "$first": "$a"
+            },
+            "l": {
+              "$last": "$a"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/first_last.js",
+        "line": 19
+      }
+    },
+    {
+      "id": "IMP016",
+      "name": "$sort + $project with $first, $last",
+      "category": "array",
+      "operator": "$first",
+      "description": "Imported from MongoDB jstest: /expressions/first_last.js",
+      "collection": "expression_first_last",
+      "mongodb_pipeline": [
+        {
+          "$sort": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "f": {
+              "$first": "$a"
+            },
+            "l": {
+              "$last": "$a"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/first_last.js",
+        "line": 19
+      }
+    }
+  ]
+}

@@ -46,7 +46,9 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 39 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 65 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3)
 
 ### Next Phase (Tier 4)
 

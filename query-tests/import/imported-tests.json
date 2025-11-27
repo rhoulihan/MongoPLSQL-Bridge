@@ -1,0 +1,126 @@
+{
+  "version": "1.0",
+  "description": "Imported MongoDB aggregation tests",
+  "imported_at": "2025-11-26T23:51:26.319Z",
+  "sources": [
+    "/expressions/size.js",
+    "/expressions/array_elem_at.js",
+    "/expressions/cond.js"
+  ],
+  "test_data": {
+    "expression_size": [
+      {
+        "_id": 0,
+        "arr": []
+      },
+      {
+        "_id": 1,
+        "arr": [
+          1
+        ]
+      },
+      {
+        "_id": 2,
+        "arr": [
+          "asdf",
+          "asdfasdf"
+        ]
+      },
+      {
+        "_id": 3,
+        "arr": [
+          1,
+          "asdf",
+          1234,
+          4.3,
+          {
+            "key": 23
+          }
+        ]
+      },
+      {
+        "_id": 4,
+        "arr": [
+          3,
+          [
+            31,
+            31,
+            13,
+            13
+          ]
+        ]
+      },
+      {
+        "arr": 231
+      }
+    ],
+    "agg_array_elem_at_expr": [
+      {
+        "a": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    ],
+    "jstests_aggregation_cond": [
+      {
+        "t": true,
+        "f": false,
+        "x": "foo",
+        "y": "bar"
+      },
+      {},
+      {
+        "noonSense": "am",
+        "mealCombined": "no"
+      },
+      {
+        "noonSense": "am",
+        "mealCombined": "yes"
+      },
+      {
+        "noonSense": "pm",
+        "mealCombined": "yes"
+      },
+      {
+        "noonSense": "pm",
+        "mealCombined": "no"
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "id": "IMP001",
+      "name": "$sort + $project with $size",
+      "category": "array",
+      "operator": "$size",
+      "description": "Imported from MongoDB jstest: /expressions/size.js",
+      "collection": "expression_size",
+      "mongodb_pipeline": [
+        {
+          "$sort": {
+            "_id": 1
+          }
+        },
+        {
+          "$project": {
+            "_id": 0,
+            "length": {
+              "$size": "$arr"
+            }
+          }
+        }
+      ],
+      "oracle_sql": null,
+      "expected_count": null,
+      "sort_by": "_id",
+      "source": {
+        "file": "/expressions/size.js",
+        "line": 15
+      }
+    }
+  ]
+}
