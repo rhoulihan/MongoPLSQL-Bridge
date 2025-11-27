@@ -1,0 +1,26 @@
+MongoPLSQL-Bridge Query Validation Test Report
+Generated: Wed Nov 26 18:34:29 CST 2025
+============================================================
+
+[UNION001] Basic $unionWith - two collections
+  Category: unionWith
+  Status: PASS
+  Details: MongoDB=10, Oracle=10, Expected=10
+
+[UNION002] $unionWith with match filter
+  Category: unionWith
+  Status: PASS
+  Details: MongoDB=7, Oracle=7, Expected=7
+
+[UNION003] $unionWith with aggregation
+  Category: unionWith
+  Status: PASS
+  Details: MongoDB=1, Oracle=1, Expected=1
+
+============================================================
+SUMMARY
+============================================================
+Total:  3
+Passed: 3
+Failed: 0
+Errors: 0

@@ -15,6 +15,7 @@ import com.oracle.mongodb.translator.ast.stage.UnwindStage;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortField;
+import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
 import org.bson.Document;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +67,37 @@ public final class StageParserRegistry {
         AddFieldsStageParser addFieldsParser = new AddFieldsStageParser();
         register("$addFields", value -> addFieldsParser.parse((Document) value));
         register("$set", value -> addFieldsParser.parse((Document) value));
+
+        // $unionWith stage - combine with another collection
+        // Use a lambda to defer PipelineParser creation to avoid circular initialization
+        register("$unionWith", value -> new UnionWithStageParser(new PipelineParser(this)).parse(value));
+
+        // $bucket stage - categorize documents into groups
+        BucketStageParser bucketParser = new BucketStageParser();
+        register("$bucket", value -> bucketParser.parse((Document) value));
+
+        // $bucketAuto stage - automatically determine bucket boundaries
+        BucketAutoStageParser bucketAutoParser = new BucketAutoStageParser();
+        register("$bucketAuto", value -> bucketAutoParser.parse((Document) value));
+
+        // $facet stage - multiple parallel pipelines
+        register("$facet", value -> new FacetStageParser(new PipelineParser(this)).parse((Document) value));
+
+        // $merge stage - write results with merge logic
+        MergeStageParser mergeParser = new MergeStageParser();
+        register("$merge", mergeParser::parse);
+
+        // $out stage - write results to collection
+        OutStageParser outParser = new OutStageParser();
+        register("$out", outParser::parse);
+
+        // $graphLookup stage - recursive search (stub)
+        GraphLookupStageParser graphLookupParser = new GraphLookupStageParser();
+        register("$graphLookup", value -> graphLookupParser.parse((Document) value));
+
+        // $setWindowFields stage - window functions (stub)
+        SetWindowFieldsStageParser setWindowFieldsParser = new SetWindowFieldsStageParser();
+        register("$setWindowFields", value -> setWindowFieldsParser.parse((Document) value));
     }
 
     private SortStage parseSortStage(Object value) {

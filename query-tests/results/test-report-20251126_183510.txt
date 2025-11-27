@@ -1,0 +1,21 @@
+MongoPLSQL-Bridge Query Validation Test Report
+Generated: Wed Nov 26 18:35:10 CST 2025
+============================================================
+
+[BUCKET001] Basic $bucket - price ranges
+  Category: bucket
+  Status: PASS
+  Details: MongoDB=3, Oracle=3, Expected=3
+
+[BUCKET002] $bucket - salary bands
+  Category: bucket
+  Status: PASS
+  Details: MongoDB=3, Oracle=3, Expected=3
+
+============================================================
+SUMMARY
+============================================================
+Total:  2
+Passed: 2
+Failed: 0
+Errors: 0

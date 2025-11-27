@@ -1,0 +1,26 @@
+MongoPLSQL-Bridge Query Validation Test Report
+Generated: Wed Nov 26 18:35:44 CST 2025
+============================================================
+
+[FACET001] Basic $facet - multiple aggregations
+  Category: facet
+  Status: PASS
+  Details: MongoDB=1, Oracle=1, Expected=1
+
+[FACET002] $facet - product analysis
+  Category: facet
+  Status: PASS
+  Details: MongoDB=1, Oracle=1, Expected=1
+
+[FACET003] $facet - employee dashboard
+  Category: facet
+  Status: PASS
+  Details: MongoDB=1, Oracle=1, Expected=1
+
+============================================================
+SUMMARY
+============================================================
+Total:  3
+Passed: 3
+Failed: 0
+Errors: 0

@@ -1,0 +1,5 @@
+{"timestamp": "2025-11-26T18:35:10-06:00", "results": [
+{"id": "BUCKET001", "name": "Basic $bucket - price ranges", "category": "bucket", "status": "PASS", "mongodb_count": "3", "oracle_count": "3", "expected_count": "3"}
+,
+{"id": "BUCKET002", "name": "$bucket - salary bands", "category": "bucket", "status": "PASS", "mongodb_count": "3", "oracle_count": "3", "expected_count": "3"}
+],"summary":{"total":2,"passed":2,"failed":0,"errors":0}}

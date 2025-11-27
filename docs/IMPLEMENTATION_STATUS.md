@@ -11,7 +11,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | Phase 1: Project Initialization | ✅ Complete | 10/10 | 10 |
 | Phase 2: Core Infrastructure | ✅ Complete | 7/7 | 7 |
 | Phase 3: Tier 1 Operators | ✅ Complete | 13/13 | 13 |
-| Phase 4: Tier 2-4 & Optimization | 🔄 In Progress | 10/18 | 18 |
+| Phase 4: Tier 2-4 & Optimization | 🔄 In Progress | 16/18 | 18 |
 
 ## Detailed Ticket Status
 
@@ -74,12 +74,12 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-038 | Predicate Pushdown Optimizer | ✅ Done | Moves $match before $project/$limit/$sort |
 | IMPL-039 | Sort-Limit Optimization | ✅ Done | Top-N optimization with limit hints |
 | IMPL-040 | Optimization Chain | ✅ Done | Configurable optimizer chain |
-| IMPL-041 | $facet Stage | ⏳ Pending | Multiple subqueries |
-| IMPL-042 | $bucket/$bucketAuto Stages | ⏳ Pending | CASE expressions |
-| IMPL-043 | $merge/$out Stages | ⏳ Pending | INSERT/MERGE statements |
-| IMPL-044 | $unionWith Stage | ⏳ Pending | UNION ALL |
-| IMPL-045 | $graphLookup Stage | ⏳ Pending | Stub (recursive CTE) |
-| IMPL-046 | $setWindowFields Stage | ⏳ Pending | Stub (window functions) |
+| IMPL-041 | $facet Stage | ✅ Done | Multiple subqueries with JSON_OBJECT |
+| IMPL-042 | $bucket/$bucketAuto Stages | ✅ Done | CASE expressions, NTILE for auto |
+| IMPL-043 | $merge/$out Stages | ✅ Done | INSERT/MERGE statements (stub) |
+| IMPL-044 | $unionWith Stage | ✅ Done | UNION ALL |
+| IMPL-045 | $graphLookup Stage | ✅ Done | Stub (recursive CTE not yet implemented) |
+| IMPL-046 | $setWindowFields Stage | ✅ Done | Stub (window functions not yet implemented) |
 | IMPL-047 | Specification Files | ⏳ Pending | operators.json, type-mappings.json |
 | IMPL-048 | Integration Test Suite | ⏳ Pending | Cross-validation tests |
 
@@ -128,7 +128,15 @@ ast/
     ├── SortStage.java ✅
     ├── LookupStage.java ✅
     ├── UnwindStage.java ✅
-    └── AddFieldsStage.java ✅
+    ├── AddFieldsStage.java ✅
+    ├── UnionWithStage.java ✅
+    ├── BucketStage.java ✅
+    ├── BucketAutoStage.java ✅
+    ├── FacetStage.java ✅
+    ├── MergeStage.java ✅
+    ├── OutStage.java ✅
+    ├── GraphLookupStage.java ✅
+    └── SetWindowFieldsStage.java ✅
 
 optimizer/
 ├── PipelineOptimizer.java ✅
@@ -162,7 +170,15 @@ parser/
 ├── ProjectStageParser.java ✅
 ├── LookupStageParser.java ✅
 ├── UnwindStageParser.java ✅
-└── AddFieldsStageParser.java ✅
+├── AddFieldsStageParser.java ✅
+├── UnionWithStageParser.java ✅
+├── BucketStageParser.java ✅
+├── BucketAutoStageParser.java ✅
+├── FacetStageParser.java ✅
+├── MergeStageParser.java ✅
+├── OutStageParser.java ✅
+├── GraphLookupStageParser.java ✅
+└── SetWindowFieldsStageParser.java ✅
 ```
 
 ### Test Files (`core/src/test/java/com/oracle/mongodb/translator/`)
@@ -236,7 +252,7 @@ parser/
 
 **Unit Tests:** 300+ test methods across 45+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 65 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 75 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 All tests passing: ✅ Yes
 
@@ -257,7 +273,11 @@ All tests passing: ✅ Yes
 | $addFields/$set | 2 | ✅ Pass |
 | Complex pipelines | 5 | ✅ Pass |
 | Edge cases | 3 | ✅ Pass |
-| **Total** | **65** | **✅ 100%** |
+| $unionWith | 3 | ✅ Pass |
+| $bucket | 2 | ✅ Pass |
+| $bucketAuto | 2 | ✅ Pass |
+| $facet | 3 | ✅ Pass |
+| **Total** | **75** | **✅ 100%** |
 
 ## Example Translations
 
@@ -334,10 +354,10 @@ Run validation tests:
 
 ## Next Steps
 
-1. Continue Phase 4: Tier 4 Operators
-2. IMPL-041: $facet Stage Implementation (multiple subqueries)
-3. IMPL-042: $bucket/$bucketAuto Stages (CASE expressions)
-4. IMPL-047: Specification Files (operators.json, type-mappings.json)
+1. IMPL-047: Specification Files (operators.json, type-mappings.json)
+2. IMPL-048: Integration Test Suite expansion
+3. Complete $graphLookup recursive CTE implementation
+4. Complete $setWindowFields window function implementation
 
 ## Git Commits
 

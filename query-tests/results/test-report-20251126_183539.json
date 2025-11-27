@@ -1,0 +1,5 @@
+{"timestamp": "2025-11-26T18:35:39-06:00", "results": [
+{"id": "BUCKETAUTO001", "name": "Basic $bucketAuto - auto price groups", "category": "bucketAuto", "status": "PASS", "mongodb_count": "3", "oracle_count": "3", "expected_count": "3"}
+,
+{"id": "BUCKETAUTO002", "name": "$bucketAuto - employee salary distribution", "category": "bucketAuto", "status": "PASS", "mongodb_count": "4", "oracle_count": "4", "expected_count": "4"}
+],"summary":{"total":2,"passed":2,"failed":0,"errors":0}}

@@ -46,15 +46,20 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 65 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 75 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3)
 
-### Next Phase (Tier 4)
+### Additional Stages Implemented
 
-- `$facet`, `$bucket`, `$bucketAuto` stages
-- `$merge`, `$out`, `$unionWith` stages
-- `$graphLookup`, `$setWindowFields` (stubs)
+- `$unionWith` - UNION ALL
+- `$bucket` - CASE expression grouping
+- `$bucketAuto` - NTILE-based automatic bucketing
+- `$facet` - Multiple parallel subqueries (JSON_OBJECT)
+- `$merge` - MERGE statement (stub)
+- `$out` - INSERT statement (stub)
+- `$graphLookup` - Recursive CTE (stub)
+- `$setWindowFields` - Window functions (stub)
 
 ## Requirements
 
@@ -132,8 +137,14 @@ try (PreparedStatement ps = connection.prepareStatement(result.sql())) {
 | `$lookup` | ✅ Implemented | LEFT OUTER JOIN |
 | `$unwind` | ✅ Implemented | JSON_TABLE with NESTED PATH |
 | `$addFields`/`$set` | ✅ Implemented | Computed columns |
-| `$facet` | ⏳ Planned | Multiple subqueries |
-| `$bucket` | ⏳ Planned | CASE expressions |
+| `$unionWith` | ✅ Implemented | UNION ALL |
+| `$bucket` | ✅ Implemented | CASE expressions |
+| `$bucketAuto` | ✅ Implemented | NTILE window function |
+| `$facet` | ✅ Implemented | Multiple subqueries (JSON_OBJECT) |
+| `$merge` | ✅ Stub | MERGE statement |
+| `$out` | ✅ Stub | INSERT statement |
+| `$graphLookup` | ✅ Stub | Recursive CTE |
+| `$setWindowFields` | ✅ Stub | Window functions |
 
 ### Expression Operators
 

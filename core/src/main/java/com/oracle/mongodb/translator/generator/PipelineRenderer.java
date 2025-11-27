@@ -19,6 +19,10 @@ import com.oracle.mongodb.translator.ast.stage.SkipStage;
 import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.Stage;
 import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
+import com.oracle.mongodb.translator.ast.stage.BucketStage;
+import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
+import com.oracle.mongodb.translator.ast.stage.FacetStage;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +84,9 @@ public final class PipelineRenderer {
 
         // Render FETCH clause
         renderFetchClause(components, ctx);
+
+        // Render UNION ALL clauses ($unionWith stages)
+        renderUnionWithClauses(components, ctx);
     }
 
     private PipelineComponents analyzePipeline(Pipeline pipeline) {
@@ -104,6 +111,14 @@ public final class PipelineRenderer {
                 components.unwindStages.add(unwind);
             } else if (stage instanceof AddFieldsStage addFields) {
                 components.addFieldsStages.add(addFields);
+            } else if (stage instanceof UnionWithStage unionWith) {
+                components.unionWithStages.add(unionWith);
+            } else if (stage instanceof BucketStage bucket) {
+                components.bucketStage = bucket;
+            } else if (stage instanceof BucketAutoStage bucketAuto) {
+                components.bucketAutoStage = bucketAuto;
+            } else if (stage instanceof FacetStage facet) {
+                components.facetStage = facet;
             }
             // For unknown stages, we skip them (they won't be rendered)
         }
@@ -114,9 +129,21 @@ public final class PipelineRenderer {
     private void renderSelectClause(PipelineComponents components, SqlGenerationContext ctx) {
         ctx.sql("SELECT ");
 
-        if (components.groupStage != null) {
+        if (components.facetStage != null) {
+            // $facet creates a JSON object with multiple subquery results
+            ctx.visit(components.facetStage);
+            ctx.sql(" AS ");
+            ctx.sql(config.dataColumnName());
+            return; // $facet replaces the entire query
+        } else if (components.groupStage != null) {
             // $group determines the SELECT clause
             renderGroupSelectClause(components.groupStage, ctx);
+        } else if (components.bucketStage != null) {
+            // $bucket determines the SELECT clause
+            ctx.visit(components.bucketStage);
+        } else if (components.bucketAutoStage != null) {
+            // $bucketAuto determines the SELECT clause
+            ctx.visit(components.bucketAutoStage);
         } else if (components.projectStage != null) {
             // $project determines the SELECT clause
             renderProjectSelectClause(components.projectStage, ctx);
@@ -239,12 +266,62 @@ public final class PipelineRenderer {
     }
 
     private void renderGroupByClause(PipelineComponents components, SqlGenerationContext ctx) {
-        if (components.groupStage == null || components.groupStage.getIdExpression() == null) {
-            return;
+        if (components.groupStage != null && components.groupStage.getIdExpression() != null) {
+            ctx.sql(" GROUP BY ");
+            ctx.visit(components.groupStage.getIdExpression());
+        } else if (components.bucketStage != null) {
+            // For $bucket, GROUP BY the CASE expression
+            ctx.sql(" GROUP BY ");
+            renderBucketCaseExpression(components.bucketStage, ctx);
+        } else if (components.bucketAutoStage != null) {
+            // For $bucketAuto, GROUP BY the NTILE result
+            ctx.sql(" GROUP BY ");
+            ctx.sql("NTILE(");
+            ctx.sql(String.valueOf(components.bucketAutoStage.getBuckets()));
+            ctx.sql(") OVER (ORDER BY ");
+            ctx.visit(components.bucketAutoStage.getGroupBy());
+            ctx.sql(")");
         }
+    }
 
-        ctx.sql(" GROUP BY ");
-        ctx.visit(components.groupStage.getIdExpression());
+    private void renderBucketCaseExpression(BucketStage bucket, SqlGenerationContext ctx) {
+        ctx.sql("CASE");
+        var boundaries = bucket.getBoundaries();
+        for (int i = 0; i < boundaries.size() - 1; i++) {
+            Object lower = boundaries.get(i);
+            Object upper = boundaries.get(i + 1);
+            ctx.sql(" WHEN ");
+            ctx.visit(bucket.getGroupBy());
+            ctx.sql(" >= ");
+            renderBucketLiteral(ctx, lower);
+            ctx.sql(" AND ");
+            ctx.visit(bucket.getGroupBy());
+            ctx.sql(" < ");
+            renderBucketLiteral(ctx, upper);
+            ctx.sql(" THEN ");
+            renderBucketLiteral(ctx, lower);
+        }
+        if (bucket.hasDefault()) {
+            ctx.sql(" ELSE ");
+            renderBucketLiteral(ctx, bucket.getDefaultBucket());
+        }
+        ctx.sql(" END");
+    }
+
+    private void renderBucketLiteral(SqlGenerationContext ctx, Object value) {
+        if (value instanceof String) {
+            ctx.sql("'");
+            ctx.sql(((String) value).replace("'", "''"));
+            ctx.sql("'");
+        } else if (value instanceof Number) {
+            ctx.sql(value.toString());
+        } else if (value == null) {
+            ctx.sql("NULL");
+        } else {
+            ctx.sql("'");
+            ctx.sql(value.toString().replace("'", "''"));
+            ctx.sql("'");
+        }
     }
 
     private void renderOrderByClause(PipelineComponents components, SqlGenerationContext ctx) {
@@ -287,6 +364,22 @@ public final class PipelineRenderer {
         ctx.sql(" ROWS ONLY");
     }
 
+    private void renderUnionWithClauses(PipelineComponents components, SqlGenerationContext ctx) {
+        for (UnionWithStage unionWith : components.unionWithStages) {
+            ctx.sql(" UNION ALL SELECT ");
+            ctx.sql(config.dataColumnName());
+            ctx.sql(" FROM ");
+            ctx.sql(unionWith.getCollection());
+
+            // If the unionWith has a pipeline, we need to render it as a subquery
+            if (unionWith.hasPipeline()) {
+                // For now, we render a simple note that pipeline support is limited
+                // Full pipeline support would require recursive rendering
+                ctx.sql(" /* pipeline not yet supported */");
+            }
+        }
+    }
+
     /**
      * Holds the decomposed components of a pipeline.
      */
@@ -295,8 +388,12 @@ public final class PipelineRenderer {
         List<LookupStage> lookupStages = new ArrayList<>();
         List<UnwindStage> unwindStages = new ArrayList<>();
         List<AddFieldsStage> addFieldsStages = new ArrayList<>();
+        List<UnionWithStage> unionWithStages = new ArrayList<>();
         GroupStage groupStage;
         ProjectStage projectStage;
+        BucketStage bucketStage;
+        BucketAutoStage bucketAutoStage;
+        FacetStage facetStage;
         SortStage sortStage;
         SkipStage skipStage;
         LimitStage limitStage;

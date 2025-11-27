@@ -1008,6 +1008,205 @@
       "oracle_sql": "SELECT UPPER(JSON_VALUE(data, '$.department')) AS grp_id, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS avgSalary, COUNT(*) AS headcount FROM employees GROUP BY UPPER(JSON_VALUE(data, '$.department')) ORDER BY UPPER(JSON_VALUE(data, '$.department'))",
       "expected_count": 4,
       "sort_by": "_id"
+    },
+    {
+      "id": "UNION001",
+      "name": "Basic $unionWith - two collections",
+      "category": "unionWith",
+      "operator": "$unionWith",
+      "description": "Tests $unionWith to combine employees and customers (names from both)",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "name": 1, "source": {"$literal": "employee"}}},
+        {"$unionWith": {"coll": "customers", "pipeline": [{"$project": {"_id": 1, "name": 1, "source": {"$literal": "customer"}}}]}},
+        {"$sort": {"source": 1, "name": 1}},
+        {"$limit": 10}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, 'employee' AS source FROM employees UNION ALL SELECT id, JSON_VALUE(data, '$.name') AS name, 'customer' AS source FROM customers ORDER BY source, name FETCH FIRST 10 ROWS ONLY",
+      "expected_count": 10,
+      "sort_by": null
+    },
+    {
+      "id": "UNION002",
+      "name": "$unionWith with match filter",
+      "category": "unionWith",
+      "operator": "$unionWith",
+      "description": "Tests $unionWith with $match in sub-pipeline",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$project": {"_id": 1, "amount": 1, "category": 1}},
+        {"$unionWith": {"coll": "sales", "pipeline": [{"$match": {"status": "pending"}}, {"$project": {"_id": 1, "amount": 1, "category": 1}}]}},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, JSON_VALUE(data, '$.category') AS category FROM sales WHERE JSON_VALUE(data, '$.status') = 'completed' UNION ALL SELECT id, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, JSON_VALUE(data, '$.category') AS category FROM sales WHERE JSON_VALUE(data, '$.status') = 'pending' ORDER BY id",
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "UNION003",
+      "name": "$unionWith with aggregation",
+      "category": "unionWith",
+      "operator": "$unionWith",
+      "description": "Tests $unionWith followed by group aggregation",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"category": "electronics"}},
+        {"$project": {"_id": 1, "price": 1}},
+        {"$unionWith": {"coll": "products", "pipeline": [{"$match": {"category": "tools"}}, {"$project": {"_id": 1, "price": 1}}]}},
+        {"$group": {"_id": null, "totalProducts": {"$sum": 1}, "avgPrice": {"$avg": "$price"}}}
+      ],
+      "oracle_sql": "SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT JSON_VALUE(data, '$.price' RETURNING NUMBER) AS price FROM products WHERE JSON_VALUE(data, '$.category') = 'electronics' UNION ALL SELECT JSON_VALUE(data, '$.price' RETURNING NUMBER) AS price FROM products WHERE JSON_VALUE(data, '$.category') = 'tools')",
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "BUCKET001",
+      "name": "Basic $bucket - price ranges",
+      "category": "bucket",
+      "operator": "$bucket",
+      "description": "Tests $bucket to group products by price ranges (no default needed - all values covered)",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$bucket": {
+          "groupBy": "$price",
+          "boundaries": [0, 25, 100, 1000],
+          "output": {"count": {"$sum": 1}, "products": {"$push": "$name"}}
+        }},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT CASE WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 0 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 25 THEN 0 WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 25 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 100 THEN 25 WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 100 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 1000 THEN 100 END AS bucket_id, COUNT(*) AS cnt, JSON_ARRAYAGG(JSON_VALUE(data, '$.name')) AS products FROM products WHERE JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 0 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 1000 GROUP BY CASE WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 0 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 25 THEN 0 WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 25 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 100 THEN 25 WHEN JSON_VALUE(data, '$.price' RETURNING NUMBER) >= 100 AND JSON_VALUE(data, '$.price' RETURNING NUMBER) < 1000 THEN 100 END ORDER BY bucket_id",
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "BUCKET002",
+      "name": "$bucket - salary bands",
+      "category": "bucket",
+      "operator": "$bucket",
+      "description": "Tests $bucket to group employees by salary bands (all values covered)",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$bucket": {
+          "groupBy": "$salary",
+          "boundaries": [60000, 75000, 90000, 110000],
+          "output": {"count": {"$sum": 1}, "avgBonus": {"$avg": "$bonus"}}
+        }},
+        {"$sort": {"_id": 1}}
+      ],
+      "oracle_sql": "SELECT CASE WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 60000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 75000 THEN 60000 WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 75000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 90000 THEN 75000 WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 90000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 110000 THEN 90000 END AS bucket_id, COUNT(*) AS cnt, AVG(JSON_VALUE(data, '$.bonus' RETURNING NUMBER)) AS avgBonus FROM employees WHERE JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 60000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 110000 GROUP BY CASE WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 60000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 75000 THEN 60000 WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 75000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 90000 THEN 75000 WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 90000 AND JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 110000 THEN 90000 END ORDER BY bucket_id",
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "BUCKETAUTO001",
+      "name": "Basic $bucketAuto - auto price groups",
+      "category": "bucketAuto",
+      "operator": "$bucketAuto",
+      "description": "Tests $bucketAuto to automatically group products by price",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$bucketAuto": {
+          "groupBy": "$price",
+          "buckets": 3,
+          "output": {"count": {"$sum": 1}, "avgPrice": {"$avg": "$price"}}
+        }}
+      ],
+      "oracle_sql": "SELECT bucket_id, COUNT(*) AS cnt, AVG(price) AS avgPrice FROM (SELECT JSON_VALUE(data, '$.price' RETURNING NUMBER) AS price, NTILE(3) OVER (ORDER BY JSON_VALUE(data, '$.price' RETURNING NUMBER)) AS bucket_id FROM products WHERE JSON_VALUE(data, '$.active') = 'true') GROUP BY bucket_id ORDER BY bucket_id",
+      "expected_count": 3,
+      "sort_by": null
+    },
+    {
+      "id": "BUCKETAUTO002",
+      "name": "$bucketAuto - employee salary distribution",
+      "category": "bucketAuto",
+      "operator": "$bucketAuto",
+      "description": "Tests $bucketAuto to distribute employees into salary quartiles",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$bucketAuto": {
+          "groupBy": "$salary",
+          "buckets": 4,
+          "output": {"count": {"$sum": 1}, "minSalary": {"$min": "$salary"}, "maxSalary": {"$max": "$salary"}}
+        }}
+      ],
+      "oracle_sql": "SELECT bucket_id, COUNT(*) AS cnt, MIN(salary) AS minSalary, MAX(salary) AS maxSalary FROM (SELECT JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, NTILE(4) OVER (ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS bucket_id FROM employees) GROUP BY bucket_id ORDER BY bucket_id",
+      "expected_count": 4,
+      "sort_by": null
+    },
+    {
+      "id": "FACET001",
+      "name": "Basic $facet - multiple aggregations",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet for parallel aggregation pipelines",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$facet": {
+          "byStatus": [
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}}
+          ],
+          "byRegion": [
+            {"$group": {"_id": "$region", "totalAmount": {"$sum": "$amount"}}},
+            {"$sort": {"_id": 1}}
+          ]
+        }}
+      ],
+      "oracle_sql": "SELECT JSON_OBJECT('byStatus' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE status, 'count' VALUE cnt) ORDER BY status) FROM (SELECT JSON_VALUE(data, '$.status') AS status, COUNT(*) AS cnt FROM sales GROUP BY JSON_VALUE(data, '$.status'))), 'byRegion' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE region, 'totalAmount' VALUE totalAmount) ORDER BY region) FROM (SELECT JSON_VALUE(data, '$.region') AS region, SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS totalAmount FROM sales GROUP BY JSON_VALUE(data, '$.region')))) AS result FROM DUAL",
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "FACET002",
+      "name": "$facet - product analysis",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet for multi-faceted product analysis",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$facet": {
+          "categorySummary": [
+            {"$group": {"_id": "$category", "count": {"$sum": 1}, "avgPrice": {"$avg": "$price"}}},
+            {"$sort": {"_id": 1}}
+          ],
+          "priceStats": [
+            {"$group": {"_id": null, "minPrice": {"$min": "$price"}, "maxPrice": {"$max": "$price"}, "avgPrice": {"$avg": "$price"}}}
+          ]
+        }}
+      ],
+      "oracle_sql": "SELECT JSON_OBJECT('categorySummary' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE category, 'count' VALUE cnt, 'avgPrice' VALUE avgPrice) ORDER BY category) FROM (SELECT JSON_VALUE(data, '$.category') AS category, COUNT(*) AS cnt, AVG(JSON_VALUE(data, '$.price' RETURNING NUMBER)) AS avgPrice FROM products WHERE JSON_VALUE(data, '$.active') = 'true' GROUP BY JSON_VALUE(data, '$.category'))), 'priceStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'minPrice' VALUE minPrice, 'maxPrice' VALUE maxPrice, 'avgPrice' VALUE avgPrice)) FROM (SELECT MIN(JSON_VALUE(data, '$.price' RETURNING NUMBER)) AS minPrice, MAX(JSON_VALUE(data, '$.price' RETURNING NUMBER)) AS maxPrice, AVG(JSON_VALUE(data, '$.price' RETURNING NUMBER)) AS avgPrice FROM products WHERE JSON_VALUE(data, '$.active') = 'true'))) AS result FROM DUAL",
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "FACET003",
+      "name": "$facet - employee dashboard",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet for employee dashboard with multiple views",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$facet": {
+          "departmentCounts": [
+            {"$group": {"_id": "$department", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+          ],
+          "topEarners": [
+            {"$sort": {"salary": -1}},
+            {"$limit": 3},
+            {"$project": {"_id": 1, "name": 1, "salary": 1}}
+          ],
+          "totalStats": [
+            {"$group": {"_id": null, "totalEmployees": {"$sum": 1}, "avgSalary": {"$avg": "$salary"}, "totalPayroll": {"$sum": "$salary"}}}
+          ]
+        }}
+      ],
+      "oracle_sql": "SELECT JSON_OBJECT('departmentCounts' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE dept, 'count' VALUE cnt) ORDER BY cnt DESC) FROM (SELECT JSON_VALUE(data, '$.department') AS dept, COUNT(*) AS cnt FROM employees GROUP BY JSON_VALUE(data, '$.department'))), 'topEarners' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE id, 'name' VALUE name, 'salary' VALUE salary) ORDER BY salary DESC) FROM (SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary FROM employees ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE cnt, 'avgSalary' VALUE avgSal, 'totalPayroll' VALUE totalPay)) FROM (SELECT COUNT(*) AS cnt, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS avgSal, SUM(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS totalPay FROM employees))) AS result FROM DUAL",
+      "expected_count": 1,
+      "sort_by": null
     }
   ]
 }

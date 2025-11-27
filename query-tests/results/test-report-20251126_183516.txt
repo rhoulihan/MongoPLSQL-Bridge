@@ -1,0 +1,21 @@
+MongoPLSQL-Bridge Query Validation Test Report
+Generated: Wed Nov 26 18:35:16 CST 2025
+============================================================
+
+[BUCKETAUTO001] Basic $bucketAuto - auto price groups
+  Category: bucketAuto
+  Status: FAIL
+  Details: MongoDB=3, Oracle=5, Expected=3
+
+[BUCKETAUTO002] $bucketAuto - employee salary distribution
+  Category: bucketAuto
+  Status: FAIL
+  Details: MongoDB=4, Oracle=5, Expected=4
+
+============================================================
+SUMMARY
+============================================================
+Total:  2
+Passed: 0
+Failed: 2
+Errors: 0
