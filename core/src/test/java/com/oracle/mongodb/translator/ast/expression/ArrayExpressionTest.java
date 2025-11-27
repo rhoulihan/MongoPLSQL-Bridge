@@ -8,6 +8,7 @@ package com.oracle.mongodb.translator.ast.expression;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -173,5 +174,139 @@ class ArrayExpressionTest {
             .isEqualTo(ArrayOp.CONCAT_ARRAYS);
         assertThat(ArrayExpression.slice(FieldPathExpression.of("x"), LiteralExpression.of(1)).getOp())
             .isEqualTo(ArrayOp.SLICE);
+    }
+
+    @Test
+    void shouldRenderArrayElemAtWithNegativeIndex() {
+        // MongoDB: {$arrayElemAt: ["$items", -1]} - last element
+        var expr = ArrayExpression.arrayElemAt(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(-1)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .isEqualTo("JSON_VALUE(data, '$.items[last]')");
+    }
+
+    @Test
+    void shouldRenderArrayElemAtWithNegativeIndexOffset() {
+        // MongoDB: {$arrayElemAt: ["$items", -2]} - second to last element
+        var expr = ArrayExpression.arrayElemAt(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(-2)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .isEqualTo("JSON_VALUE(data, '$.items[last-1]')");
+    }
+
+    @Test
+    void shouldRenderSliceWithNegativeCount() {
+        // MongoDB: {$slice: ["$items", -3]} - last 3 elements
+        var expr = ArrayExpression.slice(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(-3)
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .contains("JSON_QUERY")
+            .contains("last");
+    }
+
+    @Test
+    void shouldRenderEmptyConcatArrays() {
+        var expr = ArrayExpression.concatArrays(java.util.List.of());
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("JSON_QUERY('[]', '$')");
+    }
+
+    @Test
+    void shouldRenderFilter() {
+        var expr = ArrayExpression.filter(
+            FieldPathExpression.of("items"),
+            new ComparisonExpression(ComparisonOp.GT,
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                LiteralExpression.of(10))
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .contains("JSON_ARRAYAGG")
+            .contains("JSON_TABLE")
+            .contains("WHERE");
+    }
+
+    @Test
+    void shouldRenderMap() {
+        var expr = ArrayExpression.map(
+            FieldPathExpression.of("items"),
+            FieldPathExpression.of("name")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .contains("JSON_ARRAYAGG")
+            .contains("JSON_TABLE");
+    }
+
+    @Test
+    void shouldRenderReduce() {
+        var expr = ArrayExpression.reduce(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(0),
+            LiteralExpression.of("sum")
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql()).contains("$reduce not fully supported");
+    }
+
+    @Test
+    void shouldReturnIndexExpression() {
+        var index = LiteralExpression.of(5);
+        var expr = ArrayExpression.arrayElemAt(FieldPathExpression.of("arr"), index);
+
+        assertThat(expr.getIndexExpression()).isEqualTo(index);
+    }
+
+    @Test
+    void shouldReturnAdditionalArgs() {
+        var expr = ArrayExpression.sliceWithSkip(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(1),
+            LiteralExpression.of(3)
+        );
+
+        assertThat(expr.getAdditionalArgs()).hasSize(1);
+    }
+
+    @Test
+    void shouldReturnNullAdditionalArgsForSimpleOps() {
+        var expr = ArrayExpression.size(FieldPathExpression.of("items"));
+
+        assertThat(expr.getAdditionalArgs()).isNull();
+    }
+
+    @Test
+    void shouldProvideToStringWithIndex() {
+        var expr = ArrayExpression.arrayElemAt(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of(0)
+        );
+
+        assertThat(expr.toString())
+            .contains("$arrayElemAt")
+            .contains("items");
     }
 }

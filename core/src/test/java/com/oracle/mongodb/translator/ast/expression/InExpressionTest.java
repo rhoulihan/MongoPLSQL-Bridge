@@ -124,4 +124,43 @@ class InExpressionTest {
 
         assertThat(expr.toString()).contains("NotIn(");
     }
+
+    @Test
+    void shouldThrowOnNullField() {
+        assertThatThrownBy(() -> new InExpression(null, List.of("a"), false))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("field");
+    }
+
+    @Test
+    void shouldThrowOnNullValues() {
+        assertThatThrownBy(() -> new InExpression(FieldPathExpression.of("status"), null, false))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("values");
+    }
+
+    @Test
+    void shouldImplementEquals() {
+        var expr1 = InExpression.in(FieldPathExpression.of("status"), List.of("a", "b"));
+        var expr2 = InExpression.in(FieldPathExpression.of("status"), List.of("a", "b"));
+        var expr3 = InExpression.notIn(FieldPathExpression.of("status"), List.of("a", "b"));
+        var expr4 = InExpression.in(FieldPathExpression.of("other"), List.of("a", "b"));
+        var expr5 = InExpression.in(FieldPathExpression.of("status"), List.of("c"));
+
+        assertThat(expr1).isEqualTo(expr2);
+        assertThat(expr1).isNotEqualTo(expr3); // different negated
+        assertThat(expr1).isNotEqualTo(expr4); // different field
+        assertThat(expr1).isNotEqualTo(expr5); // different values
+        assertThat(expr1).isNotEqualTo(null);
+        assertThat(expr1).isNotEqualTo("string");
+        assertThat(expr1).isEqualTo(expr1); // same instance
+    }
+
+    @Test
+    void shouldImplementHashCode() {
+        var expr1 = InExpression.in(FieldPathExpression.of("status"), List.of("a", "b"));
+        var expr2 = InExpression.in(FieldPathExpression.of("status"), List.of("a", "b"));
+
+        assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
+    }
 }

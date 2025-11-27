@@ -155,7 +155,7 @@ class TypeConversionExpressionTest {
         expr.render(context);
 
         assertThat(context.toSql()).contains("CASE WHEN");
-        assertThat(context.toSql()).contains("THEN 0 ELSE 1 END");
+        assertThat(context.toSql()).contains("THEN 'false' ELSE 'true' END");
     }
 
     @Test
@@ -182,7 +182,7 @@ class TypeConversionExpressionTest {
 
         assertThat(context.toSql()).contains("CASE");
         assertThat(context.toSql()).contains("'null'");
-        assertThat(context.toSql()).contains("'number'");
+        assertThat(context.toSql()).contains("'int'");
         assertThat(context.toSql()).contains("'string'");
     }
 

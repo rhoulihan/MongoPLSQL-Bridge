@@ -275,6 +275,20 @@ public final class ExpressionParser {
         }
 
         if (value instanceof String str) {
+            if (str.startsWith("$$")) {
+                // Check if it's a system variable (all uppercase after $$)
+                // System variables: "$$KEEP", "$$PRUNE", "$$DESCEND", "$$ROOT", "$$NOW", etc.
+                // User variables: "$$item", "$$this", "$$item.qty" - should be field paths
+                String afterDollarDollar = str.substring(2);
+                int dotPos = afterDollarDollar.indexOf('.');
+                String varName = dotPos > 0 ? afterDollarDollar.substring(0, dotPos) : afterDollarDollar;
+                if (varName.equals(varName.toUpperCase()) && varName.length() > 0 && Character.isLetter(varName.charAt(0))) {
+                    // System variable like $$KEEP, $$PRUNE - keep as literal
+                    return LiteralExpression.of(str);
+                }
+                // User variable reference like $$item or $$this.field - treat as field path
+                return FieldPathExpression.of(str.substring(1)); // Remove first $, keep $item.qty
+            }
             if (str.startsWith("$")) {
                 // Field reference: "$fieldName" or "$nested.field"
                 return FieldPathExpression.of(str.substring(1));

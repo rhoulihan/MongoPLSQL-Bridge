@@ -7,8 +7,16 @@ package com.oracle.mongodb.translator.ast.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
+import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
+import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
+import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -122,5 +130,82 @@ class LookupStageTest {
             .contains("item")
             .contains("sku")
             .contains("inventory_docs");
+    }
+
+    @Test
+    void shouldCreatePipelineFormLookup() {
+        var letVars = Map.of("orderId", "id", "customerId", "customer_id");
+        var dummyFilter = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var pipeline = List.<Stage>of(new MatchStage(dummyFilter));
+
+        var stage = LookupStage.withPipeline("orders", letVars, pipeline, "order_details");
+
+        assertThat(stage.getFrom()).isEqualTo("orders");
+        assertThat(stage.getAs()).isEqualTo("order_details");
+        assertThat(stage.getLetVariables()).hasSize(2);
+        assertThat(stage.getPipeline()).hasSize(1);
+        assertThat(stage.getLocalField()).isNull();
+        assertThat(stage.getForeignField()).isNull();
+    }
+
+    @Test
+    void shouldIdentifyPipelineForm() {
+        var equalityStage = LookupStage.equality("inv", "a", "b", "c");
+        var pipelineStage = LookupStage.withPipeline("inv", Map.of(), List.of(), "c");
+
+        assertThat(equalityStage.isPipelineForm()).isFalse();
+        assertThat(pipelineStage.isPipelineForm()).isTrue();
+    }
+
+    @Test
+    void shouldHandleNullLetVariables() {
+        var stage = LookupStage.withPipeline("orders", null, List.of(), "result");
+
+        assertThat(stage.getLetVariables()).isEmpty();
+    }
+
+    @Test
+    void shouldHandleNullPipeline() {
+        var stage = LookupStage.withPipeline("orders", Map.of(), null, "result");
+
+        assertThat(stage.getPipeline()).isEmpty();
+    }
+
+    @Test
+    void shouldThrowOnRenderPipelineForm() {
+        var stage = LookupStage.withPipeline("orders", Map.of("x", "y"), List.of(), "result");
+
+        assertThatThrownBy(() -> stage.render(context))
+            .isInstanceOf(UnsupportedOperatorException.class)
+            .hasMessageContaining("$lookup")
+            .hasMessageContaining("pipeline");
+    }
+
+    @Test
+    void shouldProvideReadableToStringForPipelineForm() {
+        var dummyFilter = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var stage = LookupStage.withPipeline("orders",
+            Map.of("orderId", "id"),
+            List.of(new MatchStage(dummyFilter)),
+            "order_details");
+
+        assertThat(stage.toString())
+            .contains("LookupStage")
+            .contains("orders")
+            .contains("let=")
+            .contains("pipeline=1 stages")
+            .contains("order_details");
+    }
+
+    @Test
+    void shouldReturnPipelineStages() {
+        var dummyFilter = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var matchStage = new MatchStage(dummyFilter);
+        var stage = LookupStage.withPipeline("orders", Map.of(), List.of(matchStage), "result");
+
+        assertThat(stage.getPipeline()).containsExactly(matchStage);
     }
 }

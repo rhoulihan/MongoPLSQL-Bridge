@@ -202,14 +202,13 @@ public final class TypeConversionExpression implements Expression {
 
     private void renderToBool(SqlGenerationContext ctx) {
         // MongoDB toBool: null/0/false -> false, everything else -> true
-        // Oracle: CASE WHEN value IS NULL OR value = 0 OR value = 'false' THEN 0 ELSE 1 END
+        // Oracle JSON stores booleans as 'true'/'false' strings when queried with JSON_VALUE
+        // Use TO_CHAR to avoid implicit numeric conversion when the value is a string
         ctx.sql("CASE WHEN ");
         ctx.visit(argument);
-        ctx.sql(" IS NULL OR ");
+        ctx.sql(" IS NULL OR TO_CHAR(");
         ctx.visit(argument);
-        ctx.sql(" = 0 OR LOWER(TO_CHAR(");
-        ctx.visit(argument);
-        ctx.sql(")) = 'false' THEN 0 ELSE 1 END");
+        ctx.sql(") IN ('0', 'false') THEN 'false' ELSE 'true' END");
     }
 
     private void renderToDate(SqlGenerationContext ctx) {
@@ -225,18 +224,22 @@ public final class TypeConversionExpression implements Expression {
     }
 
     private void renderType(SqlGenerationContext ctx) {
-        // Use JSON_VALUE with type() method to get BSON type
-        // Returns: 'string', 'number', 'boolean', 'object', 'array', 'null'
+        // Determine BSON type from the JSON value
+        // Returns: 'string', 'int', 'double', 'bool', 'null', 'array', 'object'
+        // For JSON stored in Oracle, we check the value characteristics
         ctx.sql("CASE ");
         ctx.sql("WHEN ");
         ctx.visit(argument);
         ctx.sql(" IS NULL THEN 'null' ");
-        ctx.sql("WHEN JSON_VALUE(TO_CHAR(");
+        ctx.sql("WHEN ");
         ctx.visit(argument);
-        ctx.sql("), '$' RETURNING NUMBER ERROR ON ERROR) IS NOT NULL THEN 'number' ");
-        ctx.sql("WHEN LOWER(TO_CHAR(");
+        ctx.sql(" IN ('true', 'false') THEN 'bool' ");
+        ctx.sql("WHEN REGEXP_LIKE(");
         ctx.visit(argument);
-        ctx.sql(")) IN ('true', 'false') THEN 'bool' ");
+        ctx.sql(", '^-?[0-9]+$') THEN 'int' ");
+        ctx.sql("WHEN REGEXP_LIKE(");
+        ctx.visit(argument);
+        ctx.sql(", '^-?[0-9]+\\.[0-9]+$') THEN 'double' ");
         ctx.sql("ELSE 'string' END");
     }
 

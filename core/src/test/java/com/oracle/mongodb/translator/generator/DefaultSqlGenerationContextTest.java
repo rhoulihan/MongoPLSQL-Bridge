@@ -148,12 +148,12 @@ class DefaultSqlGenerationContextTest {
     }
 
     @Test
-    void shouldNotQuoteUppercaseIdentifiers() {
+    void shouldQuoteReservedWords() {
         context.sql("SELECT ");
         context.identifier("SELECT");
 
-        // Simple identifiers including uppercase are not quoted
-        assertThat(context.toSql()).isEqualTo("SELECT SELECT");
+        // Reserved words are quoted
+        assertThat(context.toSql()).isEqualTo("SELECT \"SELECT\"");
     }
 
     @Test

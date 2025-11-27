@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -24,6 +25,25 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     // reserved words need to be quoted
     private static final Pattern SIMPLE_IDENTIFIER =
         Pattern.compile("^[a-zA-Z][a-zA-Z0-9_]*$");
+
+    // Oracle reserved words that must be quoted when used as identifiers
+    private static final Set<String> RESERVED_WORDS = Set.of(
+        "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC", "AUDIT",
+        "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER", "COLUMN", "COMMENT",
+        "COMPRESS", "CONNECT", "CREATE", "CURRENT", "DATE", "DECIMAL", "DEFAULT",
+        "DELETE", "DESC", "DISTINCT", "DROP", "ELSE", "EXCLUSIVE", "EXISTS",
+        "FILE", "FLOAT", "FOR", "FROM", "GRANT", "GROUP", "HAVING", "IDENTIFIED",
+        "IMMEDIATE", "IN", "INCREMENT", "INDEX", "INITIAL", "INSERT", "INTEGER",
+        "INTERSECT", "INTO", "IS", "LEVEL", "LIKE", "LOCK", "LONG", "MAXEXTENTS",
+        "MINUS", "MLSLABEL", "MODE", "MODIFY", "NOAUDIT", "NOCOMPRESS", "NOT",
+        "NOWAIT", "NULL", "NUMBER", "OF", "OFFLINE", "ON", "ONLINE", "OPTION",
+        "OR", "ORDER", "PCTFREE", "PRIOR", "PRIVILEGES", "PUBLIC", "RAW", "RENAME",
+        "RESOURCE", "REVOKE", "ROW", "ROWID", "ROWNUM", "ROWS", "SELECT", "SESSION",
+        "SET", "SHARE", "SIZE", "SMALLINT", "START", "SUCCESSFUL", "SYNONYM",
+        "SYSDATE", "TABLE", "THEN", "TO", "TRIGGER", "UID", "UNION", "UNIQUE",
+        "UPDATE", "USER", "VALIDATE", "VALUES", "VARCHAR", "VARCHAR2", "VIEW",
+        "WHENEVER", "WHERE", "WITH"
+    );
 
     private static final String DEFAULT_BASE_ALIAS = "base";
 
@@ -74,7 +94,9 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
 
     @Override
     public void identifier(String name) {
-        if (SIMPLE_IDENTIFIER.matcher(name).matches()) {
+        // Quote if: doesn't match simple pattern, OR is a reserved word
+        if (SIMPLE_IDENTIFIER.matcher(name).matches()
+            && !RESERVED_WORDS.contains(name.toUpperCase())) {
             sql.append(name);
         } else {
             sql.append("\"").append(name).append("\"");

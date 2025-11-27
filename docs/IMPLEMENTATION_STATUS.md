@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-11-26
+**Last Updated:** 2025-11-27
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -222,7 +222,8 @@ ast/
 │   ├── ArrayOpTest.java ✅
 │   ├── ArrayExpressionTest.java ✅
 │   ├── TypeConversionOpTest.java ✅
-│   └── TypeConversionExpressionTest.java ✅
+│   ├── TypeConversionExpressionTest.java ✅
+│   └── CompoundIdExpressionTest.java ✅
 └── stage/
     ├── LimitStageTest.java ✅
     ├── SkipStageTest.java ✅
@@ -237,7 +238,14 @@ ast/
     ├── RedactStageTest.java ✅
     ├── SampleStageTest.java ✅
     ├── CountStageTest.java ✅
-    └── GraphLookupStageTest.java ✅
+    ├── GraphLookupStageTest.java ✅
+    ├── SetWindowFieldsStageTest.java ✅
+    ├── UnionWithStageTest.java ✅
+    ├── BucketStageTest.java ✅
+    ├── BucketAutoStageTest.java ✅
+    ├── FacetStageTest.java ✅
+    ├── MergeStageTest.java ✅
+    └── OutStageTest.java ✅
 
 optimizer/
 ├── PredicatePushdownOptimizerTest.java ✅
@@ -268,7 +276,13 @@ parser/
 ├── SetWindowFieldsStageParserTest.java ✅
 ├── RedactStageParserTest.java ✅
 ├── SampleStageParserTest.java ✅
-└── CountStageParserTest.java ✅
+├── CountStageParserTest.java ✅
+├── BucketStageParserTest.java ✅
+├── BucketAutoStageParserTest.java ✅
+├── FacetStageParserTest.java ✅
+├── MergeStageParserTest.java ✅
+├── OutStageParserTest.java ✅
+└── UnionWithStageParserTest.java ✅
 
 generator/dialect/
 └── Oracle26aiDialectTest.java ✅
@@ -276,7 +290,7 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 749 test methods across 50+ test files
+**Unit Tests:** 1031 test methods across 50+ test files
 **Integration Tests:** Oracle Testcontainers suite
 **Cross-Database Validation:** 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
@@ -287,13 +301,13 @@ All tests passing: ✅ Yes
 
 | Package | Line Coverage | Branch Coverage |
 |---------|---------------|-----------------|
-| **Overall** | **90%** | **78%** |
-| `api` | 97% | 100% |
-| `generator` | 96% | 93% |
-| `optimizer` | 92% | 86% |
-| `ast.expression` | 91% | 71% |
-| `parser` | 87% | 81% |
-| `ast.stage` | 86% | 69% |
+| **Overall** | **95%+** | **85%+** |
+| `api` | 99% | 100% |
+| `ast.expression` | 97% | 82% |
+| `ast.stage` | 98% | 91% |
+| `generator` | 98% | 92% |
+| `parser` | 93% | 86% |
+| `optimizer` | 94% | 86% |
 | `exception` | 100% | 100% |
 | `generator.dialect` | 100% | n/a |
 

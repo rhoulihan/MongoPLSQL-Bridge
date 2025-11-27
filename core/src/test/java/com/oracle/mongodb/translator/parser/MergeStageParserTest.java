@@ -147,4 +147,161 @@ class MergeStageParserTest {
             .isThrownBy(() -> parser.parse(123))
             .withMessageContaining("string or document");
     }
+
+    @Test
+    void shouldParseWhenMatchedMerge() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenMatched": "merge"
+            }
+            """);
+
+        MergeStage stage = parser.parse(doc);
+        assertThat(stage.getWhenMatched()).isEqualTo(WhenMatched.MERGE);
+    }
+
+    @Test
+    void shouldParseWhenMatchedFail() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenMatched": "fail"
+            }
+            """);
+
+        MergeStage stage = parser.parse(doc);
+        assertThat(stage.getWhenMatched()).isEqualTo(WhenMatched.FAIL);
+    }
+
+    @Test
+    void shouldParseWhenNotMatchedInsert() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenNotMatched": "insert"
+            }
+            """);
+
+        MergeStage stage = parser.parse(doc);
+        assertThat(stage.getWhenNotMatched()).isEqualTo(WhenNotMatched.INSERT);
+    }
+
+    @Test
+    void shouldParseWhenNotMatchedFail() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenNotMatched": "fail"
+            }
+            """);
+
+        MergeStage stage = parser.parse(doc);
+        assertThat(stage.getWhenNotMatched()).isEqualTo(WhenNotMatched.FAIL);
+    }
+
+    @Test
+    void shouldThrowOnUnknownWhenMatched() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenMatched": "unknown"
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("Unknown whenMatched");
+    }
+
+    @Test
+    void shouldThrowOnUnknownWhenNotMatched() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "whenNotMatched": "unknown"
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("Unknown whenNotMatched");
+    }
+
+    @Test
+    void shouldThrowOnInvalidIntoType() {
+        var doc = Document.parse("""
+            {
+                "into": 123
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("into")
+            .withMessageContaining("string or document");
+    }
+
+    @Test
+    void shouldThrowOnInvalidIntoCollType() {
+        var doc = Document.parse("""
+            {
+                "into": { "db": "mydb", "coll": 123 }
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("into.coll");
+    }
+
+    @Test
+    void shouldThrowOnInvalidOnType() {
+        var doc = Document.parse("""
+            {
+                "into": "target",
+                "on": 123
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("on")
+            .withMessageContaining("string or array");
+    }
+
+    @Test
+    void shouldThrowOnInvalidOnArrayItem() {
+        var doc = new Document()
+            .append("into", "target")
+            .append("on", java.util.List.of("valid", 123));
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("on")
+            .withMessageContaining("strings");
+    }
+
+    @Test
+    void shouldThrowOnWhenMatchedPipeline() {
+        var doc = new Document()
+            .append("into", "target")
+            .append("whenMatched", java.util.List.of(new Document("$set", new Document("x", 1))));
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("pipeline not yet supported");
+    }
+
+    @Test
+    void shouldThrowOnInvalidWhenNotMatchedType() {
+        var doc = new Document()
+            .append("into", "target")
+            .append("whenNotMatched", 123);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("whenNotMatched")
+            .withMessageContaining("string");
+    }
 }

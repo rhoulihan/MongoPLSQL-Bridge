@@ -55,13 +55,13 @@ All 102 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See 
 
 | Package | Line Coverage | Branch Coverage |
 |---------|---------------|-----------------|
-| Overall | **90%** | **78%** |
-| `api` | 97% | 100% |
-| `generator` | 96% | 93% |
-| `optimizer` | 92% | 86% |
-| `ast.expression` | 91% | 71% |
-| `parser` | 87% | 81% |
-| `ast.stage` | 86% | 69% |
+| Overall | **95%+** | **85%+** |
+| `api` | 99% | 100% |
+| `ast.expression` | 97% | 82% |
+| `ast.stage` | 98% | 91% |
+| `generator` | 98% | 92% |
+| `parser` | 93% | 86% |
+| `optimizer` | 94% | 86% |
 | `exception` | 100% | 100% |
 | `generator.dialect` | 100% | n/a |
 
@@ -165,7 +165,7 @@ cd MongoPLSQL-Bridge
 ./gradlew build
 ```
 
-This runs all unit tests (749 tests) and produces the library JAR.
+This runs all unit tests (1031 tests) and produces the library JAR.
 
 ### Setting Up the Test Environment
 
@@ -207,7 +207,7 @@ docker compose logs -f oracle
 ./gradlew :core:test
 ```
 
-Runs 749 unit tests covering all operators and parsers.
+Runs 1031 unit tests covering all operators and parsers.
 
 #### Integration Tests (Requires Docker)
 

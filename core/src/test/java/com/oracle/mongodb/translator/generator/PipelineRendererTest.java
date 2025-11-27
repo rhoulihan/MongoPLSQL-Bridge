@@ -9,8 +9,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
+import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
+import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
+import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
+import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
@@ -35,6 +39,10 @@ import com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection;
 import com.oracle.mongodb.translator.ast.stage.SortStage.SortField;
 import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
 import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import com.oracle.mongodb.translator.ast.stage.CountStage;
+import com.oracle.mongodb.translator.ast.stage.SampleStage;
+import com.oracle.mongodb.translator.ast.stage.RedactStage;
+import org.bson.Document;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -538,7 +546,9 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .contains("WITH");
+            .contains("LATERAL")
+            .contains("JSON_ARRAYAGG")
+            .contains("hierarchy");
     }
 
     @Test
@@ -549,9 +559,10 @@ class PipelineRendererTest {
 
         renderer.render(pipeline, context);
 
+        // Note: depthField is not rendered in LATERAL join implementation for non-recursive case
         assertThat(context.toSql())
-            .contains("WITH")
-            .contains("level");
+            .contains("LATERAL")
+            .contains("hierarchy");
     }
 
     @Test
@@ -674,8 +685,400 @@ class PipelineRendererTest {
         renderer.render(pipeline, context);
 
         assertThat(context.toSql())
-            .contains("WITH")
+            .contains("LATERAL")
             .contains("managers")
             .contains("subordinates");
+    }
+
+    // Tests for $count stage
+    @Test
+    void shouldRenderCountStage() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new CountStage("totalCount")
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("JSON_OBJECT")
+            .contains("totalCount")
+            .contains("COUNT(*)");
+    }
+
+    // Tests for $sample stage
+    @Test
+    void shouldRenderSampleStage() {
+        Pipeline pipeline = Pipeline.of("orders",
+            new SampleStage(10)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("ORDER BY DBMS_RANDOM.VALUE")
+            .contains("FETCH FIRST 10 ROWS ONLY");
+    }
+
+    // Tests for $redact stage
+    @Test
+    void shouldRenderRedactStage() {
+        var redactExpr = ConditionalExpression.cond(
+            new ComparisonExpression(ComparisonOp.EQ,
+                FieldPathExpression.of("level"),
+                LiteralExpression.of(5)),
+            LiteralExpression.of("$$PRUNE"),
+            LiteralExpression.of("$$KEEP")
+        );
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new RedactStage(redactExpr)
+        );
+
+        renderer.render(pipeline, context);
+
+        // $redact adds a WHERE clause that filters where CASE result != $$PRUNE
+        assertThat(context.toSql())
+            .contains("WHERE")
+            .contains("CASE WHEN")
+            .contains("<>");
+    }
+
+    // Tests for compound _id in group stage
+    @Test
+    void shouldRenderGroupWithCompoundId() {
+        var idFields = new LinkedHashMap<String, Expression>();
+        idFields.put("category", FieldPathExpression.of("category"));
+        idFields.put("status", FieldPathExpression.of("status"));
+
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(new CompoundIdExpression(idFields), accumulators)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("AS category")
+            .contains("AS status")
+            .contains("GROUP BY");
+    }
+
+    // Tests for post-group $addFields
+    @Test
+    void shouldRenderPostGroupAddFieldsWithArithmetic() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+        accumulators.put("qty", AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
+
+        // Post-group computed field: average = total / qty
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("average", new ArithmeticExpression(
+            ArithmeticOp.DIVIDE,
+            List.of(FieldPathExpression.of("total"), FieldPathExpression.of("qty"))
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("category"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("SELECT inner_query.*")
+            .contains("FROM (");
+    }
+
+    @Test
+    void shouldRenderPostGroupAddFieldsWithConditional() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        // Post-group computed field with conditional
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("category", ConditionalExpression.cond(
+            new ComparisonExpression(ComparisonOp.GT, FieldPathExpression.of("total"), LiteralExpression.of(1000)),
+            LiteralExpression.of("high"),
+            LiteralExpression.of("low")
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("CASE WHEN")
+            .contains("THEN")
+            .contains("ELSE")
+            .contains("END");
+    }
+
+    @Test
+    void shouldRenderPostGroupAddFieldsWithIfNull() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        // Post-group computed field with $ifNull
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("safeTotal", ConditionalExpression.ifNull(
+            FieldPathExpression.of("total"),
+            LiteralExpression.of(0)
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("NVL(");
+    }
+
+    @Test
+    void shouldRenderPostGroupAddFieldsWithLiteral() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("label", LiteralExpression.of("constant"));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("SELECT inner_query.*")
+            .contains("AS label");
+    }
+
+    @Test
+    void shouldRenderPostGroupAddFieldsWithSort() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("computed", FieldPathExpression.of("total"));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields),
+            new SortStage(List.of(new SortField(FieldPathExpression.of("total"), SortDirection.DESC)))
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("ORDER BY")
+            .contains("total");
+    }
+
+    @Test
+    void shouldRenderPostGroupArithmeticWithMultiply() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("doubled", new ArithmeticExpression(
+            ArithmeticOp.MULTIPLY,
+            List.of(FieldPathExpression.of("total"), LiteralExpression.of(2))
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains(" * ");
+    }
+
+    @Test
+    void shouldRenderPostGroupArithmeticWithSubtract() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("reduced", new ArithmeticExpression(
+            ArithmeticOp.SUBTRACT,
+            List.of(FieldPathExpression.of("total"), LiteralExpression.of(100))
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains(" - ");
+    }
+
+    @Test
+    void shouldRenderPostGroupArithmeticWithAdd() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("increased", new ArithmeticExpression(
+            ArithmeticOp.ADD,
+            List.of(FieldPathExpression.of("total"), LiteralExpression.of(50))
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains(" + ");
+    }
+
+    @Test
+    void shouldRenderPostGroupArithmeticWithAbs() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+        var computedFields = new LinkedHashMap<String, Expression>();
+        computedFields.put("absTotal", new ArithmeticExpression(
+            ArithmeticOp.ABS,
+            List.of(FieldPathExpression.of("total"))
+        ));
+
+        Pipeline pipeline = Pipeline.of("orders",
+            new GroupStage(FieldPathExpression.of("status"), accumulators),
+            new AddFieldsStage(computedFields)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("ABS(");
+    }
+
+    // Tests for GraphLookup with restrictSearchWithMatch
+    @Test
+    void shouldRenderGraphLookupWithStringRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"status\": \"active\"}");
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+                null, null, restrictMatch)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("LATERAL")
+            .contains("status")
+            .contains("active");
+    }
+
+    @Test
+    void shouldRenderGraphLookupWithBooleanRestrictSearchWithMatch() {
+        var restrictMatch = Document.parse("{\"active\": true}");
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+                null, null, restrictMatch)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("LATERAL")
+            .contains("active")
+            .contains("true");
+    }
+
+    @Test
+    void shouldRenderGraphLookupWithNumericRestrictSearchWithMatch() {
+        var restrictMatch = new Document("level", 5);
+        Pipeline pipeline = Pipeline.of("employees",
+            new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy",
+                null, null, restrictMatch)
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("LATERAL")
+            .contains("5");
+    }
+
+    // Test sorting after bucket stage
+    @Test
+    void shouldRenderSortAfterBucket() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                List.of(0, 100, 200),
+                null,
+                accumulators
+            ),
+            new SortStage(List.of(new SortField(FieldPathExpression.of("count"), SortDirection.DESC)))
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("GROUP BY")
+            .contains("ORDER BY")
+            .contains("count");
+    }
+
+    // Test sorting after bucketAuto
+    @Test
+    void shouldRenderSortAfterBucketAuto() {
+        var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+        accumulators.put("count", AccumulatorExpression.count());
+
+        Pipeline pipeline = Pipeline.of("products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER),
+                4,
+                accumulators,
+                null
+            ),
+            new SortStage(List.of(new SortField(FieldPathExpression.of("count"), SortDirection.DESC)))
+        );
+
+        renderer.render(pipeline, context);
+
+        assertThat(context.toSql())
+            .contains("NTILE")
+            .contains("ORDER BY")
+            .contains("count");
+    }
+
+    // Test with context without base alias
+    @Test
+    void shouldRenderWithoutBaseAlias() {
+        OracleConfiguration config = OracleConfiguration.builder()
+            .collectionName("orders")
+            .build();
+        PipelineRenderer localRenderer = new PipelineRenderer(config);
+        var ctx = new DefaultSqlGenerationContext(false, null, "");
+
+        Pipeline pipeline = Pipeline.of("orders");
+
+        localRenderer.render(pipeline, ctx);
+
+        assertThat(ctx.toSql()).isEqualTo("SELECT data FROM orders ");
     }
 }

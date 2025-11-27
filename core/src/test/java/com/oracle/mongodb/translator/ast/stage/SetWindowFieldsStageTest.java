@@ -154,4 +154,219 @@ class SetWindowFieldsStageTest {
             .contains("sortBy=")
             .contains("total");
     }
+
+    @Test
+    void shouldRenderAvgWindowFunction() {
+        var windowField = new WindowField("$avg", "$price", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("avgPrice", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("AVG(").contains("AS avgPrice");
+    }
+
+    @Test
+    void shouldRenderMinWindowFunction() {
+        var windowField = new WindowField("$min", "$value", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("minVal", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("MIN(").contains("AS minVal");
+    }
+
+    @Test
+    void shouldRenderMaxWindowFunction() {
+        var windowField = new WindowField("$max", "$value", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("maxVal", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("MAX(").contains("AS maxVal");
+    }
+
+    @Test
+    void shouldRenderCountWindowFunction() {
+        var windowField = new WindowField("$count", null, null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("cnt", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("COUNT(*)").contains("AS cnt");
+    }
+
+    @Test
+    void shouldRenderFirstValueWindowFunction() {
+        var windowField = new WindowField("$first", "$name", null);
+        var stage = new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("firstName", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("FIRST_VALUE(").contains("AS firstName");
+    }
+
+    @Test
+    void shouldRenderLastValueWindowFunction() {
+        var windowField = new WindowField("$last", "$name", null);
+        var stage = new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("lastName", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("LAST_VALUE(").contains("AS lastName");
+    }
+
+    @Test
+    void shouldRenderShiftWindowFunction() {
+        var windowField = new WindowField("$shift", "$value", null);
+        var stage = new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("prevVal", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("LAG(").contains("AS prevVal");
+    }
+
+    @Test
+    void shouldRenderStdDevPopWindowFunction() {
+        var windowField = new WindowField("$stdDevPop", "$score", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("stddev", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("STDDEV_POP(").contains("AS stddev");
+    }
+
+    @Test
+    void shouldRenderStdDevSampWindowFunction() {
+        var windowField = new WindowField("$stdDevSamp", "$score", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("stddev", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("STDDEV_SAMP(").contains("AS stddev");
+    }
+
+    @Test
+    void shouldRenderDocumentNumberWindowFunction() {
+        var windowField = new WindowField("$documentNumber", null, null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("docNum", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("ROW_NUMBER()").contains("AS docNum");
+    }
+
+    @Test
+    void shouldRenderUnsupportedOperatorAsComment() {
+        var windowField = new WindowField("$unknownOp", "$field", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("result", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql())
+            .contains("/* unsupported: $unknownOp */")
+            .contains("NULL");
+    }
+
+    @Test
+    void shouldRenderRangeWindowFrame() {
+        var windowSpec = new WindowSpec("range", List.of("unbounded", "current"));
+        var windowField = new WindowField("$sum", "$amount", windowSpec);
+        var stage = new SetWindowFieldsStage(null, Map.of("date", 1), Map.of("total", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("RANGE BETWEEN");
+    }
+
+    @Test
+    void shouldRenderNumericWindowBounds() {
+        var windowSpec = new WindowSpec("documents", List.of("-2", "2"));
+        var windowField = new WindowField("$avg", "$value", windowSpec);
+        var stage = new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("movingAvg", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql())
+            .contains("2 PRECEDING")
+            .contains("2 FOLLOWING");
+    }
+
+    @Test
+    void shouldRenderZeroBoundAsCurrentRow() {
+        var windowSpec = new WindowSpec("documents", List.of("0", "0"));
+        var windowField = new WindowField("$sum", "$value", windowSpec);
+        var stage = new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("currentVal", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("CURRENT ROW AND CURRENT ROW");
+    }
+
+    @Test
+    void shouldRenderMultipleOutputFields() {
+        var field1 = new WindowField("$sum", "$qty", null);
+        var field2 = new WindowField("$avg", "$price", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("total", field1, "avgPrice", field2));
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("SUM(").contains("AVG(").contains(", ");
+    }
+
+    @Test
+    void shouldRenderMultipleSortFields() {
+        var windowField = new WindowField("$rank", null, null);
+        var stage = new SetWindowFieldsStage(
+            null,
+            Map.of("date", 1, "amount", -1),
+            Map.of("rnk", windowField)
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("ORDER BY").contains("DESC");
+    }
+
+    @Test
+    void shouldRenderFieldPathWithoutDollarPrefix() {
+        var windowField = new WindowField("$sum", "quantity", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("total", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("$.quantity");
+    }
+
+    @Test
+    void shouldRenderPartitionByWithoutDollarPrefix() {
+        var windowField = new WindowField("$rank", null, null);
+        var stage = new SetWindowFieldsStage("state", Map.of("id", 1), Map.of("rnk", windowField));
+
+        stage.render(context);
+
+        assertThat(context.toSql()).contains("$.state");
+    }
+
+    @Test
+    void shouldProvideToStringWithoutPartitionBy() {
+        var windowField = new WindowField("$sum", "$qty", null);
+        var stage = new SetWindowFieldsStage(null, null, Map.of("total", windowField));
+
+        assertThat(stage.toString())
+            .contains("SetWindowFieldsStage")
+            .doesNotContain("partitionBy=");
+    }
+
+    @Test
+    void shouldProvideToStringWithoutSortBy() {
+        var windowField = new WindowField("$sum", "$qty", null);
+        var stage = new SetWindowFieldsStage("$region", null, Map.of("total", windowField));
+
+        assertThat(stage.toString())
+            .contains("SetWindowFieldsStage")
+            .contains("partitionBy=")
+            .doesNotContain("sortBy=");
+    }
 }

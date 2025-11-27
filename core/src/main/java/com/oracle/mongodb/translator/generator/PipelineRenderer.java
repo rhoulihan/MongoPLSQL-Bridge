@@ -9,6 +9,7 @@ import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
+import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
@@ -33,6 +34,9 @@ import com.oracle.mongodb.translator.ast.stage.FacetStage;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.GraphLookupStage;
 import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage;
+import com.oracle.mongodb.translator.ast.stage.CountStage;
+import com.oracle.mongodb.translator.ast.stage.SampleStage;
+import com.oracle.mongodb.translator.ast.stage.RedactStage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -270,35 +274,53 @@ public final class PipelineRenderer {
     }
 
     private void renderCteClause(PipelineComponents components, SqlGenerationContext ctx) {
-        if (components.graphLookupStages.isEmpty()) {
-            return;
-        }
-
-        ctx.sql("WITH ");
-        boolean first = true;
-        for (GraphLookupStage graphLookup : components.graphLookupStages) {
-            if (!first) {
-                ctx.sql(", ");
-            }
-            graphLookup.renderCteDefinition(ctx, ctx.getBaseTableAlias());
-            first = false;
-        }
-        ctx.sql(" ");
+        // GraphLookup uses LATERAL joins, not CTEs (since CTEs can't reference outer query columns)
+        // So we don't render CTE clause for graphLookup stages
     }
 
     private void renderGraphLookupJoins(PipelineComponents components, SqlGenerationContext ctx) {
         for (GraphLookupStage graphLookup : components.graphLookupStages) {
-            ctx.sql(" LEFT JOIN (SELECT JSON_ARRAYAGG(data) AS ");
-            ctx.sql(graphLookup.getAs());
-            if (graphLookup.getDepthField() != null) {
-                ctx.sql(", MAX(graph_depth) AS ");
-                ctx.sql(graphLookup.getDepthField());
-            }
+            // Use LATERAL join (CROSS APPLY) which allows referencing outer query columns
+            ctx.sql(" LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS ");
+            ctx.identifier(graphLookup.getAs());
+
             ctx.sql(" FROM ");
-            ctx.sql(graphLookup.getCteName());
+            ctx.sql(graphLookup.getFrom());
+            ctx.sql(" g WHERE JSON_VALUE(g.data, '$.");
+            ctx.sql(graphLookup.getConnectToField());
+            ctx.sql("') = JSON_VALUE(");
+            ctx.sql(ctx.getBaseTableAlias());
+            ctx.sql(".data, '$.");
+            String startField = graphLookup.getStartWith();
+            if (startField.startsWith("$")) {
+                startField = startField.substring(1);
+            }
+            ctx.sql(startField);
+            ctx.sql("')");
+
+            // Add restrictSearchWithMatch filter if specified
+            if (graphLookup.getRestrictSearchWithMatch() != null && !graphLookup.getRestrictSearchWithMatch().isEmpty()) {
+                for (var entry : graphLookup.getRestrictSearchWithMatch().entrySet()) {
+                    String field = entry.getKey();
+                    Object value = entry.getValue();
+                    ctx.sql(" AND JSON_VALUE(g.data, '$.");
+                    ctx.sql(field);
+                    ctx.sql("') = ");
+                    if (value instanceof String) {
+                        ctx.sql("'");
+                        ctx.sql(((String) value).replace("'", "''"));
+                        ctx.sql("'");
+                    } else if (value instanceof Boolean) {
+                        ctx.sql(value.toString());
+                    } else {
+                        ctx.sql(String.valueOf(value));
+                    }
+                }
+            }
+
             ctx.sql(") ");
-            ctx.sql(graphLookup.getAs());
-            ctx.sql("_cte ON 1=1");
+            ctx.identifier(graphLookup.getAs() + "_cte");
+            ctx.sql(" ON 1=1");
         }
     }
 
@@ -346,6 +368,12 @@ public final class PipelineRenderer {
                 components.graphLookupStages.add(graphLookup);
             } else if (stage instanceof SetWindowFieldsStage setWindowFields) {
                 components.setWindowFieldsStages.add(setWindowFields);
+            } else if (stage instanceof CountStage count) {
+                components.countStage = count;
+            } else if (stage instanceof SampleStage sample) {
+                components.sampleStage = sample;
+            } else if (stage instanceof RedactStage redact) {
+                components.redactStages.add(redact);
             }
             // For unknown stages, we skip them (they won't be rendered)
         }
@@ -356,7 +384,14 @@ public final class PipelineRenderer {
     private void renderSelectClause(PipelineComponents components, SqlGenerationContext ctx) {
         ctx.sql("SELECT ");
 
-        if (components.facetStage != null) {
+        if (components.countStage != null) {
+            // $count returns a single document with the count
+            ctx.sql("JSON_OBJECT('");
+            ctx.sql(components.countStage.getFieldName());
+            ctx.sql("' VALUE COUNT(*)) AS ");
+            ctx.sql(config.dataColumnName());
+            return; // $count replaces the entire query
+        } else if (components.facetStage != null) {
             // $facet creates a JSON object with multiple subquery results
             ctx.visit(components.facetStage);
             ctx.sql(" AS ");
@@ -508,22 +543,36 @@ public final class PipelineRenderer {
     }
 
     private void renderWhereClause(PipelineComponents components, SqlGenerationContext ctx) {
-        if (components.matchStages.isEmpty()) {
+        List<Expression> allFilters = new ArrayList<>();
+
+        // Collect all match filters
+        for (MatchStage match : components.matchStages) {
+            allFilters.add(match.getFilter());
+        }
+
+        // Collect redact filters - $redact filters based on PRUNE/KEEP/DESCEND
+        // The condition that returns PRUNE should exclude the document
+        for (RedactStage redact : components.redactStages) {
+            // Redact expression evaluates to $$PRUNE, $$KEEP, or $$DESCEND
+            // We filter where the result != '$$PRUNE'
+            Expression redactFilter = new ComparisonExpression(
+                ComparisonOp.NE,
+                redact.getExpression(),
+                LiteralExpression.of("$$PRUNE")
+            );
+            allFilters.add(redactFilter);
+        }
+
+        if (allFilters.isEmpty()) {
             return;
         }
 
         ctx.sql(" WHERE ");
 
-        if (components.matchStages.size() == 1) {
-            // Single match - render its filter directly
-            ctx.visit(components.matchStages.get(0).getFilter());
+        if (allFilters.size() == 1) {
+            ctx.visit(allFilters.get(0));
         } else {
-            // Multiple matches - combine with AND
-            List<Expression> filters = new ArrayList<>();
-            for (MatchStage match : components.matchStages) {
-                filters.add(match.getFilter());
-            }
-            LogicalExpression combined = new LogicalExpression(LogicalOp.AND, filters);
+            LogicalExpression combined = new LogicalExpression(LogicalOp.AND, allFilters);
             ctx.visit(combined);
         }
     }
@@ -588,6 +637,12 @@ public final class PipelineRenderer {
     }
 
     private void renderOrderByClause(PipelineComponents components, SqlGenerationContext ctx) {
+        // $sample uses random ordering
+        if (components.sampleStage != null) {
+            ctx.sql(" ORDER BY DBMS_RANDOM.VALUE");
+            return;
+        }
+
         if (components.sortStage == null || components.sortStage.getSortFields().isEmpty()) {
             return;
         }
@@ -599,7 +654,12 @@ public final class PipelineRenderer {
             if (!first) {
                 ctx.sql(", ");
             }
-            ctx.visit(field.getFieldPath());
+            // After GROUP BY, sort fields refer to aliases, not JSON paths
+            if (components.groupStage != null || components.bucketStage != null || components.bucketAutoStage != null) {
+                ctx.identifier(field.getFieldPath().getPath());
+            } else {
+                ctx.visit(field.getFieldPath());
+            }
             if (field.getDirection() == SortStage.SortDirection.DESC) {
                 ctx.sql(" DESC");
             }
@@ -618,6 +678,14 @@ public final class PipelineRenderer {
     }
 
     private void renderFetchClause(PipelineComponents components, SqlGenerationContext ctx) {
+        // $sample limits result count
+        if (components.sampleStage != null) {
+            ctx.sql(" FETCH FIRST ");
+            ctx.sql(String.valueOf(components.sampleStage.getSize()));
+            ctx.sql(" ROWS ONLY");
+            return;
+        }
+
         if (components.limitStage == null) {
             return;
         }
@@ -655,6 +723,7 @@ public final class PipelineRenderer {
         List<UnionWithStage> unionWithStages = new ArrayList<>();
         List<GraphLookupStage> graphLookupStages = new ArrayList<>();
         List<SetWindowFieldsStage> setWindowFieldsStages = new ArrayList<>();
+        List<RedactStage> redactStages = new ArrayList<>();
         GroupStage groupStage;
         ProjectStage projectStage;
         BucketStage bucketStage;
@@ -663,6 +732,8 @@ public final class PipelineRenderer {
         SortStage sortStage;
         SkipStage skipStage;
         LimitStage limitStage;
+        CountStage countStage;
+        SampleStage sampleStage;
         boolean hasPostGroupAddFields = false; // Track if $addFields comes after $group
     }
 }

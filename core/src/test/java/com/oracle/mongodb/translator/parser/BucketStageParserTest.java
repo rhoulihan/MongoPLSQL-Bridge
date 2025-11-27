@@ -173,4 +173,146 @@ class BucketStageParserTest {
             .withMessageContaining("output")
             .withMessageContaining("document");
     }
+
+    @Test
+    void shouldCreateWithExpressionParser() {
+        var customParser = new BucketStageParser(new ExpressionParser());
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100]
+            }
+            """);
+
+        BucketStage stage = customParser.parse(doc);
+
+        assertThat(stage).isNotNull();
+    }
+
+    @Test
+    void shouldThrowOnNonDocumentOutputField() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "count": "invalid"
+                }
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("output field")
+            .withMessageContaining("accumulator document");
+    }
+
+    @Test
+    void shouldThrowOnAccumulatorWithMultipleOperators() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "invalid": { "$sum": 1, "$avg": 1 }
+                }
+            }
+            """);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("exactly one operator");
+    }
+
+    @Test
+    void shouldThrowOnUnsupportedAccumulator() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "result": { "$unknown": 1 }
+                }
+            }
+            """);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> parser.parse(doc))
+            .isInstanceOf(com.oracle.mongodb.translator.exception.UnsupportedOperatorException.class)
+            .hasMessageContaining("$unknown");
+    }
+
+    @Test
+    void shouldParseAccumulatorWithNullArgument() {
+        var doc = new Document()
+            .append("groupBy", "$price")
+            .append("boundaries", java.util.List.of(0, 100))
+            .append("output", new Document("count", new Document("$count", new Document())));
+
+        BucketStage stage = parser.parse(doc);
+
+        assertThat(stage.getOutput()).containsKey("count");
+    }
+
+    @Test
+    void shouldParseAccumulatorWithFieldPath() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "total": { "$sum": "$amount" }
+                }
+            }
+            """);
+
+        BucketStage stage = parser.parse(doc);
+
+        assertThat(stage.getOutput()).containsKey("total");
+    }
+
+    @Test
+    void shouldParseAccumulatorWithStringLiteral() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "label": { "$first": "default" }
+                }
+            }
+            """);
+
+        BucketStage stage = parser.parse(doc);
+
+        assertThat(stage.getOutput()).containsKey("label");
+    }
+
+    @Test
+    void shouldParseAccumulatorWithComplexExpression() {
+        var doc = Document.parse("""
+            {
+                "groupBy": "$price",
+                "boundaries": [0, 100],
+                "output": {
+                    "total": { "$sum": { "$multiply": ["$price", "$qty"] } }
+                }
+            }
+            """);
+
+        BucketStage stage = parser.parse(doc);
+
+        assertThat(stage.getOutput()).containsKey("total");
+    }
+
+    @Test
+    void shouldThrowOnInvalidAccumulatorArgument() {
+        var doc = new Document()
+            .append("groupBy", "$price")
+            .append("boundaries", java.util.List.of(0, 100))
+            .append("output", new Document("invalid", new Document("$sum", true)));
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> parser.parse(doc))
+            .withMessageContaining("Unsupported accumulator argument");
+    }
 }

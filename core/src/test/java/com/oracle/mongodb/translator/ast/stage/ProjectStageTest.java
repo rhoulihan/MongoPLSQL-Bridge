@@ -148,4 +148,28 @@ class ProjectStageTest {
 
         assertThat(stage.toString()).contains("ProjectStage");
     }
+
+    @Test
+    void shouldProvideReadableProjectionFieldToString() {
+        var includedField = ProjectionField.include(FieldPathExpression.of("name"));
+        var excludedField = ProjectionField.exclude();
+
+        assertThat(includedField.toString()).contains("name");
+        assertThat(excludedField.toString()).isEqualTo("EXCLUDED");
+    }
+
+    @Test
+    void shouldHandleNullProjectionsMap() {
+        var stage = new ProjectStage(null);
+
+        assertThat(stage.getProjections()).isEmpty();
+    }
+
+    @Test
+    void shouldHandleNullProjectionsMapWithExclusionMode() {
+        var stage = new ProjectStage(null, true);
+
+        assertThat(stage.getProjections()).isEmpty();
+        assertThat(stage.isExclusionMode()).isTrue();
+    }
 }

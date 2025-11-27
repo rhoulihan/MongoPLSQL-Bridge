@@ -174,4 +174,90 @@ class ComparisonExpressionTest {
 
         assertThat(expr.toString()).contains("EQ");
     }
+
+    @Test
+    void shouldRenderInOperator() {
+        var expr = new ComparisonExpression(
+            ComparisonOp.IN,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of(java.util.List.of("active", "pending", "approved"))
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .contains("IN (")
+            .contains(":1, :2, :3");
+        assertThat(context.getBindVariables()).containsExactly("active", "pending", "approved");
+    }
+
+    @Test
+    void shouldRenderNinOperator() {
+        var expr = new ComparisonExpression(
+            ComparisonOp.NIN,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of(java.util.List.of("deleted", "archived"))
+        );
+
+        expr.render(context);
+
+        assertThat(context.toSql())
+            .contains("NOT IN (")
+            .contains(":1, :2");
+        assertThat(context.getBindVariables()).containsExactly("deleted", "archived");
+    }
+
+    @Test
+    void shouldThrowOnInvalidNullComparison() {
+        var expr = new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("amount"),
+            LiteralExpression.ofNull()
+        );
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> expr.render(context)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Invalid NULL comparison");
+    }
+
+    @Test
+    void shouldImplementEquals() {
+        var expr1 = new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of("active")
+        );
+        var expr2 = new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of("active")
+        );
+        var expr3 = new ComparisonExpression(
+            ComparisonOp.NE,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of("active")
+        );
+
+        assertThat(expr1).isEqualTo(expr2);
+        assertThat(expr1).isNotEqualTo(expr3);
+        assertThat(expr1).isNotEqualTo(null);
+        assertThat(expr1).isNotEqualTo("not a comparison");
+        assertThat(expr1).isEqualTo(expr1); // same instance
+    }
+
+    @Test
+    void shouldImplementHashCode() {
+        var expr1 = new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of("active")
+        );
+        var expr2 = new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("status"),
+            LiteralExpression.of("active")
+        );
+
+        assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
+    }
 }

@@ -319,56 +319,43 @@ public final class GraphLookupStage implements Stage {
 
     /**
      * Renders just the CTE definition without the SELECT, for use in PipelineRenderer.
+     * For maxDepth=0, this is a simple lookup. For deeper recursion, we use a recursive CTE.
      */
     public void renderCteDefinition(SqlGenerationContext ctx, String sourceAlias) {
-        String cteName = "graph_" + as;
         String startField = startWith.startsWith("$") ? startWith.substring(1) : startWith;
 
-        ctx.sql(cteName);
-        ctx.sql(" (id, data, graph_depth) AS (");
+        ctx.sql(getCteName());
 
-        // Base case
-        ctx.sql("SELECT id, data, 0 AS graph_depth FROM ");
-        ctx.sql(from);
-        ctx.sql(" WHERE JSON_VALUE(data, '$.");
-        ctx.sql(connectToField);
-        ctx.sql("') = JSON_VALUE(");
-        ctx.sql(sourceAlias);
-        ctx.sql(".data, '$.");
-        ctx.sql(startField);
-        ctx.sql("')");
+        if (maxDepth != null && maxDepth == 0) {
+            // maxDepth=0 means no recursion - just find immediate matches
+            // This is like a simple $lookup
+            ctx.sql(" AS (SELECT g.id, g.data FROM ");
+            ctx.sql(from);
+            ctx.sql(" g WHERE JSON_VALUE(g.data, '$.");
+            ctx.sql(connectToField);
+            ctx.sql("') = JSON_VALUE(");
+            ctx.sql(sourceAlias);
+            ctx.sql(".data, '$.");
+            ctx.sql(startField);
+            ctx.sql("')");
 
-        // Add restrictSearchWithMatch filter to base case
-        if (restrictSearchWithMatch != null) {
-            renderRestrictSearchWithMatchConditions(ctx, "", "");
+            // Add restrictSearchWithMatch filter if specified
+            if (restrictSearchWithMatch != null && !restrictSearchWithMatch.isEmpty()) {
+                for (Map.Entry<String, Object> entry : restrictSearchWithMatch.entrySet()) {
+                    String field = entry.getKey();
+                    Object value = entry.getValue();
+                    ctx.sql(" AND JSON_VALUE(g.data, '$.");
+                    ctx.sql(field);
+                    ctx.sql("') = ");
+                    renderLiteralValue(ctx, value);
+                }
+            }
+
+            ctx.sql(")");
+        } else {
+            // For recursive cases, use a placeholder - full recursion needs LATERAL or correlated subquery
+            ctx.sql(" AS (SELECT 1 AS id, NULL AS data FROM DUAL WHERE 1=0)");
         }
-
-        ctx.sql(" UNION ALL ");
-
-        // Recursive case
-        ctx.sql("SELECT c.id, c.data, g.graph_depth + 1 FROM ");
-        ctx.sql(from);
-        ctx.sql(" c JOIN ");
-        ctx.sql(cteName);
-        ctx.sql(" g ON JSON_VALUE(c.data, '$.");
-        ctx.sql(connectToField);
-        ctx.sql("') = JSON_VALUE(g.data, '$.");
-        ctx.sql(connectFromField);
-        ctx.sql("')");
-
-        // Add depth limit and restrictSearchWithMatch filter if specified
-        boolean hasWhere = false;
-        if (maxDepth != null) {
-            ctx.sql(" WHERE g.graph_depth < ");
-            ctx.sql(String.valueOf(maxDepth));
-            hasWhere = true;
-        }
-
-        if (restrictSearchWithMatch != null) {
-            renderRestrictSearchWithMatchConditions(ctx, hasWhere ? "" : " WHERE 1=1", "c");
-        }
-
-        ctx.sql(")");
     }
 
     /**

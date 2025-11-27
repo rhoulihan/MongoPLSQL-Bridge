@@ -212,10 +212,20 @@ public final class ArrayExpression implements Expression {
         // JSON_VALUE(data, '$.items[index]')
         if (indexExpression instanceof LiteralExpression lit
             && lit.getValue() instanceof Number num) {
+            int idx = num.intValue();
             ctx.sql("JSON_VALUE(data, '$.");
             ctx.sql(path);
             ctx.sql("[");
-            ctx.sql(String.valueOf(num.intValue()));
+            if (idx >= 0) {
+                ctx.sql(String.valueOf(idx));
+            } else if (idx == -1) {
+                // Oracle supports [last] for the last element
+                ctx.sql("last");
+            } else {
+                // For -2, -3, etc. use [last-1], [last-2], etc.
+                ctx.sql("last");
+                ctx.sql(String.valueOf(idx + 1)); // idx is negative, so idx+1 gives the offset (e.g., -2+1 = -1)
+            }
             ctx.sql("]')");
         } else {
             throw new IllegalArgumentException("$arrayElemAt index must be a literal number");

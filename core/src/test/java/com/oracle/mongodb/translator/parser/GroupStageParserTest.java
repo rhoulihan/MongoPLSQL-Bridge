@@ -136,4 +136,139 @@ class GroupStageParserTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Accumulator must be a document");
     }
+
+    @Test
+    void shouldParseCompoundIdWithMultipleFields() {
+        // { $group: { _id: { category: "$category", status: "$status" } } }
+        var doc = new Document()
+            .append("_id", new Document()
+                .append("category", "$category")
+                .append("status", "$status"));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getIdExpression()).isNotNull();
+        assertThat(stage.getIdExpression().toString()).contains("category");
+    }
+
+    @Test
+    void shouldParseIdWithLiteralStringValue() {
+        // { $group: { _id: "constant" } }
+        var doc = new Document("_id", "constant");
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getIdExpression()).isNotNull();
+    }
+
+    @Test
+    void shouldParseIdWithLiteralNumericValue() {
+        // { $group: { _id: 123 } }
+        var doc = new Document("_id", 123);
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getIdExpression()).isNotNull();
+    }
+
+    @Test
+    void shouldRejectAccumulatorWithMultipleOperators() {
+        var doc = new Document()
+            .append("_id", "$status")
+            .append("result", new Document()
+                .append("$sum", "$amount")
+                .append("$avg", "$amount"));
+
+        assertThatThrownBy(() -> parser.parse(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("exactly one operator");
+    }
+
+    @Test
+    void shouldParseAccumulatorWithNullArgument() {
+        // { $group: { _id: null, count: { $count: {} } } } - $count with empty doc
+        var doc = new Document()
+            .append("_id", null)
+            .append("count", new Document("$count", new Document()));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("count").getOp()).isEqualTo(AccumulatorOp.COUNT);
+    }
+
+    @Test
+    void shouldParseAccumulatorWithComplexExpression() {
+        // { $group: { _id: null, total: { $sum: { $multiply: ["$price", "$qty"] } } } }
+        var doc = new Document()
+            .append("_id", null)
+            .append("total", new Document("$sum",
+                new Document("$multiply", java.util.List.of("$price", "$qty"))));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("total").getOp()).isEqualTo(AccumulatorOp.SUM);
+        assertThat(stage.getAccumulators().get("total").getArgument()).isNotNull();
+    }
+
+    @Test
+    void shouldParseFirstLastAccumulators() {
+        // { $group: { _id: "$category", first: { $first: "$value" }, last: { $last: "$value" } } }
+        var doc = new Document()
+            .append("_id", "$category")
+            .append("first", new Document("$first", "$value"))
+            .append("last", new Document("$last", "$value"));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("first").getOp()).isEqualTo(AccumulatorOp.FIRST);
+        assertThat(stage.getAccumulators().get("last").getOp()).isEqualTo(AccumulatorOp.LAST);
+    }
+
+    @Test
+    void shouldParsePushAccumulator() {
+        // { $group: { _id: "$category", items: { $push: "$item" } } }
+        var doc = new Document()
+            .append("_id", "$category")
+            .append("items", new Document("$push", "$item"));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("items").getOp()).isEqualTo(AccumulatorOp.PUSH);
+    }
+
+    @Test
+    void shouldParseAddToSetAccumulator() {
+        // { $group: { _id: "$category", uniqueItems: { $addToSet: "$item" } } }
+        var doc = new Document()
+            .append("_id", "$category")
+            .append("uniqueItems", new Document("$addToSet", "$item"));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("uniqueItems").getOp()).isEqualTo(AccumulatorOp.ADD_TO_SET);
+    }
+
+    @Test
+    void shouldParseAccumulatorWithStringLiteral() {
+        // { $group: { _id: "$category", label: { $first: "constant" } } }
+        var doc = new Document()
+            .append("_id", "$category")
+            .append("label", new Document("$first", "constant"));
+
+        var stage = parser.parse(doc);
+
+        assertThat(stage.getAccumulators().get("label").getArgument()).isNotNull();
+    }
+
+    @Test
+    void shouldRejectInvalidAccumulatorArgument() {
+        // { $group: { _id: null, result: { $sum: true } } } - boolean is not valid
+        var doc = new Document()
+            .append("_id", null)
+            .append("result", new Document("$sum", true));
+
+        assertThatThrownBy(() -> parser.parse(doc))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported accumulator argument");
+    }
 }

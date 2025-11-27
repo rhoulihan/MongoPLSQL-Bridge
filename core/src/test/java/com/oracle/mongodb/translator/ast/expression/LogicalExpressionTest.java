@@ -199,4 +199,62 @@ class LogicalExpressionTest {
         int andCount = sql.split("AND").length - 1;
         assertThat(andCount).isEqualTo(2);
     }
+
+    @Test
+    void shouldThrowOnNullOp() {
+        assertThatThrownBy(() -> new LogicalExpression(null, List.of(
+            new ComparisonExpression(ComparisonOp.EQ,
+                FieldPathExpression.of("a"), LiteralExpression.of(1))
+        )))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("op");
+    }
+
+    @Test
+    void shouldThrowOnNullOperands() {
+        assertThatThrownBy(() -> new LogicalExpression(LogicalOp.AND, null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("operands");
+    }
+
+    @Test
+    void shouldImplementEquals() {
+        var operand = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var expr1 = new LogicalExpression(LogicalOp.AND, List.of(operand));
+        var expr2 = new LogicalExpression(LogicalOp.AND, List.of(operand));
+        var expr3 = new LogicalExpression(LogicalOp.OR, List.of(operand));
+        var expr4 = new LogicalExpression(LogicalOp.AND, List.of(
+            new ComparisonExpression(ComparisonOp.NE,
+                FieldPathExpression.of("status"), LiteralExpression.of("active"))
+        ));
+
+        assertThat(expr1).isEqualTo(expr2);
+        assertThat(expr1).isNotEqualTo(expr3); // different op
+        assertThat(expr1).isNotEqualTo(expr4); // different operand
+        assertThat(expr1).isNotEqualTo(null);
+        assertThat(expr1).isNotEqualTo("string");
+        assertThat(expr1).isEqualTo(expr1); // same instance
+    }
+
+    @Test
+    void shouldImplementHashCode() {
+        var operand = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var expr1 = new LogicalExpression(LogicalOp.AND, List.of(operand));
+        var expr2 = new LogicalExpression(LogicalOp.AND, List.of(operand));
+
+        assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
+    }
+
+    @Test
+    void shouldProvideReadableToString() {
+        var operand = new ComparisonExpression(ComparisonOp.EQ,
+            FieldPathExpression.of("status"), LiteralExpression.of("active"));
+        var expr = new LogicalExpression(LogicalOp.AND, List.of(operand));
+
+        assertThat(expr.toString())
+            .contains("Logical")
+            .contains("AND");
+    }
 }
