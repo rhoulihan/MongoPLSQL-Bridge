@@ -401,6 +401,36 @@ CREATE INDEX idx_inv_warehouse ON inventory(JSON_VALUE(data, '$.warehouse'));
 COMMIT;
 
 -- ============================================================
+-- Create Org Chart Table (for $graphLookup - hierarchical data)
+-- ============================================================
+PROMPT Loading org_chart table...
+
+CREATE TABLE org_chart (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO org_chart (id, data) VALUES ('CEO', '{"_id": "CEO", "name": "John Smith", "title": "CEO", "reportsTo": null, "department": "Executive"}');
+INSERT INTO org_chart (id, data) VALUES ('CTO', '{"_id": "CTO", "name": "Jane Doe", "title": "CTO", "reportsTo": "CEO", "department": "Technology"}');
+INSERT INTO org_chart (id, data) VALUES ('CFO', '{"_id": "CFO", "name": "Bob Wilson", "title": "CFO", "reportsTo": "CEO", "department": "Finance"}');
+INSERT INTO org_chart (id, data) VALUES ('VP_ENG', '{"_id": "VP_ENG", "name": "Alice Brown", "title": "VP Engineering", "reportsTo": "CTO", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('VP_PROD', '{"_id": "VP_PROD", "name": "Charlie Davis", "title": "VP Product", "reportsTo": "CTO", "department": "Product"}');
+INSERT INTO org_chart (id, data) VALUES ('DIR_BE', '{"_id": "DIR_BE", "name": "Diana Evans", "title": "Director Backend", "reportsTo": "VP_ENG", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('DIR_FE', '{"_id": "DIR_FE", "name": "Edward Foster", "title": "Director Frontend", "reportsTo": "VP_ENG", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('MGR_API', '{"_id": "MGR_API", "name": "Fiona Garcia", "title": "API Manager", "reportsTo": "DIR_BE", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('MGR_DB', '{"_id": "MGR_DB", "name": "George Harris", "title": "Database Manager", "reportsTo": "DIR_BE", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('DEV_1', '{"_id": "DEV_1", "name": "Helen Irving", "title": "Senior Developer", "reportsTo": "MGR_API", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('DEV_2', '{"_id": "DEV_2", "name": "Ivan Jones", "title": "Developer", "reportsTo": "MGR_API", "department": "Engineering"}');
+INSERT INTO org_chart (id, data) VALUES ('DEV_3', '{"_id": "DEV_3", "name": "Julia King", "title": "Developer", "reportsTo": "MGR_DB", "department": "Engineering"}');
+
+PROMPT   Inserted 12 org_chart records
+
+CREATE INDEX idx_org_reportsTo ON org_chart(JSON_VALUE(data, '$.reportsTo'));
+CREATE INDEX idx_org_dept ON org_chart(JSON_VALUE(data, '$.department'));
+
+COMMIT;
+
+-- ============================================================
 -- Summary
 -- ============================================================
 PROMPT
@@ -419,7 +449,9 @@ SELECT 'customers', COUNT(*) FROM customers
 UNION ALL
 SELECT 'events', COUNT(*) FROM events
 UNION ALL
-SELECT 'inventory', COUNT(*) FROM inventory;
+SELECT 'inventory', COUNT(*) FROM inventory
+UNION ALL
+SELECT 'org_chart', COUNT(*) FROM org_chart;
 
 PROMPT ============================================================
 

@@ -1207,6 +1207,98 @@
       "oracle_sql": "SELECT JSON_OBJECT('departmentCounts' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE dept, 'count' VALUE cnt) ORDER BY cnt DESC) FROM (SELECT JSON_VALUE(data, '$.department') AS dept, COUNT(*) AS cnt FROM employees GROUP BY JSON_VALUE(data, '$.department'))), 'topEarners' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE id, 'name' VALUE name, 'salary' VALUE salary) ORDER BY salary DESC) FROM (SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary FROM employees ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE cnt, 'avgSalary' VALUE avgSal, 'totalPayroll' VALUE totalPay)) FROM (SELECT COUNT(*) AS cnt, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS avgSal, SUM(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) AS totalPay FROM employees))) AS result FROM DUAL",
       "expected_count": 1,
       "sort_by": null
+    },
+    {
+      "id": "WINDOW001",
+      "name": "$setWindowFields - rank by salary",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields",
+      "description": "Tests $setWindowFields with $rank partitioned by department",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$setWindowFields": {
+          "partitionBy": "$department",
+          "sortBy": {"salary": -1},
+          "output": {
+            "salaryRank": {"$rank": {}}
+          }
+        }},
+        {"$match": {"salaryRank": 1}},
+        {"$project": {"_id": 1, "name": 1, "department": 1, "salary": 1, "salaryRank": 1}},
+        {"$sort": {"department": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, salaryRank FROM (SELECT id, data, RANK() OVER (PARTITION BY JSON_VALUE(data, '$.department') ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC) AS salaryRank FROM employees) WHERE salaryRank = 1 ORDER BY JSON_VALUE(data, '$.department')",
+      "expected_count": 4,
+      "sort_by": "department"
+    },
+    {
+      "id": "WINDOW002",
+      "name": "$setWindowFields - cumulative sum",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields",
+      "description": "Tests $setWindowFields with cumulative $sum",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$setWindowFields": {
+          "sortBy": {"orderDate": 1},
+          "output": {
+            "runningTotal": {
+              "$sum": "$amount",
+              "window": {"documents": ["unbounded", "current"]}
+            }
+          }
+        }},
+        {"$project": {"_id": 1, "orderId": 1, "amount": 1, "runningTotal": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales WHERE JSON_VALUE(data, '$.status') = 'completed'",
+      "expected_count": 5,
+      "sort_by": null
+    },
+    {
+      "id": "WINDOW003",
+      "name": "$setWindowFields - document number",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields",
+      "description": "Tests $setWindowFields with $documentNumber",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$setWindowFields": {
+          "partitionBy": "$category",
+          "sortBy": {"price": -1},
+          "output": {
+            "priceRankInCategory": {"$documentNumber": {}}
+          }
+        }},
+        {"$match": {"priceRankInCategory": 1}},
+        {"$project": {"_id": 1, "name": 1, "category": 1, "price": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.category') AS category, JSON_VALUE(data, '$.price' RETURNING NUMBER) AS price FROM (SELECT id, data, ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(data, '$.category') ORDER BY JSON_VALUE(data, '$.price' RETURNING NUMBER) DESC) AS priceRankInCategory FROM products WHERE JSON_VALUE(data, '$.active') = 'true') WHERE priceRankInCategory = 1",
+      "expected_count": 3,
+      "sort_by": null
+    },
+    {
+      "id": "WINDOW004",
+      "name": "$setWindowFields - dense rank",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields",
+      "description": "Tests $setWindowFields with $denseRank",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$setWindowFields": {
+          "sortBy": {"salary": -1},
+          "output": {
+            "denseRank": {"$denseRank": {}}
+          }
+        }},
+        {"$match": {"denseRank": {"$lte": 3}}},
+        {"$project": {"_id": 1, "name": 1, "salary": 1, "denseRank": 1}},
+        {"$sort": {"denseRank": 1}}
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, denseRank FROM (SELECT id, data, DENSE_RANK() OVER (ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC) AS denseRank FROM employees) WHERE denseRank <= 3 ORDER BY denseRank",
+      "expected_count": 3,
+      "sort_by": "denseRank"
     }
   ]
 }

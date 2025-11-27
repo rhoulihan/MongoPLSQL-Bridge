@@ -27,23 +27,25 @@ import java.util.Objects;
  * }
  * </pre>
  *
- * <p>Oracle translation would require recursive CTE:
+ * <p>Oracle translation uses a recursive CTE (Common Table Expression):
  * <pre>
- * WITH RECURSIVE graph_results AS (
- *   -- Base case: initial documents
- *   SELECT ... FROM collection WHERE startWith condition
+ * WITH graph_cte (id, data, depth) AS (
+ *   -- Base case: initial documents matching startWith
+ *   SELECT id, data, 0 AS depth
+ *   FROM collection
+ *   WHERE JSON_VALUE(data, '$.connectToField') = :startWith
  *   UNION ALL
- *   -- Recursive case
- *   SELECT ... FROM collection c
- *   JOIN graph_results g ON c.connectToField = g.connectFromField
- *   WHERE depth &lt; maxDepth
+ *   -- Recursive case: traverse connections
+ *   SELECT c.id, c.data, g.depth + 1
+ *   FROM collection c
+ *   JOIN graph_cte g ON JSON_VALUE(c.data, '$.connectToField') = JSON_VALUE(g.data, '$.connectFromField')
+ *   WHERE g.depth &lt; :maxDepth
  * )
- * SELECT ... FROM main_collection
- * LEFT JOIN graph_results ...
+ * SELECT ... FROM main_collection m
+ * LEFT JOIN (
+ *   SELECT JSON_ARRAYAGG(data) AS results FROM graph_cte
+ * ) ON 1=1
  * </pre>
- *
- * <p>Note: This is a stub implementation. Full $graphLookup support
- * requires complex recursive CTE generation.
  */
 public final class GraphLookupStage implements Stage {
 
@@ -118,22 +120,108 @@ public final class GraphLookupStage implements Stage {
 
     @Override
     public void render(SqlGenerationContext ctx) {
-        // $graphLookup is not fully supported - render as comment
-        ctx.sql("/* $graphLookup from ");
+        // Render as recursive CTE
+        String cteName = "graph_" + as;
+        String startField = startWith.startsWith("$") ? startWith.substring(1) : startWith;
+
+        // Generate the recursive CTE
+        ctx.sql("WITH ");
+        ctx.sql(cteName);
+        ctx.sql(" (id, data, graph_depth) AS (");
+
+        // Base case: find initial matching documents
+        ctx.sql("SELECT id, data, 0 AS graph_depth FROM ");
         ctx.sql(from);
-        ctx.sql(" startWith ");
-        ctx.sql(startWith);
-        ctx.sql(" connectFromField ");
-        ctx.sql(connectFromField);
-        ctx.sql(" connectToField ");
+        ctx.sql(" WHERE JSON_VALUE(data, '$.");
         ctx.sql(connectToField);
-        ctx.sql(" as ");
-        ctx.sql(as);
+        ctx.sql("') = JSON_VALUE(");
+        ctx.sql(ctx.getBaseTableAlias());
+        ctx.sql(".data, '$.");
+        ctx.sql(startField);
+        ctx.sql("')");
+
+        ctx.sql(" UNION ALL ");
+
+        // Recursive case: traverse the graph
+        ctx.sql("SELECT c.id, c.data, g.graph_depth + 1 FROM ");
+        ctx.sql(from);
+        ctx.sql(" c JOIN ");
+        ctx.sql(cteName);
+        ctx.sql(" g ON JSON_VALUE(c.data, '$.");
+        ctx.sql(connectToField);
+        ctx.sql("') = JSON_VALUE(g.data, '$.");
+        ctx.sql(connectFromField);
+        ctx.sql("')");
+
+        // Add depth limit if specified
         if (maxDepth != null) {
-            ctx.sql(" maxDepth ");
+            ctx.sql(" WHERE g.graph_depth < ");
             ctx.sql(String.valueOf(maxDepth));
         }
-        ctx.sql(" - NOT YET IMPLEMENTED */");
+
+        ctx.sql(") ");
+
+        // Add the CTE results as a lateral join
+        ctx.sql("SELECT ");
+        if (depthField != null) {
+            ctx.sql("g.graph_depth AS ");
+            ctx.sql(depthField);
+            ctx.sql(", ");
+        }
+        ctx.sql("JSON_ARRAYAGG(g.data) AS ");
+        ctx.sql(as);
+        ctx.sql(" FROM ");
+        ctx.sql(cteName);
+        ctx.sql(" g");
+    }
+
+    /**
+     * Renders just the CTE definition without the SELECT, for use in PipelineRenderer.
+     */
+    public void renderCteDefinition(SqlGenerationContext ctx, String sourceAlias) {
+        String cteName = "graph_" + as;
+        String startField = startWith.startsWith("$") ? startWith.substring(1) : startWith;
+
+        ctx.sql(cteName);
+        ctx.sql(" (id, data, graph_depth) AS (");
+
+        // Base case
+        ctx.sql("SELECT id, data, 0 AS graph_depth FROM ");
+        ctx.sql(from);
+        ctx.sql(" WHERE JSON_VALUE(data, '$.");
+        ctx.sql(connectToField);
+        ctx.sql("') = JSON_VALUE(");
+        ctx.sql(sourceAlias);
+        ctx.sql(".data, '$.");
+        ctx.sql(startField);
+        ctx.sql("')");
+
+        ctx.sql(" UNION ALL ");
+
+        // Recursive case
+        ctx.sql("SELECT c.id, c.data, g.graph_depth + 1 FROM ");
+        ctx.sql(from);
+        ctx.sql(" c JOIN ");
+        ctx.sql(cteName);
+        ctx.sql(" g ON JSON_VALUE(c.data, '$.");
+        ctx.sql(connectToField);
+        ctx.sql("') = JSON_VALUE(g.data, '$.");
+        ctx.sql(connectFromField);
+        ctx.sql("')");
+
+        if (maxDepth != null) {
+            ctx.sql(" WHERE g.graph_depth < ");
+            ctx.sql(String.valueOf(maxDepth));
+        }
+
+        ctx.sql(")");
+    }
+
+    /**
+     * Gets the CTE name for this graph lookup.
+     */
+    public String getCteName() {
+        return "graph_" + as;
     }
 
     @Override

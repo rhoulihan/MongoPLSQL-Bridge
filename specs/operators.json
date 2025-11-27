@@ -1,0 +1,453 @@
+{
+  "$schema": "./schemas/operators-schema.json",
+  "version": "1.0.0",
+  "description": "MongoDB to Oracle SQL operator mappings for MongoPLSQL-Bridge",
+  "lastUpdated": "2024-11-26",
+  "operators": {
+    "stage": {
+      "$match": {
+        "description": "Filters documents based on query conditions",
+        "oracleEquivalent": "WHERE clause",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Supports all comparison and logical operators"
+      },
+      "$project": {
+        "description": "Reshapes documents by including, excluding, or computing fields",
+        "oracleEquivalent": "SELECT clause with expressions",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Supports field inclusion/exclusion and computed fields"
+      },
+      "$group": {
+        "description": "Groups documents by a specified expression and applies accumulators",
+        "oracleEquivalent": "GROUP BY with aggregate functions",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Supports all standard accumulators"
+      },
+      "$sort": {
+        "description": "Reorders documents based on specified fields",
+        "oracleEquivalent": "ORDER BY clause",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Supports multi-field sorting with ASC/DESC"
+      },
+      "$limit": {
+        "description": "Limits the number of documents passed to the next stage",
+        "oracleEquivalent": "FETCH FIRST n ROWS ONLY",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Combined with $sort for Top-N optimization"
+      },
+      "$skip": {
+        "description": "Skips the specified number of documents",
+        "oracleEquivalent": "OFFSET n ROWS",
+        "status": "implemented",
+        "tier": 1,
+        "notes": "Used with $limit for pagination"
+      },
+      "$lookup": {
+        "description": "Performs a left outer join with another collection",
+        "oracleEquivalent": "LEFT OUTER JOIN",
+        "status": "implemented",
+        "tier": 2,
+        "notes": "Supports basic equality join condition"
+      },
+      "$unwind": {
+        "description": "Deconstructs an array field into multiple documents",
+        "oracleEquivalent": "JSON_TABLE with NESTED PATH",
+        "status": "implemented",
+        "tier": 2,
+        "notes": "Supports preserveNullAndEmptyArrays option"
+      },
+      "$addFields": {
+        "description": "Adds new fields to documents",
+        "oracleEquivalent": "Computed columns in SELECT",
+        "status": "implemented",
+        "tier": 2,
+        "notes": "Alias: $set"
+      },
+      "$set": {
+        "description": "Alias for $addFields",
+        "oracleEquivalent": "Computed columns in SELECT",
+        "status": "implemented",
+        "tier": 2,
+        "notes": "Same as $addFields"
+      },
+      "$unionWith": {
+        "description": "Combines documents from two collections",
+        "oracleEquivalent": "UNION ALL",
+        "status": "implemented",
+        "tier": 3,
+        "notes": "Supports sub-pipeline in MongoDB"
+      },
+      "$bucket": {
+        "description": "Categorizes documents into buckets based on boundaries",
+        "oracleEquivalent": "CASE expression with GROUP BY",
+        "status": "implemented",
+        "tier": 3,
+        "notes": "Supports custom boundaries and default bucket"
+      },
+      "$bucketAuto": {
+        "description": "Automatically categorizes documents into specified number of buckets",
+        "oracleEquivalent": "NTILE() window function with GROUP BY",
+        "status": "implemented",
+        "tier": 3,
+        "notes": "Uses Oracle NTILE for automatic bucketing"
+      },
+      "$facet": {
+        "description": "Processes multiple aggregation pipelines in parallel",
+        "oracleEquivalent": "Multiple subqueries with JSON_OBJECT",
+        "status": "implemented",
+        "tier": 3,
+        "notes": "Returns single document with named array fields"
+      },
+      "$graphLookup": {
+        "description": "Performs recursive graph traversal",
+        "oracleEquivalent": "Recursive CTE (WITH RECURSIVE)",
+        "status": "implemented",
+        "tier": 4,
+        "notes": "Supports maxDepth and depthField options"
+      },
+      "$setWindowFields": {
+        "description": "Adds window function results to documents",
+        "oracleEquivalent": "Window functions (OVER clause)",
+        "status": "implemented",
+        "tier": 4,
+        "supportedWindowOperators": ["$sum", "$avg", "$min", "$max", "$count", "$rank", "$denseRank", "$rowNumber", "$first", "$last", "$stdDevPop", "$stdDevSamp"],
+        "notes": "Supports PARTITION BY, ORDER BY, and window frames"
+      },
+      "$merge": {
+        "description": "Writes aggregation results to a collection with merge logic",
+        "oracleEquivalent": "MERGE statement",
+        "status": "stub",
+        "tier": 4,
+        "notes": "Basic structure implemented, full logic pending"
+      },
+      "$out": {
+        "description": "Writes aggregation results to a collection",
+        "oracleEquivalent": "INSERT INTO ... SELECT",
+        "status": "stub",
+        "tier": 4,
+        "notes": "Basic structure implemented, execution pending"
+      }
+    },
+    "comparison": {
+      "$eq": {
+        "description": "Matches values that are equal",
+        "oracleEquivalent": "=",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$ne": {
+        "description": "Matches values that are not equal",
+        "oracleEquivalent": "<> or !=",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$gt": {
+        "description": "Matches values greater than specified",
+        "oracleEquivalent": ">",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$gte": {
+        "description": "Matches values greater than or equal to specified",
+        "oracleEquivalent": ">=",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$lt": {
+        "description": "Matches values less than specified",
+        "oracleEquivalent": "<",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$lte": {
+        "description": "Matches values less than or equal to specified",
+        "oracleEquivalent": "<=",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$in": {
+        "description": "Matches any value in specified array",
+        "oracleEquivalent": "IN (...)",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$nin": {
+        "description": "Matches none of the values in specified array",
+        "oracleEquivalent": "NOT IN (...)",
+        "status": "implemented",
+        "tier": 1
+      }
+    },
+    "logical": {
+      "$and": {
+        "description": "Joins query clauses with logical AND",
+        "oracleEquivalent": "AND",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$or": {
+        "description": "Joins query clauses with logical OR",
+        "oracleEquivalent": "OR",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$not": {
+        "description": "Inverts the effect of a query expression",
+        "oracleEquivalent": "NOT",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$nor": {
+        "description": "Joins query clauses with logical NOR",
+        "oracleEquivalent": "NOT (... OR ...)",
+        "status": "implemented",
+        "tier": 1
+      }
+    },
+    "arithmetic": {
+      "$add": {
+        "description": "Adds numbers or dates",
+        "oracleEquivalent": "+",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$subtract": {
+        "description": "Subtracts numbers or dates",
+        "oracleEquivalent": "-",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$multiply": {
+        "description": "Multiplies numbers",
+        "oracleEquivalent": "*",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$divide": {
+        "description": "Divides numbers",
+        "oracleEquivalent": "/",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$mod": {
+        "description": "Returns modulo (remainder)",
+        "oracleEquivalent": "MOD()",
+        "status": "implemented",
+        "tier": 1
+      }
+    },
+    "accumulator": {
+      "$sum": {
+        "description": "Returns sum of numeric values",
+        "oracleEquivalent": "SUM()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$avg": {
+        "description": "Returns average of numeric values",
+        "oracleEquivalent": "AVG()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$count": {
+        "description": "Returns count of documents",
+        "oracleEquivalent": "COUNT(*)",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$min": {
+        "description": "Returns minimum value",
+        "oracleEquivalent": "MIN()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$max": {
+        "description": "Returns maximum value",
+        "oracleEquivalent": "MAX()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$first": {
+        "description": "Returns first value in a group",
+        "oracleEquivalent": "FIRST_VALUE() or MIN()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$last": {
+        "description": "Returns last value in a group",
+        "oracleEquivalent": "LAST_VALUE() or MAX()",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$push": {
+        "description": "Returns array of all values in a group",
+        "oracleEquivalent": "JSON_ARRAYAGG()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$addToSet": {
+        "description": "Returns array of unique values in a group",
+        "oracleEquivalent": "JSON_ARRAYAGG(DISTINCT ...)",
+        "status": "implemented",
+        "tier": 2
+      }
+    },
+    "conditional": {
+      "$cond": {
+        "description": "Ternary conditional operator",
+        "oracleEquivalent": "CASE WHEN ... THEN ... ELSE ... END",
+        "status": "implemented",
+        "tier": 1
+      },
+      "$ifNull": {
+        "description": "Returns first non-null expression",
+        "oracleEquivalent": "NVL() or COALESCE()",
+        "status": "implemented",
+        "tier": 1
+      }
+    },
+    "string": {
+      "$concat": {
+        "description": "Concatenates strings",
+        "oracleEquivalent": "|| or CONCAT()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$toLower": {
+        "description": "Converts string to lowercase",
+        "oracleEquivalent": "LOWER()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$toUpper": {
+        "description": "Converts string to uppercase",
+        "oracleEquivalent": "UPPER()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$substr": {
+        "description": "Returns substring",
+        "oracleEquivalent": "SUBSTR()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$trim": {
+        "description": "Removes whitespace from both ends",
+        "oracleEquivalent": "TRIM()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$ltrim": {
+        "description": "Removes whitespace from start",
+        "oracleEquivalent": "LTRIM()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$rtrim": {
+        "description": "Removes whitespace from end",
+        "oracleEquivalent": "RTRIM()",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$strLenCP": {
+        "description": "Returns string length in code points",
+        "oracleEquivalent": "LENGTH()",
+        "status": "implemented",
+        "tier": 2
+      }
+    },
+    "date": {
+      "$year": {
+        "description": "Extracts year from date",
+        "oracleEquivalent": "EXTRACT(YEAR FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$month": {
+        "description": "Extracts month from date",
+        "oracleEquivalent": "EXTRACT(MONTH FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$dayOfMonth": {
+        "description": "Extracts day of month from date",
+        "oracleEquivalent": "EXTRACT(DAY FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$hour": {
+        "description": "Extracts hour from date",
+        "oracleEquivalent": "EXTRACT(HOUR FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$minute": {
+        "description": "Extracts minute from date",
+        "oracleEquivalent": "EXTRACT(MINUTE FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$second": {
+        "description": "Extracts second from date",
+        "oracleEquivalent": "EXTRACT(SECOND FROM ...)",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$dayOfWeek": {
+        "description": "Returns day of week (1-7)",
+        "oracleEquivalent": "TO_CHAR(..., 'D')",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$dayOfYear": {
+        "description": "Returns day of year (1-366)",
+        "oracleEquivalent": "TO_CHAR(..., 'DDD')",
+        "status": "implemented",
+        "tier": 2
+      }
+    },
+    "array": {
+      "$arrayElemAt": {
+        "description": "Returns element at specified index",
+        "oracleEquivalent": "JSON_QUERY with array index",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$size": {
+        "description": "Returns array length",
+        "oracleEquivalent": "JSON_VALUE with array size",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$first": {
+        "description": "Returns first array element",
+        "oracleEquivalent": "JSON_QUERY with [0]",
+        "status": "implemented",
+        "tier": 2
+      },
+      "$last": {
+        "description": "Returns last array element",
+        "oracleEquivalent": "JSON_QUERY with [last]",
+        "status": "implemented",
+        "tier": 2
+      }
+    }
+  },
+  "optimization": {
+    "predicatePushdown": {
+      "description": "Moves $match stages earlier in the pipeline",
+      "status": "implemented",
+      "notes": "Pushes $match before $project, $limit, $sort when safe"
+    },
+    "sortLimitCombination": {
+      "description": "Combines adjacent $sort and $limit for Top-N optimization",
+      "status": "implemented",
+      "notes": "Oracle uses FETCH FIRST optimization"
+    }
+  }
+}

@@ -54,7 +54,7 @@ class GraphLookupStageTest {
     }
 
     @Test
-    void shouldRenderAsComment() {
+    void shouldRenderRecursiveCte() {
         var stage = new GraphLookupStage(
             "employees", "$reportsTo", "reportsTo", "name", "hierarchy"
         );
@@ -62,9 +62,34 @@ class GraphLookupStageTest {
         stage.render(context);
 
         String sql = context.toSql();
-        assertThat(sql).contains("$graphLookup");
+        assertThat(sql).contains("WITH graph_hierarchy");
+        assertThat(sql).contains("UNION ALL");
+        assertThat(sql).contains("JSON_ARRAYAGG");
         assertThat(sql).contains("employees");
-        assertThat(sql).contains("NOT YET IMPLEMENTED");
+    }
+
+    @Test
+    void shouldRenderCteWithMaxDepth() {
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy", 5, null
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("graph_depth < 5");
+    }
+
+    @Test
+    void shouldRenderCteWithDepthField() {
+        var stage = new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy", null, "level"
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("graph_depth AS level");
     }
 
     @Test

@@ -336,6 +336,32 @@ db.inventory.createIndex({productId: 1});
 db.inventory.createIndex({warehouse: 1});
 
 // ============================================================
+// Org Chart Collection (for $graphLookup - hierarchical data)
+// ============================================================
+print('Loading org_chart collection...');
+db.org_chart.drop();
+
+db.org_chart.insertMany([
+  {_id: "CEO", name: "John Smith", title: "CEO", reportsTo: null, department: "Executive"},
+  {_id: "CTO", name: "Jane Doe", title: "CTO", reportsTo: "CEO", department: "Technology"},
+  {_id: "CFO", name: "Bob Wilson", title: "CFO", reportsTo: "CEO", department: "Finance"},
+  {_id: "VP_ENG", name: "Alice Brown", title: "VP Engineering", reportsTo: "CTO", department: "Engineering"},
+  {_id: "VP_PROD", name: "Charlie Davis", title: "VP Product", reportsTo: "CTO", department: "Product"},
+  {_id: "DIR_BE", name: "Diana Evans", title: "Director Backend", reportsTo: "VP_ENG", department: "Engineering"},
+  {_id: "DIR_FE", name: "Edward Foster", title: "Director Frontend", reportsTo: "VP_ENG", department: "Engineering"},
+  {_id: "MGR_API", name: "Fiona Garcia", title: "API Manager", reportsTo: "DIR_BE", department: "Engineering"},
+  {_id: "MGR_DB", name: "George Harris", title: "Database Manager", reportsTo: "DIR_BE", department: "Engineering"},
+  {_id: "DEV_1", name: "Helen Irving", title: "Senior Developer", reportsTo: "MGR_API", department: "Engineering"},
+  {_id: "DEV_2", name: "Ivan Jones", title: "Developer", reportsTo: "MGR_API", department: "Engineering"},
+  {_id: "DEV_3", name: "Julia King", title: "Developer", reportsTo: "MGR_DB", department: "Engineering"}
+]);
+
+print('  Inserted ' + db.org_chart.countDocuments() + ' org_chart documents');
+
+db.org_chart.createIndex({reportsTo: 1});
+db.org_chart.createIndex({department: 1});
+
+// ============================================================
 // Summary
 // ============================================================
 print('');
@@ -349,4 +375,5 @@ print('    - products: ' + db.products.countDocuments() + ' documents');
 print('    - customers: ' + db.customers.countDocuments() + ' documents');
 print('    - events: ' + db.events.countDocuments() + ' documents');
 print('    - inventory: ' + db.inventory.countDocuments() + ' documents');
+print('    - org_chart: ' + db.org_chart.countDocuments() + ' documents');
 print('============================================================');

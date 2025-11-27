@@ -46,9 +46,9 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 75 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 79 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (6), Date (5), Array (4), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4)
 
 ### Additional Stages Implemented
 
@@ -56,10 +56,10 @@ All 75 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [
 - `$bucket` - CASE expression grouping
 - `$bucketAuto` - NTILE-based automatic bucketing
 - `$facet` - Multiple parallel subqueries (JSON_OBJECT)
+- `$graphLookup` - Recursive CTE for hierarchical queries
+- `$setWindowFields` - Window functions (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.)
 - `$merge` - MERGE statement (stub)
 - `$out` - INSERT statement (stub)
-- `$graphLookup` - Recursive CTE (stub)
-- `$setWindowFields` - Window functions (stub)
 
 ## Requirements
 

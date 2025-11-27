@@ -1,0 +1,194 @@
+{
+  "$schema": "./schemas/type-mappings-schema.json",
+  "version": "1.0.0",
+  "description": "MongoDB to Oracle type mappings for MongoPLSQL-Bridge",
+  "lastUpdated": "2024-11-26",
+  "typeMappings": {
+    "bson": {
+      "Double": {
+        "mongoType": "Double",
+        "oracleType": "NUMBER",
+        "jsonPath": "RETURNING NUMBER",
+        "notes": "IEEE 754 double precision"
+      },
+      "String": {
+        "mongoType": "String",
+        "oracleType": "VARCHAR2",
+        "jsonPath": "default",
+        "notes": "UTF-8 strings"
+      },
+      "Object": {
+        "mongoType": "Object",
+        "oracleType": "JSON",
+        "jsonPath": "JSON_QUERY",
+        "notes": "Embedded documents"
+      },
+      "Array": {
+        "mongoType": "Array",
+        "oracleType": "JSON",
+        "jsonPath": "JSON_QUERY",
+        "notes": "Arrays use JSON_TABLE for expansion"
+      },
+      "Binary": {
+        "mongoType": "Binary",
+        "oracleType": "BLOB",
+        "jsonPath": "RETURNING BLOB",
+        "notes": "Binary data"
+      },
+      "ObjectId": {
+        "mongoType": "ObjectId",
+        "oracleType": "VARCHAR2(24)",
+        "jsonPath": "default",
+        "notes": "24-character hex string"
+      },
+      "Boolean": {
+        "mongoType": "Boolean",
+        "oracleType": "VARCHAR2(5)",
+        "jsonPath": "default",
+        "notes": "Stored as 'true' or 'false'"
+      },
+      "Date": {
+        "mongoType": "Date",
+        "oracleType": "TIMESTAMP WITH TIME ZONE",
+        "jsonPath": "RETURNING TIMESTAMP",
+        "notes": "ISO 8601 format"
+      },
+      "Null": {
+        "mongoType": "Null",
+        "oracleType": "NULL",
+        "jsonPath": "default",
+        "notes": "JSON null"
+      },
+      "Int32": {
+        "mongoType": "Int32",
+        "oracleType": "NUMBER(10)",
+        "jsonPath": "RETURNING NUMBER",
+        "notes": "32-bit integer"
+      },
+      "Int64": {
+        "mongoType": "Int64",
+        "oracleType": "NUMBER(19)",
+        "jsonPath": "RETURNING NUMBER",
+        "notes": "64-bit integer"
+      },
+      "Decimal128": {
+        "mongoType": "Decimal128",
+        "oracleType": "NUMBER(38,10)",
+        "jsonPath": "RETURNING NUMBER",
+        "notes": "High precision decimal"
+      }
+    },
+    "aggregation": {
+      "accumulatorResult": {
+        "description": "Result types for accumulator operators",
+        "$sum": "NUMBER",
+        "$avg": "NUMBER",
+        "$count": "NUMBER",
+        "$min": "varies",
+        "$max": "varies",
+        "$first": "varies",
+        "$last": "varies",
+        "$push": "JSON",
+        "$addToSet": "JSON"
+      },
+      "windowFunctionResult": {
+        "description": "Result types for window function operators",
+        "$rank": "NUMBER",
+        "$denseRank": "NUMBER",
+        "$rowNumber": "NUMBER",
+        "$sum": "NUMBER",
+        "$avg": "NUMBER"
+      }
+    },
+    "jsonFunctions": {
+      "JSON_VALUE": {
+        "description": "Extracts scalar value from JSON",
+        "returningClauses": {
+          "default": "VARCHAR2(4000)",
+          "NUMBER": "RETURNING NUMBER",
+          "DATE": "RETURNING DATE",
+          "TIMESTAMP": "RETURNING TIMESTAMP",
+          "CLOB": "RETURNING CLOB"
+        },
+        "errorHandling": ["NULL ON ERROR", "ERROR ON ERROR", "DEFAULT '' ON ERROR"]
+      },
+      "JSON_QUERY": {
+        "description": "Extracts JSON object or array",
+        "wrapperOptions": ["WITHOUT WRAPPER", "WITH WRAPPER", "WITH CONDITIONAL WRAPPER"],
+        "errorHandling": ["NULL ON ERROR", "ERROR ON ERROR", "EMPTY ON ERROR"]
+      },
+      "JSON_TABLE": {
+        "description": "Projects JSON data as relational columns",
+        "useCase": "$unwind array expansion",
+        "nestedPath": "Supports NESTED PATH for arrays"
+      },
+      "JSON_EXISTS": {
+        "description": "Tests for existence of JSON path",
+        "useCase": "$exists operator implementation"
+      },
+      "JSON_ARRAYAGG": {
+        "description": "Aggregates values into JSON array",
+        "useCase": "$push accumulator",
+        "options": ["DISTINCT", "ORDER BY"]
+      },
+      "JSON_OBJECTAGG": {
+        "description": "Aggregates key-value pairs into JSON object",
+        "useCase": "Dynamic field construction"
+      },
+      "JSON_OBJECT": {
+        "description": "Constructs JSON object from key-value pairs",
+        "useCase": "$facet result construction"
+      }
+    },
+    "oracleDialects": {
+      "Oracle23ai": {
+        "version": "23.x",
+        "features": {
+          "jsonCollections": true,
+          "jsonDuality": true,
+          "vectorSearch": false,
+          "jsonRelationalDuality": true
+        },
+        "jsonPathSyntax": "SQL/JSON standard",
+        "recursiveCTE": true
+      },
+      "Oracle26ai": {
+        "version": "26.x",
+        "features": {
+          "jsonCollections": true,
+          "jsonDuality": true,
+          "vectorSearch": true,
+          "jsonRelationalDuality": true,
+          "enhancedJsonFunctions": true
+        },
+        "jsonPathSyntax": "SQL/JSON standard",
+        "recursiveCTE": true,
+        "notes": "Enhanced JSON processing capabilities"
+      }
+    }
+  },
+  "nullHandling": {
+    "mongoNull": {
+      "description": "MongoDB null value behavior",
+      "oracleMapping": "NULL or JSON null",
+      "comparison": "IS NULL or JSON_VALUE IS NULL"
+    },
+    "missingField": {
+      "description": "Field does not exist in document",
+      "oracleMapping": "JSON_VALUE returns NULL",
+      "comparison": "JSON_EXISTS returns false"
+    }
+  },
+  "collation": {
+    "default": {
+      "description": "Default collation behavior",
+      "mongodb": "Simple binary comparison",
+      "oracle": "Database NLS settings"
+    },
+    "caseInsensitive": {
+      "description": "Case-insensitive comparison",
+      "mongodb": "Collation with strength: 2",
+      "oracle": "UPPER() or LOWER() functions"
+    }
+  }
+}

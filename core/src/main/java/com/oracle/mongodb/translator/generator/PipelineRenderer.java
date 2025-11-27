@@ -24,6 +24,8 @@ import com.oracle.mongodb.translator.ast.stage.BucketStage;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
 import com.oracle.mongodb.translator.ast.stage.FacetStage;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
+import com.oracle.mongodb.translator.ast.stage.GraphLookupStage;
+import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,6 +63,9 @@ public final class PipelineRenderer {
         // Analyze pipeline to extract components
         PipelineComponents components = analyzePipeline(pipeline);
 
+        // Render WITH clause for CTEs ($graphLookup stages)
+        renderCteClause(components, ctx);
+
         // Render SELECT clause
         renderSelectClause(components, ctx);
 
@@ -69,6 +74,9 @@ public final class PipelineRenderer {
 
         // Render JOIN clauses ($lookup stages)
         renderJoinClauses(components, ctx);
+
+        // Render $graphLookup joins
+        renderGraphLookupJoins(components, ctx);
 
         // Render WHERE clause (combined $match stages)
         renderWhereClause(components, ctx);
@@ -87,6 +95,39 @@ public final class PipelineRenderer {
 
         // Render UNION ALL clauses ($unionWith stages)
         renderUnionWithClauses(components, ctx);
+    }
+
+    private void renderCteClause(PipelineComponents components, SqlGenerationContext ctx) {
+        if (components.graphLookupStages.isEmpty()) {
+            return;
+        }
+
+        ctx.sql("WITH ");
+        boolean first = true;
+        for (GraphLookupStage graphLookup : components.graphLookupStages) {
+            if (!first) {
+                ctx.sql(", ");
+            }
+            graphLookup.renderCteDefinition(ctx, ctx.getBaseTableAlias());
+            first = false;
+        }
+        ctx.sql(" ");
+    }
+
+    private void renderGraphLookupJoins(PipelineComponents components, SqlGenerationContext ctx) {
+        for (GraphLookupStage graphLookup : components.graphLookupStages) {
+            ctx.sql(" LEFT JOIN (SELECT JSON_ARRAYAGG(data) AS ");
+            ctx.sql(graphLookup.getAs());
+            if (graphLookup.getDepthField() != null) {
+                ctx.sql(", MAX(graph_depth) AS ");
+                ctx.sql(graphLookup.getDepthField());
+            }
+            ctx.sql(" FROM ");
+            ctx.sql(graphLookup.getCteName());
+            ctx.sql(") ");
+            ctx.sql(graphLookup.getAs());
+            ctx.sql("_cte ON 1=1");
+        }
     }
 
     private PipelineComponents analyzePipeline(Pipeline pipeline) {
@@ -119,6 +160,10 @@ public final class PipelineRenderer {
                 components.bucketAutoStage = bucketAuto;
             } else if (stage instanceof FacetStage facet) {
                 components.facetStage = facet;
+            } else if (stage instanceof GraphLookupStage graphLookup) {
+                components.graphLookupStages.add(graphLookup);
+            } else if (stage instanceof SetWindowFieldsStage setWindowFields) {
+                components.setWindowFieldsStages.add(setWindowFields);
             }
             // For unknown stages, we skip them (they won't be rendered)
         }
@@ -161,6 +206,30 @@ public final class PipelineRenderer {
             if (!addFields.getFields().isEmpty()) {
                 ctx.sql(", ");
                 ctx.visit(addFields);
+            }
+        }
+
+        // Render $setWindowFields window function columns
+        for (SetWindowFieldsStage setWindowFields : components.setWindowFieldsStages) {
+            ctx.sql(", ");
+            ctx.visit(setWindowFields);
+        }
+
+        // Render $graphLookup result columns
+        for (GraphLookupStage graphLookup : components.graphLookupStages) {
+            ctx.sql(", ");
+            ctx.sql(graphLookup.getAs());
+            ctx.sql("_cte.");
+            ctx.sql(graphLookup.getAs());
+            ctx.sql(" AS ");
+            ctx.sql(graphLookup.getAs());
+            if (graphLookup.getDepthField() != null) {
+                ctx.sql(", ");
+                ctx.sql(graphLookup.getAs());
+                ctx.sql("_cte.");
+                ctx.sql(graphLookup.getDepthField());
+                ctx.sql(" AS ");
+                ctx.sql(graphLookup.getDepthField());
             }
         }
     }
@@ -389,6 +458,8 @@ public final class PipelineRenderer {
         List<UnwindStage> unwindStages = new ArrayList<>();
         List<AddFieldsStage> addFieldsStages = new ArrayList<>();
         List<UnionWithStage> unionWithStages = new ArrayList<>();
+        List<GraphLookupStage> graphLookupStages = new ArrayList<>();
+        List<SetWindowFieldsStage> setWindowFieldsStages = new ArrayList<>();
         GroupStage groupStage;
         ProjectStage projectStage;
         BucketStage bucketStage;

@@ -11,7 +11,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | Phase 1: Project Initialization | ✅ Complete | 10/10 | 10 |
 | Phase 2: Core Infrastructure | ✅ Complete | 7/7 | 7 |
 | Phase 3: Tier 1 Operators | ✅ Complete | 13/13 | 13 |
-| Phase 4: Tier 2-4 & Optimization | 🔄 In Progress | 16/18 | 18 |
+| Phase 4: Tier 2-4 & Optimization | ✅ Complete | 18/18 | 18 |
 
 ## Detailed Ticket Status
 
@@ -78,10 +78,10 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-042 | $bucket/$bucketAuto Stages | ✅ Done | CASE expressions, NTILE for auto |
 | IMPL-043 | $merge/$out Stages | ✅ Done | INSERT/MERGE statements (stub) |
 | IMPL-044 | $unionWith Stage | ✅ Done | UNION ALL |
-| IMPL-045 | $graphLookup Stage | ✅ Done | Stub (recursive CTE not yet implemented) |
-| IMPL-046 | $setWindowFields Stage | ✅ Done | Stub (window functions not yet implemented) |
-| IMPL-047 | Specification Files | ⏳ Pending | operators.json, type-mappings.json |
-| IMPL-048 | Integration Test Suite | ⏳ Pending | Cross-validation tests |
+| IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation |
+| IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
+| IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
+| IMPL-048 | Integration Test Suite | ✅ Done | 79 cross-validation tests |
 
 ## Files Created
 
@@ -252,7 +252,7 @@ parser/
 
 **Unit Tests:** 300+ test methods across 45+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 75 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 79 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 All tests passing: ✅ Yes
 
@@ -277,7 +277,8 @@ All tests passing: ✅ Yes
 | $bucket | 2 | ✅ Pass |
 | $bucketAuto | 2 | ✅ Pass |
 | $facet | 3 | ✅ Pass |
-| **Total** | **75** | **✅ 100%** |
+| $setWindowFields | 4 | ✅ Pass |
+| **Total** | **79** | **✅ 100%** |
 
 ## Example Translations
 
@@ -354,10 +355,10 @@ Run validation tests:
 
 ## Next Steps
 
-1. IMPL-047: Specification Files (operators.json, type-mappings.json)
-2. IMPL-048: Integration Test Suite expansion
-3. Complete $graphLookup recursive CTE implementation
-4. Complete $setWindowFields window function implementation
+1. Add additional MongoDB expression operators ($type, $toInt, $toString, etc.)
+2. Implement $graphLookup with restrictSearchWithMatch option
+3. Add more complex window function tests
+4. Expand documentation with more examples
 
 ## Git Commits
 

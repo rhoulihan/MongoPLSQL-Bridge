@@ -62,7 +62,7 @@ class SetWindowFieldsStageTest {
     }
 
     @Test
-    void shouldRenderAsComment() {
+    void shouldRenderRankWindowFunction() {
         var windowField = new WindowField("$rank", null, null);
         var stage = new SetWindowFieldsStage(
             "$state",
@@ -73,10 +73,63 @@ class SetWindowFieldsStageTest {
         stage.render(context);
 
         String sql = context.toSql();
-        assertThat(sql).contains("$setWindowFields");
+        assertThat(sql).contains("RANK()");
+        assertThat(sql).contains("OVER");
         assertThat(sql).contains("PARTITION BY");
-        assertThat(sql).contains("$state");
-        assertThat(sql).contains("NOT YET IMPLEMENTED");
+        assertThat(sql).contains("ORDER BY");
+        assertThat(sql).contains("AS rank");
+    }
+
+    @Test
+    void shouldRenderSumWithWindow() {
+        var windowSpec = new WindowSpec("documents", List.of("unbounded", "current"));
+        var windowField = new WindowField("$sum", "$quantity", windowSpec);
+        var stage = new SetWindowFieldsStage(
+            "$state",
+            Map.of("orderDate", 1),
+            Map.of("cumulativeSum", windowField)
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("SUM(");
+        assertThat(sql).contains("OVER");
+        assertThat(sql).contains("ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+        assertThat(sql).contains("AS cumulativeSum");
+    }
+
+    @Test
+    void shouldRenderRowNumber() {
+        var windowField = new WindowField("$rowNumber", null, null);
+        var stage = new SetWindowFieldsStage(
+            null,
+            Map.of("date", 1),
+            Map.of("rowNum", windowField)
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("ROW_NUMBER()");
+        assertThat(sql).contains("AS rowNum");
+    }
+
+    @Test
+    void shouldRenderDenseRank() {
+        var windowField = new WindowField("$denseRank", null, null);
+        var stage = new SetWindowFieldsStage(
+            "$department",
+            Map.of("salary", -1),
+            Map.of("denseRank", windowField)
+        );
+
+        stage.render(context);
+
+        String sql = context.toSql();
+        assertThat(sql).contains("DENSE_RANK()");
+        assertThat(sql).contains("DESC");
+        assertThat(sql).contains("AS denseRank");
     }
 
     @Test
