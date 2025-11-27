@@ -286,13 +286,13 @@ All tests passing: ✅ Yes
 
 | Package | Line Coverage | Branch Coverage |
 |---------|---------------|-----------------|
-| **Overall** | **90%** | **80%** |
+| **Overall** | **90%** | **78%** |
 | `api` | 97% | 100% |
 | `generator` | 96% | 93% |
 | `optimizer` | 92% | 86% |
-| `ast.stage` | 90% | 74% |
-| `ast.expression` | 89% | 69% |
-| `parser` | 87% | 82% |
+| `ast.expression` | 91% | 71% |
+| `parser` | 87% | 81% |
+| `ast.stage` | 86% | 69% |
 | `exception` | 100% | 100% |
 | `generator.dialect` | 100% | n/a |
 

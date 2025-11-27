@@ -272,7 +272,7 @@ Both databases contain matching test data:
 | Accumulators | `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet` |
 
 **Test Coverage:**
-- Unit Tests: 90% line coverage, 80% branch coverage
+- Unit Tests: 90% line coverage, 78% branch coverage
 - Cross-Database Validation: 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
 
 ## Development Guidelines
