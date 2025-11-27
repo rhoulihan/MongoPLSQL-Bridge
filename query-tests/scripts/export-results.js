@@ -10,9 +10,13 @@
  */
 
 const { MongoClient } = require('mongodb');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+// Path to the translator JAR
+const TRANSLATOR_JAR = path.join(__dirname, '../../core/build/libs/core.jar');
+const PROJECT_ROOT = path.join(__dirname, '../..');
 
 // Configuration
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:admin123@localhost:27017';
@@ -144,6 +148,52 @@ function formatResult(result) {
         }
         return value;
     }, 2);
+}
+
+/**
+ * Translate a MongoDB pipeline to Oracle SQL using the Java translator
+ */
+function translatePipeline(collection, pipeline) {
+    try {
+        // Write pipeline to temp file
+        const tempFile = path.join(__dirname, '../output/_temp_pipeline.json');
+        fs.writeFileSync(tempFile, JSON.stringify(pipeline));
+
+        // Run gradle task to translate (task is in :core subproject)
+        const result = execSync(
+            `./gradlew -q :core:translatePipeline -PcollectionName="${collection}" -PpipelineFile="${tempFile}"`,
+            {
+                cwd: PROJECT_ROOT,
+                encoding: 'utf8',
+                maxBuffer: 10 * 1024 * 1024,
+                timeout: 60000
+            }
+        );
+
+        // Clean up temp file
+        try { fs.unlinkSync(tempFile); } catch {}
+
+        // Parse the result - should be the SQL (may have leading/trailing whitespace or gradle output)
+        const lines = result.split('\n').filter(line => {
+            const trimmed = line.trim();
+            // Skip empty lines and gradle-related output
+            return trimmed.length > 0 &&
+                   !trimmed.startsWith('>') &&
+                   !trimmed.startsWith('BUILD') &&
+                   !trimmed.includes('UP-TO-DATE') &&
+                   !trimmed.includes('SKIPPED');
+        });
+
+        const sql = lines.join('\n').trim();
+        if (sql && sql.length > 0 && !sql.startsWith('FAILURE') && !sql.includes('BUILD FAILED')) {
+            return sql;
+        }
+        return null;
+    } catch (err) {
+        // Translation failed
+        console.error(`Translation error for ${collection}: ${err.message}`);
+        return null;
+    }
 }
 
 /**
@@ -343,8 +393,21 @@ async function runTest(db, test, outputDir, options) {
     }
 
     // Run Oracle query
-    if (!options.mongodbOnly && test.oracleSql) {
-        output.oracle = runOracleQuery(test.oracleSql);
+    if (!options.mongodbOnly) {
+        let oracleSql = test.oracleSql;
+
+        // If no Oracle SQL provided, try to translate the pipeline
+        if (!oracleSql && test.pipeline) {
+            oracleSql = translatePipeline(test.collection, test.pipeline);
+            if (oracleSql) {
+                output.oracleSql = oracleSql;
+                output.oracleSqlGenerated = true;
+            }
+        }
+
+        if (oracleSql) {
+            output.oracle = runOracleQuery(oracleSql);
+        }
     }
 
     // Compare results if both ran

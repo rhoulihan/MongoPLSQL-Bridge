@@ -47,3 +47,29 @@ tasks.spotbugsTest {
 dependencies {
     spotbugsPlugins("com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0")
 }
+
+// Task to translate a pipeline from command line
+tasks.register<JavaExec>("translatePipeline") {
+    group = "application"
+    description = "Translate a MongoDB pipeline to Oracle SQL"
+    mainClass.set("com.oracle.mongodb.translator.cli.TranslateCli")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    doFirst {
+        val argsList = mutableListOf<String>()
+        val collectionName = project.findProperty("collectionName")?.toString() ?: ""
+        val pipelineFile = project.findProperty("pipelineFile")?.toString() ?: ""
+        val pipelineJson = project.findProperty("pipelineJson")?.toString() ?: ""
+
+        if (collectionName.isNotEmpty()) {
+            argsList.add(collectionName)
+        }
+        if (pipelineFile.isNotEmpty()) {
+            argsList.add("--file")
+            argsList.add(pipelineFile)
+        } else if (pipelineJson.isNotEmpty()) {
+            argsList.add(pipelineJson)
+        }
+        args = argsList
+    }
+}
