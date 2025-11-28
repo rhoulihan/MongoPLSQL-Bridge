@@ -401,15 +401,21 @@ pre-commit run --all-files
 - `end-of-file-fixer` - Ensure files end with newline
 - `check-yaml` - Validate YAML syntax
 - `check-json` - Validate JSON syntax
-- `check-added-large-files` - Prevent large file commits
+- `check-added-large-files` - Prevent large file commits (>1MB)
 - `check-merge-conflict` - Detect merge conflict markers
 - `detect-private-key` - Prevent private key commits
+- `check-case-conflict` - Detect case-insensitive filename conflicts
+- `mixed-line-ending` - Enforce LF line endings
+- `check-executables-have-shebangs` - Ensure scripts have shebangs
+- `no-commit-to-branch` - Prevent direct commits to main/master
 - `checkstyle` - Google Java Style enforcement (2-space indent, maxWarnings=0)
 - `spotbugs` - Static analysis with FindSecBugs plugin
 - `compile-check` - Ensure code compiles
 - `unit-tests` - Run quick unit tests
 
 All hooks must pass before a commit is accepted.
+
+**Note:** The `no-commit-to-branch` hook prevents direct commits to main. Use feature branches and PRs for changes.
 
 ## Usage
 

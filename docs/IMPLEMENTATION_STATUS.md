@@ -542,14 +542,17 @@ cd query-tests/large-scale
 
 ## Code Quality
 
-The project enforces strict code quality through pre-commit hooks:
+The project enforces strict code quality through pre-commit hooks and CI/CD:
 
-| Check | Tool | Status |
-|-------|------|--------|
-| Code Style | Checkstyle (Google Java Style, 2-space indent) | ✅ Pass (maxWarnings=0) |
-| Static Analysis | SpotBugs with FindSecBugs | ✅ Pass |
-| Dependency Security | OWASP Dependency Check | ✅ Configured |
-| Test Coverage | JaCoCo | ✅ 95%+ line, 85%+ branch |
+| Check | Tool | Where | Status |
+|-------|------|-------|--------|
+| Code Style | Checkstyle (Google Java Style, 2-space indent) | Pre-commit | ✅ Pass (maxWarnings=0) |
+| Static Analysis | SpotBugs with FindSecBugs | Pre-commit | ✅ Pass |
+| Dependency Security | OWASP Dependency Check | CI/CD | ✅ Configured |
+| Test Coverage | JaCoCo | CI/CD | ✅ 95%+ line, 85%+ branch |
+| Case Conflicts | check-case-conflict | Pre-commit | ✅ Pass |
+| Line Endings | mixed-line-ending (LF) | Pre-commit | ✅ Pass |
+| Branch Protection | no-commit-to-branch | Pre-commit | ✅ Configured |
 
 **Code Quality Fixes Applied (2025-11-28):**
 - Formatted all Java files with Google Java Format (2-space indentation)
