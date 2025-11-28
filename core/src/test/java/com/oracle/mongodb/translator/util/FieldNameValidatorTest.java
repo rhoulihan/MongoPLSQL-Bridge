@@ -182,4 +182,76 @@ class FieldNameValidatorTest {
             () -> FieldNameValidator.validateTableName("orders UNION SELECT * FROM users"))
         .isInstanceOf(ValidationException.class);
   }
+
+  // ==================== File Path Validation ====================
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "pipeline.json",
+        "/home/user/pipeline.json",
+        "data/pipelines/test.json",
+        "C:\\Users\\test\\pipeline.json",
+        "./pipeline.json",
+        "relative/path/file.txt"
+      })
+  void shouldAcceptValidFilePaths(String filePath) {
+    assertThat(FieldNameValidator.validateFilePath(filePath)).isEqualTo(filePath);
+    assertThat(FieldNameValidator.isValidFilePath(filePath)).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "../etc/passwd", // path traversal
+        "../../secret.json", // path traversal
+        "data/../../../etc/passwd", // embedded path traversal
+        "..\\windows\\system32", // Windows path traversal
+      })
+  void shouldRejectPathTraversalAttempts(String filePath) {
+    assertThatThrownBy(() -> FieldNameValidator.validateFilePath(filePath))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("Path traversal");
+    assertThat(FieldNameValidator.isValidFilePath(filePath)).isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "file:///etc/passwd",
+        "FILE:///etc/passwd",
+        "http://evil.com/payload",
+        "https://evil.com/payload",
+        "ftp://evil.com/file",
+      })
+  void shouldRejectUrlStylePaths(String filePath) {
+    assertThatThrownBy(() -> FieldNameValidator.validateFilePath(filePath))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("URL-style paths are not allowed");
+    assertThat(FieldNameValidator.isValidFilePath(filePath)).isFalse();
+  }
+
+  @Test
+  void shouldRejectNullFilePath() {
+    assertThatThrownBy(() -> FieldNameValidator.validateFilePath(null))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("null or empty");
+    assertThat(FieldNameValidator.isValidFilePath(null)).isFalse();
+  }
+
+  @Test
+  void shouldRejectEmptyFilePath() {
+    assertThatThrownBy(() -> FieldNameValidator.validateFilePath(""))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("null or empty");
+    assertThat(FieldNameValidator.isValidFilePath("")).isFalse();
+  }
+
+  @Test
+  void shouldRejectPathWithNullBytes() {
+    assertThatThrownBy(() -> FieldNameValidator.validateFilePath("file.json\0.txt"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("null bytes");
+    assertThat(FieldNameValidator.isValidFilePath("file.json\0.txt")).isFalse();
+  }
 }

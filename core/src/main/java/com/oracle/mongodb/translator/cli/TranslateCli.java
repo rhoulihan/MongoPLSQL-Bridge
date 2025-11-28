@@ -4,6 +4,7 @@ import com.oracle.mongodb.translator.api.AggregationTranslator;
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.api.TranslationOptions;
 import com.oracle.mongodb.translator.api.TranslationResult;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,7 +59,10 @@ public final class TranslateCli {
         inlineValues = true;
       } else if ("--file".equals(args[i]) && i + 1 < args.length) {
         try {
-          pipelineJson = Files.readString(Path.of(args[++i]));
+          String filePath = args[++i];
+          // Validate file path to prevent path traversal attacks
+          FieldNameValidator.validateFilePath(filePath);
+          pipelineJson = Files.readString(Path.of(filePath));
         } catch (IOException e) {
           System.err.println("Error reading file: " + e.getMessage());
           System.exit(1);

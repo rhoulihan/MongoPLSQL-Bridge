@@ -180,4 +180,81 @@ public final class FieldNameValidator {
     String truncated = input.length() > 50 ? input.substring(0, 50) + "..." : input;
     return truncated.replaceAll("[\\x00-\\x1F\\x7F]", "?");
   }
+
+  /**
+   * Validates a file path for CLI input to prevent path traversal attacks.
+   *
+   * <p>This method checks that:
+   *
+   * <ul>
+   *   <li>The path is not null or empty
+   *   <li>The path does not contain path traversal sequences (..)
+   *   <li>The path does not contain null bytes
+   *   <li>The path is not a URL-style path
+   * </ul>
+   *
+   * @param filePath the file path to validate
+   * @return the validated path
+   * @throws ValidationException if the path is invalid or potentially malicious
+   */
+  public static String validateFilePath(String filePath) {
+    if (filePath == null || filePath.isEmpty()) {
+      throw new ValidationException(
+          List.of(new ValidationError("INVALID_PATH", "File path cannot be null or empty")));
+    }
+
+    // Check for path traversal attempts
+    if (filePath.contains("..")) {
+      throw new ValidationException(
+          List.of(
+              new ValidationError(
+                  "PATH_TRAVERSAL",
+                  "Path traversal detected in '"
+                      + sanitizeForMessage(filePath)
+                      + "': '..' sequences are not allowed")));
+    }
+
+    // Check for null bytes (path truncation attack)
+    if (filePath.contains("\0")) {
+      throw new ValidationException(
+          List.of(
+              new ValidationError(
+                  "INVALID_PATH", "Invalid characters in path: null bytes are not allowed")));
+    }
+
+    // Check for suspicious protocol prefixes
+    String lowerPath = filePath.toLowerCase();
+    if (lowerPath.startsWith("file:")
+        || lowerPath.startsWith("http:")
+        || lowerPath.startsWith("https:")
+        || lowerPath.startsWith("ftp:")) {
+      throw new ValidationException(
+          List.of(
+              new ValidationError(
+                  "INVALID_PATH",
+                  "URL-style paths are not allowed: " + sanitizeForMessage(filePath))));
+    }
+
+    return filePath;
+  }
+
+  /**
+   * Checks if a file path is valid without throwing an exception.
+   *
+   * @param filePath the file path to check
+   * @return true if valid, false otherwise
+   */
+  public static boolean isValidFilePath(String filePath) {
+    if (filePath == null || filePath.isEmpty()) {
+      return false;
+    }
+    if (filePath.contains("..") || filePath.contains("\0")) {
+      return false;
+    }
+    String lowerPath = filePath.toLowerCase();
+    return !lowerPath.startsWith("file:")
+        && !lowerPath.startsWith("http:")
+        && !lowerPath.startsWith("https:")
+        && !lowerPath.startsWith("ftp:");
+  }
 }

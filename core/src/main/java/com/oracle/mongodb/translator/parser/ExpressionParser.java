@@ -126,13 +126,7 @@ public final class ExpressionParser {
     LogicalOp logicalOp = LogicalOp.fromMongo(op);
 
     if (logicalOp == LogicalOp.NOT) {
-      // $not at top level (filter context) requires a document
-      // Expression context handling (where $not can take expressions) is done in
-      // parseExpressionOperator
-      if (!(value instanceof Document)) {
-        throw new IllegalArgumentException("$not requires a document operand in filter context");
-      }
-      return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
+      return parseNotOperatorAtTopLevel(logicalOp, value);
     }
 
     if (!(value instanceof List)) {
@@ -144,30 +138,42 @@ public final class ExpressionParser {
     List<Expression> operands = new ArrayList<>();
 
     for (Object item : items) {
-      // In expression context, items can be expressions (field refs, literals, nested expressions)
-      // In filter context, items are documents
-      if (item instanceof Document) {
-        // Could be a filter document or an expression document
-        Document doc = (Document) item;
-        if (!doc.isEmpty()) {
-          String firstKey = doc.keySet().iterator().next();
-          if (firstKey.startsWith("$")) {
-            // Expression document like {$eq: [...]}
-            operands.add(parseValue(item));
-          } else {
-            // Filter document like {field: value}
-            operands.add(parseDocument(doc));
-          }
-        } else {
-          operands.add(parseDocument(doc));
-        }
-      } else {
-        // Field reference or literal
-        operands.add(parseValue(item));
-      }
+      operands.add(parseLogicalOperand(item));
     }
 
     return new LogicalExpression(logicalOp, operands);
+  }
+
+  private Expression parseNotOperatorAtTopLevel(LogicalOp logicalOp, Object value) {
+    // $not at top level (filter context) requires a document
+    // Expression context handling (where $not can take expressions) is done in
+    // parseExpressionOperator
+    if (!(value instanceof Document)) {
+      throw new IllegalArgumentException("$not requires a document operand in filter context");
+    }
+    return new LogicalExpression(logicalOp, List.of(parseDocument((Document) value)));
+  }
+
+  private Expression parseLogicalOperand(Object item) {
+    // In expression context, items can be expressions (field refs, literals, nested expressions)
+    // In filter context, items are documents
+    if (!(item instanceof Document doc)) {
+      // Field reference or literal
+      return parseValue(item);
+    }
+
+    // Could be a filter document or an expression document
+    if (doc.isEmpty()) {
+      return parseDocument(doc);
+    }
+
+    String firstKey = doc.keySet().iterator().next();
+    if (firstKey.startsWith("$")) {
+      // Expression document like {$eq: [...]}
+      return parseValue(item);
+    }
+    // Filter document like {field: value}
+    return parseDocument(doc);
   }
 
   private Expression parseFieldCondition(String fieldPath, Object value) {
@@ -566,101 +572,97 @@ public final class ExpressionParser {
   private Expression parseArrayExpression(String op, Object operand) {
     ArrayOp arrayOp = ArrayOp.fromMongo(op);
 
-    switch (arrayOp) {
-      case ARRAY_ELEM_AT -> {
-        // $arrayElemAt: [arrayExpr, indexExpr]
-        if (!(operand instanceof List)) {
-          throw new IllegalArgumentException("$arrayElemAt requires an array of [array, index]");
-        }
-        @SuppressWarnings("unchecked")
-        List<Object> args = (List<Object>) operand;
-        if (args.size() != 2) {
-          throw new IllegalArgumentException("$arrayElemAt requires exactly 2 arguments");
-        }
-        return ArrayExpression.arrayElemAt(parseValue(args.get(0)), parseValue(args.get(1)));
-      }
-      case SIZE -> {
-        // $size: arrayExpr
-        return ArrayExpression.size(parseValue(operand));
-      }
-      case FIRST -> {
-        // $first: arrayExpr
-        return ArrayExpression.first(parseValue(operand));
-      }
-      case LAST -> {
-        // $last: arrayExpr
-        return ArrayExpression.last(parseValue(operand));
-      }
-      case CONCAT_ARRAYS -> {
-        // $concatArrays: [array1, array2, ...]
-        if (!(operand instanceof List)) {
-          throw new IllegalArgumentException("$concatArrays requires an array of arrays");
-        }
-        @SuppressWarnings("unchecked")
-        List<Object> args = (List<Object>) operand;
-        List<Expression> arrays = new ArrayList<>();
-        for (Object arg : args) {
-          arrays.add(parseValue(arg));
-        }
-        return ArrayExpression.concatArrays(arrays);
-      }
-      case SLICE -> {
-        // $slice: [array, count] or [array, skip, count]
-        if (!(operand instanceof List)) {
-          throw new IllegalArgumentException("$slice requires an array");
-        }
-        @SuppressWarnings("unchecked")
-        List<Object> args = (List<Object>) operand;
-        if (args.size() == 2) {
-          return ArrayExpression.slice(parseValue(args.get(0)), parseValue(args.get(1)));
-        } else if (args.size() == 3) {
-          return ArrayExpression.sliceWithSkip(
-              parseValue(args.get(0)), parseValue(args.get(1)), parseValue(args.get(2)));
-        } else {
-          throw new IllegalArgumentException("$slice requires 2 or 3 arguments");
-        }
-      }
-      case FILTER -> {
-        // $filter: {input: array, as: varName, cond: condition}
-        if (!(operand instanceof Document doc)) {
-          throw new IllegalArgumentException("$filter requires a document");
-        }
-        Object input = doc.get("input");
-        Object cond = doc.get("cond");
-        if (input == null || cond == null) {
-          throw new IllegalArgumentException("$filter requires 'input' and 'cond' fields");
-        }
-        return ArrayExpression.filter(parseValue(input), parseValue(cond));
-      }
-      case MAP -> {
-        // $map: {input: array, as: varName, in: expression}
-        if (!(operand instanceof Document doc)) {
-          throw new IllegalArgumentException("$map requires a document");
-        }
-        Object input = doc.get("input");
-        Object inExpr = doc.get("in");
-        if (input == null || inExpr == null) {
-          throw new IllegalArgumentException("$map requires 'input' and 'in' fields");
-        }
-        return ArrayExpression.map(parseValue(input), parseValue(inExpr));
-      }
-      case REDUCE -> {
-        // $reduce: {input: array, initialValue: value, in: expression}
-        if (!(operand instanceof Document doc)) {
-          throw new IllegalArgumentException("$reduce requires a document");
-        }
-        Object input = doc.get("input");
-        Object initialValue = doc.get("initialValue");
-        Object inExpr = doc.get("in");
-        if (input == null || initialValue == null || inExpr == null) {
-          throw new IllegalArgumentException(
-              "$reduce requires 'input', 'initialValue', and 'in' fields");
-        }
-        return ArrayExpression.reduce(
-            parseValue(input), parseValue(initialValue), parseValue(inExpr));
-      }
+    return switch (arrayOp) {
+      case ARRAY_ELEM_AT -> parseArrayElemAt(operand);
+      case SIZE -> ArrayExpression.size(parseValue(operand));
+      case FIRST -> ArrayExpression.first(parseValue(operand));
+      case LAST -> ArrayExpression.last(parseValue(operand));
+      case CONCAT_ARRAYS -> parseConcatArrays(operand);
+      case SLICE -> parseSlice(operand);
+      case FILTER -> parseFilter(operand);
+      case MAP -> parseMap(operand);
+      case REDUCE -> parseReduce(operand);
       default -> throw new UnsupportedOperatorException(op);
+    };
+  }
+
+  private Expression parseArrayElemAt(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$arrayElemAt requires an array of [array, index]");
     }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() != 2) {
+      throw new IllegalArgumentException("$arrayElemAt requires exactly 2 arguments");
+    }
+    return ArrayExpression.arrayElemAt(parseValue(args.get(0)), parseValue(args.get(1)));
+  }
+
+  private Expression parseConcatArrays(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$concatArrays requires an array of arrays");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    List<Expression> arrays = new ArrayList<>();
+    for (Object arg : args) {
+      arrays.add(parseValue(arg));
+    }
+    return ArrayExpression.concatArrays(arrays);
+  }
+
+  private Expression parseSlice(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$slice requires an array");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() == 2) {
+      return ArrayExpression.slice(parseValue(args.get(0)), parseValue(args.get(1)));
+    } else if (args.size() == 3) {
+      return ArrayExpression.sliceWithSkip(
+          parseValue(args.get(0)), parseValue(args.get(1)), parseValue(args.get(2)));
+    }
+    throw new IllegalArgumentException("$slice requires 2 or 3 arguments");
+  }
+
+  private Expression parseFilter(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$filter requires a document");
+    }
+    Object input = doc.get("input");
+    Object cond = doc.get("cond");
+    if (input == null || cond == null) {
+      throw new IllegalArgumentException("$filter requires 'input' and 'cond' fields");
+    }
+    return ArrayExpression.filter(parseValue(input), parseValue(cond));
+  }
+
+  private Expression parseMap(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$map requires a document");
+    }
+    Object input = doc.get("input");
+    Object inExpr = doc.get("in");
+    if (input == null || inExpr == null) {
+      throw new IllegalArgumentException("$map requires 'input' and 'in' fields");
+    }
+    return ArrayExpression.map(parseValue(input), parseValue(inExpr));
+  }
+
+  private Expression parseReduce(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$reduce requires a document");
+    }
+    Object input = doc.get("input");
+    Object initialValue = doc.get("initialValue");
+    Object inExpr = doc.get("in");
+    if (input == null || initialValue == null || inExpr == null) {
+      throw new IllegalArgumentException(
+          "$reduce requires 'input', 'initialValue', and 'in' fields");
+    }
+    return ArrayExpression.reduce(
+        parseValue(input), parseValue(initialValue), parseValue(inExpr));
   }
 
   private Expression parseTypeConversionExpression(String op, Object operand) {
