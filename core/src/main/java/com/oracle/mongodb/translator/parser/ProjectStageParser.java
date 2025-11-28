@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.expression.Expression;
@@ -10,87 +11,85 @@ import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage.ProjectionField;
-import org.bson.Document;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.bson.Document;
 
-/**
- * Parser for $project stage documents.
- */
+/** Parser for $project stage documents. */
 public final class ProjectStageParser {
 
-    private final ExpressionParser expressionParser = new ExpressionParser();
+  private final ExpressionParser expressionParser = new ExpressionParser();
 
-    /**
-     * Parses a $project stage document.
-     *
-     * @param projectDoc the $project document
-     * @return ProjectStage AST node
-     */
-    public ProjectStage parse(Document projectDoc) {
-        Map<String, ProjectionField> projections = new LinkedHashMap<>();
-        boolean hasExclusion = false;
-        boolean hasInclusion = false;
+  /**
+   * Parses a $project stage document.
+   *
+   * @param projectDoc the $project document
+   * @return ProjectStage AST node
+   */
+  public ProjectStage parse(Document projectDoc) {
+    Map<String, ProjectionField> projections = new LinkedHashMap<>();
+    boolean hasExclusion = false;
+    boolean hasInclusion = false;
 
-        for (Map.Entry<String, Object> entry : projectDoc.entrySet()) {
-            String fieldName = entry.getKey();
-            Object value = entry.getValue();
+    for (Map.Entry<String, Object> entry : projectDoc.entrySet()) {
+      String fieldName = entry.getKey();
+      Object value = entry.getValue();
 
-            ProjectionField field = parseProjectionValue(fieldName, value);
-            projections.put(fieldName, field);
+      ProjectionField field = parseProjectionValue(fieldName, value);
+      projections.put(fieldName, field);
 
-            if (field.isExcluded()) {
-                hasExclusion = true;
-            } else {
-                hasInclusion = true;
-            }
-        }
-
-        // MongoDB doesn't allow mixing inclusion and exclusion except for _id
-        boolean isExclusionMode = hasExclusion && !hasInclusion;
-
-        return new ProjectStage(projections, isExclusionMode);
+      if (field.isExcluded()) {
+        hasExclusion = true;
+      } else {
+        hasInclusion = true;
+      }
     }
 
-    private ProjectionField parseProjectionValue(String fieldName, Object value) {
-        // Handle numeric inclusion/exclusion: 1, 0, true, false
-        if (value instanceof Number numVal) {
-            int intVal = numVal.intValue();
-            if (intVal == 0) {
-                return ProjectionField.exclude();
-            }
-            // Include the field as-is
-            return ProjectionField.include(FieldPathExpression.of(fieldName));
-        }
+    // MongoDB doesn't allow mixing inclusion and exclusion except for _id
+    boolean isExclusionMode = hasExclusion && !hasInclusion;
 
-        if (value instanceof Boolean boolVal) {
-            if (!boolVal) {
-                return ProjectionField.exclude();
-            }
-            return ProjectionField.include(FieldPathExpression.of(fieldName));
-        }
+    return new ProjectStage(projections, isExclusionMode);
+  }
 
-        // Handle string field reference: "$existingField"
-        if (value instanceof String strVal) {
-            if (strVal.startsWith("$")) {
-                return ProjectionField.include(FieldPathExpression.of(strVal.substring(1)));
-            }
-            // Literal string value
-            return ProjectionField.include(LiteralExpression.of(strVal));
-        }
-
-        // Handle expression document
-        if (value instanceof Document) {
-            Expression expr = parseExpression((Document) value);
-            return ProjectionField.include(expr);
-        }
-
-        throw new IllegalArgumentException(
-            "Unsupported projection value for field '" + fieldName + "': " + value);
+  private ProjectionField parseProjectionValue(String fieldName, Object value) {
+    // Handle numeric inclusion/exclusion: 1, 0, true, false
+    if (value instanceof Number numVal) {
+      int intVal = numVal.intValue();
+      if (intVal == 0) {
+        return ProjectionField.exclude();
+      }
+      // Include the field as-is
+      return ProjectionField.include(FieldPathExpression.of(fieldName));
     }
 
-    private Expression parseExpression(Document exprDoc) {
-        // Delegate to the ExpressionParser which handles all expression types
-        return expressionParser.parseValue(exprDoc);
+    if (value instanceof Boolean boolVal) {
+      if (!boolVal) {
+        return ProjectionField.exclude();
+      }
+      return ProjectionField.include(FieldPathExpression.of(fieldName));
     }
+
+    // Handle string field reference: "$existingField"
+    if (value instanceof String strVal) {
+      if (strVal.startsWith("$")) {
+        return ProjectionField.include(FieldPathExpression.of(strVal.substring(1)));
+      }
+      // Literal string value
+      return ProjectionField.include(LiteralExpression.of(strVal));
+    }
+
+    // Handle expression document
+    if (value instanceof Document) {
+      Expression expr = parseExpression((Document) value);
+      return ProjectionField.include(expr);
+    }
+
+    throw new IllegalArgumentException(
+        "Unsupported projection value for field '" + fieldName + "': " + value);
+  }
+
+  private Expression parseExpression(Document exprDoc) {
+    // Delegate to the ExpressionParser which handles all expression types
+    return expressionParser.parseValue(exprDoc);
+  }
 }

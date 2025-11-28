@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,16 +16,18 @@ import org.junit.jupiter.api.Test;
 
 class RedactStageParserTest {
 
-    private RedactStageParser parser;
+  private RedactStageParser parser;
 
-    @BeforeEach
-    void setUp() {
-        parser = new RedactStageParser();
-    }
+  @BeforeEach
+  void setUp() {
+    parser = new RedactStageParser();
+  }
 
-    @Test
-    void shouldParseConditionalRedact() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseConditionalRedact() {
+    var doc =
+        Document.parse(
+            """
             {
                 "$cond": {
                     "if": {"$eq": ["$level", 5]},
@@ -34,23 +37,25 @@ class RedactStageParserTest {
             }
             """);
 
-        RedactStage stage = parser.parse(doc);
+    RedactStage stage = parser.parse(doc);
 
-        assertThat(stage).isNotNull();
-        assertThat(stage.getExpression()).isNotNull();
-    }
+    assertThat(stage).isNotNull();
+    assertThat(stage.getExpression()).isNotNull();
+  }
 
-    @Test
-    void shouldParseDirectSystemVariable() {
-        RedactStage stage = parser.parse("$$KEEP");
+  @Test
+  void shouldParseDirectSystemVariable() {
+    RedactStage stage = parser.parse("$$KEEP");
 
-        assertThat(stage).isNotNull();
-        assertThat(stage.getExpression()).isNotNull();
-    }
+    assertThat(stage).isNotNull();
+    assertThat(stage.getExpression()).isNotNull();
+  }
 
-    @Test
-    void shouldReturnCorrectOperatorName() {
-        var doc = Document.parse("""
+  @Test
+  void shouldReturnCorrectOperatorName() {
+    var doc =
+        Document.parse(
+            """
             {
                 "$cond": {
                     "if": {"$eq": ["$status", "public"]},
@@ -60,22 +65,22 @@ class RedactStageParserTest {
             }
             """);
 
-        RedactStage stage = parser.parse(doc);
+    RedactStage stage = parser.parse(doc);
 
-        assertThat(stage.getOperatorName()).isEqualTo("$redact");
-    }
+    assertThat(stage.getOperatorName()).isEqualTo("$redact");
+  }
 
-    @Test
-    void shouldThrowOnInvalidValue() {
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(123))
-            .withMessageContaining("$redact");
-    }
+  @Test
+  void shouldThrowOnInvalidValue() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(123))
+        .withMessageContaining("$redact");
+  }
 
-    @Test
-    void shouldThrowOnNullValue() {
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(null))
-            .withMessageContaining("$redact");
-    }
+  @Test
+  void shouldThrowOnNullValue() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(null))
+        .withMessageContaining("$redact");
+  }
 }

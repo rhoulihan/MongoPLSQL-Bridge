@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.ast.expression;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,249 +16,200 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class ComparisonExpressionTest {
 
-    private DefaultSqlGenerationContext context;
+  private DefaultSqlGenerationContext context;
 
-    @BeforeEach
-    void setUp() {
-        context = new DefaultSqlGenerationContext();
-    }
+  @BeforeEach
+  void setUp() {
+    context = new DefaultSqlGenerationContext();
+  }
 
-    @ParameterizedTest
-    @CsvSource({
-        "EQ, =",
-        "NE, <>",
-        "GT, >",
-        "GTE, >=",
-        "LT, <",
-        "LTE, <="
-    })
-    void shouldRenderComparisonOperator(ComparisonOp op, String expectedSql) {
-        var expr = new ComparisonExpression(
-            op,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
+  @ParameterizedTest
+  @CsvSource({"EQ, =", "NE, <>", "GT, >", "GTE, >=", "LT, <", "LTE, <="})
+  void shouldRenderComparisonOperator(ComparisonOp op, String expectedSql) {
+    var expr =
+        new ComparisonExpression(
+            op, FieldPathExpression.of("status"), LiteralExpression.of("active"));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql()).contains(expectedSql);
-    }
+    assertThat(context.toSql()).contains(expectedSql);
+  }
 
-    @Test
-    void shouldRenderFieldPathEquality() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
+  @Test
+  void shouldRenderFieldPathEquality() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.status') = :1");
-        assertThat(context.getBindVariables()).containsExactly("active");
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status') = :1");
+    assertThat(context.getBindVariables()).containsExactly("active");
+  }
 
-    @Test
-    void shouldRenderNumericComparison() {
-        var expr = new ComparisonExpression(
+  @Test
+  void shouldRenderNumericComparison() {
+    var expr =
+        new ComparisonExpression(
             ComparisonOp.GT,
             FieldPathExpression.of("age", JsonReturnType.NUMBER),
-            LiteralExpression.of(21)
-        );
+            LiteralExpression.of(21));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.age' RETURNING NUMBER) > :1");
-        assertThat(context.getBindVariables()).containsExactly(21);
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.age' RETURNING NUMBER) > :1");
+    assertThat(context.getBindVariables()).containsExactly(21);
+  }
 
-    @Test
-    void shouldRenderNestedFieldComparison() {
-        var expr = new ComparisonExpression(
+  @Test
+  void shouldRenderNestedFieldComparison() {
+    var expr =
+        new ComparisonExpression(
             ComparisonOp.EQ,
             FieldPathExpression.of("customer.address.city"),
-            LiteralExpression.of("New York")
-        );
+            LiteralExpression.of("New York"));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.customer.address.city') = :1");
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.customer.address.city') = :1");
+  }
 
-    @Test
-    void shouldHandleNullEqualityComparison() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("deletedAt"),
-            LiteralExpression.ofNull()
-        );
+  @Test
+  void shouldHandleNullEqualityComparison() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NULL");
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NULL");
+  }
 
-    @Test
-    void shouldHandleNullInequalityComparison() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.NE,
-            FieldPathExpression.of("deletedAt"),
-            LiteralExpression.ofNull()
-        );
+  @Test
+  void shouldHandleNullInequalityComparison() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.NE, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NOT NULL");
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NOT NULL");
+  }
 
-    @Test
-    void shouldReturnOperator() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.GT,
-            FieldPathExpression.of("amount"),
-            LiteralExpression.of(100)
-        );
+  @Test
+  void shouldReturnOperator() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.GT, FieldPathExpression.of("amount"), LiteralExpression.of(100));
 
-        assertThat(expr.getOp()).isEqualTo(ComparisonOp.GT);
-    }
+    assertThat(expr.getOp()).isEqualTo(ComparisonOp.GT);
+  }
 
-    @Test
-    void shouldReturnLeftExpression() {
-        var left = FieldPathExpression.of("status");
-        var expr = new ComparisonExpression(
-            ComparisonOp.EQ,
-            left,
-            LiteralExpression.of("active")
-        );
+  @Test
+  void shouldReturnLeftExpression() {
+    var left = FieldPathExpression.of("status");
+    var expr = new ComparisonExpression(ComparisonOp.EQ, left, LiteralExpression.of("active"));
 
-        assertThat(expr.getLeft()).isEqualTo(left);
-    }
+    assertThat(expr.getLeft()).isEqualTo(left);
+  }
 
-    @Test
-    void shouldReturnRightExpression() {
-        var right = LiteralExpression.of("active");
-        var expr = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            right
-        );
+  @Test
+  void shouldReturnRightExpression() {
+    var right = LiteralExpression.of("active");
+    var expr = new ComparisonExpression(ComparisonOp.EQ, FieldPathExpression.of("status"), right);
 
-        assertThat(expr.getRight()).isEqualTo(right);
-    }
+    assertThat(expr.getRight()).isEqualTo(right);
+  }
 
-    @Test
-    void shouldRenderLessThanOrEqual() {
-        var expr = new ComparisonExpression(
+  @Test
+  void shouldRenderLessThanOrEqual() {
+    var expr =
+        new ComparisonExpression(
             ComparisonOp.LTE,
             FieldPathExpression.of("price", JsonReturnType.NUMBER),
-            LiteralExpression.of(99.99)
-        );
+            LiteralExpression.of(99.99));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .isEqualTo("JSON_VALUE(data, '$.price' RETURNING NUMBER) <= :1");
-    }
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.price' RETURNING NUMBER) <= :1");
+  }
 
-    @Test
-    void shouldProvideReadableToString() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
+  @Test
+  void shouldProvideReadableToString() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
 
-        assertThat(expr.toString()).contains("EQ");
-    }
+    assertThat(expr.toString()).contains("EQ");
+  }
 
-    @Test
-    void shouldRenderInOperator() {
-        var expr = new ComparisonExpression(
+  @Test
+  void shouldRenderInOperator() {
+    var expr =
+        new ComparisonExpression(
             ComparisonOp.IN,
             FieldPathExpression.of("status"),
-            LiteralExpression.of(java.util.List.of("active", "pending", "approved"))
-        );
+            LiteralExpression.of(java.util.List.of("active", "pending", "approved")));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .contains("IN (")
-            .contains(":1, :2, :3");
-        assertThat(context.getBindVariables()).containsExactly("active", "pending", "approved");
-    }
+    assertThat(context.toSql()).contains("IN (").contains(":1, :2, :3");
+    assertThat(context.getBindVariables()).containsExactly("active", "pending", "approved");
+  }
 
-    @Test
-    void shouldRenderNinOperator() {
-        var expr = new ComparisonExpression(
+  @Test
+  void shouldRenderNinOperator() {
+    var expr =
+        new ComparisonExpression(
             ComparisonOp.NIN,
             FieldPathExpression.of("status"),
-            LiteralExpression.of(java.util.List.of("deleted", "archived"))
-        );
+            LiteralExpression.of(java.util.List.of("deleted", "archived")));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .contains("NOT IN (")
-            .contains(":1, :2");
-        assertThat(context.getBindVariables()).containsExactly("deleted", "archived");
-    }
+    assertThat(context.toSql()).contains("NOT IN (").contains(":1, :2");
+    assertThat(context.getBindVariables()).containsExactly("deleted", "archived");
+  }
 
-    @Test
-    void shouldThrowOnInvalidNullComparison() {
-        var expr = new ComparisonExpression(
-            ComparisonOp.GT,
-            FieldPathExpression.of("amount"),
-            LiteralExpression.ofNull()
-        );
+  @Test
+  void shouldThrowOnInvalidNullComparison() {
+    var expr =
+        new ComparisonExpression(
+            ComparisonOp.GT, FieldPathExpression.of("amount"), LiteralExpression.ofNull());
 
-        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> expr.render(context)))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Invalid NULL comparison");
-    }
+    assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> expr.render(context)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Invalid NULL comparison");
+  }
 
-    @Test
-    void shouldImplementEquals() {
-        var expr1 = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
-        var expr2 = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
-        var expr3 = new ComparisonExpression(
-            ComparisonOp.NE,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
+  @Test
+  void shouldImplementEquals() {
+    var expr1 =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+    var expr2 =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+    var expr3 =
+        new ComparisonExpression(
+            ComparisonOp.NE, FieldPathExpression.of("status"), LiteralExpression.of("active"));
 
-        assertThat(expr1).isEqualTo(expr2);
-        assertThat(expr1).isNotEqualTo(expr3);
-        assertThat(expr1).isNotEqualTo(null);
-        assertThat(expr1).isNotEqualTo("not a comparison");
-        assertThat(expr1).isEqualTo(expr1); // same instance
-    }
+    assertThat(expr1).isEqualTo(expr2);
+    assertThat(expr1).isNotEqualTo(expr3);
+    assertThat(expr1).isNotEqualTo(null);
+    assertThat(expr1).isNotEqualTo("not a comparison");
+    assertThat(expr1).isEqualTo(expr1); // same instance
+  }
 
-    @Test
-    void shouldImplementHashCode() {
-        var expr1 = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
-        var expr2 = new ComparisonExpression(
-            ComparisonOp.EQ,
-            FieldPathExpression.of("status"),
-            LiteralExpression.of("active")
-        );
+  @Test
+  void shouldImplementHashCode() {
+    var expr1 =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+    var expr2 =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
 
-        assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
-    }
+    assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
+  }
 }

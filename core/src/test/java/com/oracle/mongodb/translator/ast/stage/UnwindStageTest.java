@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.ast.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,97 +15,97 @@ import org.junit.jupiter.api.Test;
 
 class UnwindStageTest {
 
-    private DefaultSqlGenerationContext context;
+  private DefaultSqlGenerationContext context;
 
-    @BeforeEach
-    void setUp() {
-        context = new DefaultSqlGenerationContext();
-    }
+  @BeforeEach
+  void setUp() {
+    context = new DefaultSqlGenerationContext();
+  }
 
-    @Test
-    void shouldCreateUnwindWithPath() {
-        var stage = new UnwindStage("items");
+  @Test
+  void shouldCreateUnwindWithPath() {
+    var stage = new UnwindStage("items");
 
-        assertThat(stage.getPath()).isEqualTo("items");
-        assertThat(stage.getIncludeArrayIndex()).isNull();
-        assertThat(stage.isPreserveNullAndEmptyArrays()).isFalse();
-    }
+    assertThat(stage.getPath()).isEqualTo("items");
+    assertThat(stage.getIncludeArrayIndex()).isNull();
+    assertThat(stage.isPreserveNullAndEmptyArrays()).isFalse();
+  }
 
-    @Test
-    void shouldCreateUnwindWithAllOptions() {
-        var stage = new UnwindStage("items", "itemIndex", true);
+  @Test
+  void shouldCreateUnwindWithAllOptions() {
+    var stage = new UnwindStage("items", "itemIndex", true);
 
-        assertThat(stage.getPath()).isEqualTo("items");
-        assertThat(stage.getIncludeArrayIndex()).isEqualTo("itemIndex");
-        assertThat(stage.isPreserveNullAndEmptyArrays()).isTrue();
-    }
+    assertThat(stage.getPath()).isEqualTo("items");
+    assertThat(stage.getIncludeArrayIndex()).isEqualTo("itemIndex");
+    assertThat(stage.isPreserveNullAndEmptyArrays()).isTrue();
+  }
 
-    @Test
-    void shouldReturnOperatorName() {
-        var stage = new UnwindStage("items");
+  @Test
+  void shouldReturnOperatorName() {
+    var stage = new UnwindStage("items");
 
-        assertThat(stage.getOperatorName()).isEqualTo("$unwind");
-    }
+    assertThat(stage.getOperatorName()).isEqualTo("$unwind");
+  }
 
-    @Test
-    void shouldRenderJsonTable() {
-        var stage = new UnwindStage("items");
+  @Test
+  void shouldRenderJsonTable() {
+    var stage = new UnwindStage("items");
 
-        stage.render(context);
+    stage.render(context);
 
-        String sql = context.toSql();
-        assertThat(sql).contains("JSON_TABLE");
-        assertThat(sql).contains("$.items[*]");
-        assertThat(sql).contains("COLUMNS");
-    }
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.items[*]");
+    assertThat(sql).contains("COLUMNS");
+  }
 
-    @Test
-    void shouldRenderNestedPath() {
-        var stage = new UnwindStage("order.items");
+  @Test
+  void shouldRenderNestedPath() {
+    var stage = new UnwindStage("order.items");
 
-        stage.render(context);
+    stage.render(context);
 
-        String sql = context.toSql();
-        assertThat(sql).contains("$.order.items[*]");
-    }
+    String sql = context.toSql();
+    assertThat(sql).contains("$.order.items[*]");
+  }
 
-    @Test
-    void shouldRenderWithArrayIndex() {
-        var stage = new UnwindStage("items", "idx", false);
+  @Test
+  void shouldRenderWithArrayIndex() {
+    var stage = new UnwindStage("items", "idx", false);
 
-        stage.render(context);
+    stage.render(context);
 
-        String sql = context.toSql();
-        assertThat(sql).contains("FOR ORDINALITY");
-        assertThat(sql).contains("idx");
-    }
+    String sql = context.toSql();
+    assertThat(sql).contains("FOR ORDINALITY");
+    assertThat(sql).contains("idx");
+  }
 
-    @Test
-    void shouldRenderWithPreserveNullAndEmptyArrays() {
-        var stage = new UnwindStage("items", null, true);
+  @Test
+  void shouldRenderWithPreserveNullAndEmptyArrays() {
+    var stage = new UnwindStage("items", null, true);
 
-        stage.render(context);
+    stage.render(context);
 
-        String sql = context.toSql();
-        // Oracle uses OUTER for preserving nulls
-        assertThat(sql).containsIgnoringCase("ERROR ON ERROR");
-    }
+    String sql = context.toSql();
+    // Oracle uses OUTER for preserving nulls
+    assertThat(sql).containsIgnoringCase("ERROR ON ERROR");
+  }
 
-    @Test
-    void shouldThrowOnNullPath() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new UnwindStage(null))
-            .withMessageContaining("path");
-    }
+  @Test
+  void shouldThrowOnNullPath() {
+    assertThatNullPointerException()
+        .isThrownBy(() -> new UnwindStage(null))
+        .withMessageContaining("path");
+  }
 
-    @Test
-    void shouldProvideReadableToString() {
-        var stage = new UnwindStage("items", "idx", true);
+  @Test
+  void shouldProvideReadableToString() {
+    var stage = new UnwindStage("items", "idx", true);
 
-        assertThat(stage.toString())
-            .contains("UnwindStage")
-            .contains("items")
-            .contains("idx")
-            .contains("true");
-    }
+    assertThat(stage.toString())
+        .contains("UnwindStage")
+        .contains("items")
+        .contains("idx")
+        .contains("true");
+  }
 }

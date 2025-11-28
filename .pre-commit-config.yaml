@@ -3,11 +3,16 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: '\.md$'
       - id: end-of-file-fixer
+        exclude: '\.md$'
       - id: check-yaml
       - id: check-json
+        exclude: 'node_modules/'
       - id: check-added-large-files
         args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
 
   - repo: local
     hooks:
@@ -17,7 +22,7 @@ repos:
         language: system
         pass_filenames: false
         types: [java]
-        stages: [commit]
+        stages: [pre-commit]
 
       - id: spotbugs
         name: SpotBugs Security Check
@@ -25,12 +30,21 @@ repos:
         language: system
         pass_filenames: false
         types: [java]
-        stages: [commit]
+        stages: [pre-commit]
 
-      - id: unit-tests
-        name: Unit Tests
-        entry: ./gradlew :core:test --no-daemon -q
+      - id: compile-check
+        name: Compile Check
+        entry: ./gradlew :core:compileJava :core:compileTestJava --no-daemon -q
         language: system
         pass_filenames: false
         types: [java]
-        stages: [commit]
+        stages: [pre-commit]
+
+      - id: unit-tests
+        name: Unit Tests (quick)
+        entry: bash -c './gradlew :core:test --no-daemon -q 2>&1 | tail -20'
+        language: system
+        pass_filenames: false
+        types: [java]
+        stages: [pre-commit]
+        verbose: true

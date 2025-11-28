@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,16 +16,18 @@ import org.junit.jupiter.api.Test;
 
 class GraphLookupStageParserTest {
 
-    private GraphLookupStageParser parser;
+  private GraphLookupStageParser parser;
 
-    @BeforeEach
-    void setUp() {
-        parser = new GraphLookupStageParser();
-    }
+  @BeforeEach
+  void setUp() {
+    parser = new GraphLookupStageParser();
+  }
 
-    @Test
-    void shouldParseBasicGraphLookup() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseBasicGraphLookup() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -34,20 +37,22 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getFrom()).isEqualTo("employees");
-        assertThat(stage.getStartWith()).isEqualTo("$reportsTo");
-        assertThat(stage.getConnectFromField()).isEqualTo("reportsTo");
-        assertThat(stage.getConnectToField()).isEqualTo("name");
-        assertThat(stage.getAs()).isEqualTo("reportingHierarchy");
-        assertThat(stage.getMaxDepth()).isNull();
-        assertThat(stage.getDepthField()).isNull();
-    }
+    assertThat(stage.getFrom()).isEqualTo("employees");
+    assertThat(stage.getStartWith()).isEqualTo("$reportsTo");
+    assertThat(stage.getConnectFromField()).isEqualTo("reportsTo");
+    assertThat(stage.getConnectToField()).isEqualTo("name");
+    assertThat(stage.getAs()).isEqualTo("reportingHierarchy");
+    assertThat(stage.getMaxDepth()).isNull();
+    assertThat(stage.getDepthField()).isNull();
+  }
 
-    @Test
-    void shouldParseWithMaxDepth() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithMaxDepth() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "categories",
                 "startWith": "$parentCategory",
@@ -58,14 +63,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getMaxDepth()).isEqualTo(5);
-    }
+    assertThat(stage.getMaxDepth()).isEqualTo(5);
+  }
 
-    @Test
-    void shouldParseWithDepthField() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithDepthField() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$managerId",
@@ -76,14 +83,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getDepthField()).isEqualTo("level");
-    }
+    assertThat(stage.getDepthField()).isEqualTo("level");
+  }
 
-    @Test
-    void shouldParseWithAllOptionalFields() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithAllOptionalFields() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "nodes",
                 "startWith": "$parentId",
@@ -95,20 +104,22 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getFrom()).isEqualTo("nodes");
-        assertThat(stage.getStartWith()).isEqualTo("$parentId");
-        assertThat(stage.getConnectFromField()).isEqualTo("parentId");
-        assertThat(stage.getConnectToField()).isEqualTo("_id");
-        assertThat(stage.getAs()).isEqualTo("path");
-        assertThat(stage.getMaxDepth()).isEqualTo(10);
-        assertThat(stage.getDepthField()).isEqualTo("depth");
-    }
+    assertThat(stage.getFrom()).isEqualTo("nodes");
+    assertThat(stage.getStartWith()).isEqualTo("$parentId");
+    assertThat(stage.getConnectFromField()).isEqualTo("parentId");
+    assertThat(stage.getConnectToField()).isEqualTo("_id");
+    assertThat(stage.getAs()).isEqualTo("path");
+    assertThat(stage.getMaxDepth()).isEqualTo(10);
+    assertThat(stage.getDepthField()).isEqualTo("depth");
+  }
 
-    @Test
-    void shouldHandleIntegerMaxDepth() {
-        var doc = Document.parse("""
+  @Test
+  void shouldHandleIntegerMaxDepth() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "tree",
                 "startWith": "$parent",
@@ -119,14 +130,15 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getMaxDepth()).isEqualTo(3);
-    }
+    assertThat(stage.getMaxDepth()).isEqualTo(3);
+  }
 
-    @Test
-    void shouldHandleDoubleMaxDepth() {
-        var doc = new Document()
+  @Test
+  void shouldHandleDoubleMaxDepth() {
+    var doc =
+        new Document()
             .append("from", "tree")
             .append("startWith", "$parent")
             .append("connectFromField", "parent")
@@ -134,30 +146,33 @@ class GraphLookupStageParserTest {
             .append("as", "ancestors")
             .append("maxDepth", 7.0);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getMaxDepth()).isEqualTo(7);
-    }
+    assertThat(stage.getMaxDepth()).isEqualTo(7);
+  }
 
-    @Test
-    void shouldHandleNonStringStartWith() {
-        // When startWith is not a string (e.g., an expression document), convert to string
-        var doc = new Document()
+  @Test
+  void shouldHandleNonStringStartWith() {
+    // When startWith is not a string (e.g., an expression document), convert to string
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", new Document("$literal", "CEO"))
             .append("connectFromField", "reportsTo")
             .append("connectToField", "name")
             .append("as", "hierarchy");
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        // Non-string startWith should be converted to string representation
-        assertThat(stage.getStartWith()).contains("literal");
-    }
+    // Non-string startWith should be converted to string representation
+    assertThat(stage.getStartWith()).contains("literal");
+  }
 
-    @Test
-    void shouldThrowOnMissingFrom() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingFrom() {
+    var doc =
+        Document.parse(
+            """
             {
                 "startWith": "$reportsTo",
                 "connectFromField": "reportsTo",
@@ -166,14 +181,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("from");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("from");
+  }
 
-    @Test
-    void shouldThrowOnMissingStartWith() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingStartWith() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "connectFromField": "reportsTo",
@@ -182,14 +199,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("startWith");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("startWith");
+  }
 
-    @Test
-    void shouldThrowOnMissingConnectFromField() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingConnectFromField() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -198,14 +217,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("connectFromField");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("connectFromField");
+  }
 
-    @Test
-    void shouldThrowOnMissingConnectToField() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingConnectToField() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -214,14 +235,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("connectToField");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("connectToField");
+  }
 
-    @Test
-    void shouldThrowOnMissingAs() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingAs() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -230,74 +253,80 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("as");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("as");
+  }
 
-    @Test
-    void shouldThrowOnNonStringFrom() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonStringFrom() {
+    var doc =
+        new Document()
             .append("from", 123)
             .append("startWith", "$reportsTo")
             .append("connectFromField", "reportsTo")
             .append("connectToField", "name")
             .append("as", "hierarchy");
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("from")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("from")
+        .withMessageContaining("string");
+  }
 
-    @Test
-    void shouldThrowOnNonStringConnectFromField() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonStringConnectFromField() {
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", "$reportsTo")
             .append("connectFromField", 123)
             .append("connectToField", "name")
             .append("as", "hierarchy");
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("connectFromField")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("connectFromField")
+        .withMessageContaining("string");
+  }
 
-    @Test
-    void shouldThrowOnNonStringConnectToField() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonStringConnectToField() {
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", "$reportsTo")
             .append("connectFromField", "reportsTo")
             .append("connectToField", 123)
             .append("as", "hierarchy");
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("connectToField")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("connectToField")
+        .withMessageContaining("string");
+  }
 
-    @Test
-    void shouldThrowOnNonStringAs() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonStringAs() {
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", "$reportsTo")
             .append("connectFromField", "reportsTo")
             .append("connectToField", "name")
             .append("as", 123);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("as")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("as")
+        .withMessageContaining("string");
+  }
 
-    @Test
-    void shouldThrowOnNonNumericMaxDepth() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonNumericMaxDepth() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -308,15 +337,16 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("maxDepth")
-            .withMessageContaining("number");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("maxDepth")
+        .withMessageContaining("number");
+  }
 
-    @Test
-    void shouldThrowOnNonStringDepthField() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonStringDepthField() {
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", "$reportsTo")
             .append("connectFromField", "reportsTo")
@@ -324,15 +354,17 @@ class GraphLookupStageParserTest {
             .append("as", "hierarchy")
             .append("depthField", 123);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("depthField")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("depthField")
+        .withMessageContaining("string");
+  }
 
-    @Test
-    void shouldReturnCorrectOperatorName() {
-        var doc = Document.parse("""
+  @Test
+  void shouldReturnCorrectOperatorName() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -342,16 +374,18 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getOperatorName()).isEqualTo("$graphLookup");
-    }
+    assertThat(stage.getOperatorName()).isEqualTo("$graphLookup");
+  }
 
-    // restrictSearchWithMatch tests
+  // restrictSearchWithMatch tests
 
-    @Test
-    void shouldParseWithRestrictSearchWithMatch() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithRestrictSearchWithMatch() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -364,15 +398,17 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
-        assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
-    }
+    assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+    assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
+  }
 
-    @Test
-    void shouldParseWithComplexRestrictSearchWithMatch() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithComplexRestrictSearchWithMatch() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$reportsTo",
@@ -386,16 +422,18 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
-        assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
-        assertThat(stage.getRestrictSearchWithMatch().get("department")).isNotNull();
-    }
+    assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+    assertThat(stage.getRestrictSearchWithMatch().getString("status")).isEqualTo("active");
+    assertThat(stage.getRestrictSearchWithMatch().get("department")).isNotNull();
+  }
 
-    @Test
-    void shouldParseWithAllOptionsIncludingRestrictSearchWithMatch() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithAllOptionsIncludingRestrictSearchWithMatch() {
+    var doc =
+        Document.parse(
+            """
             {
                 "from": "employees",
                 "startWith": "$managerId",
@@ -410,18 +448,19 @@ class GraphLookupStageParserTest {
             }
             """);
 
-        GraphLookupStage stage = parser.parse(doc);
+    GraphLookupStage stage = parser.parse(doc);
 
-        assertThat(stage.getFrom()).isEqualTo("employees");
-        assertThat(stage.getMaxDepth()).isEqualTo(5);
-        assertThat(stage.getDepthField()).isEqualTo("level");
-        assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
-        assertThat(stage.getRestrictSearchWithMatch().getBoolean("active")).isTrue();
-    }
+    assertThat(stage.getFrom()).isEqualTo("employees");
+    assertThat(stage.getMaxDepth()).isEqualTo(5);
+    assertThat(stage.getDepthField()).isEqualTo("level");
+    assertThat(stage.getRestrictSearchWithMatch()).isNotNull();
+    assertThat(stage.getRestrictSearchWithMatch().getBoolean("active")).isTrue();
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentRestrictSearchWithMatch() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnNonDocumentRestrictSearchWithMatch() {
+    var doc =
+        new Document()
             .append("from", "employees")
             .append("startWith", "$reportsTo")
             .append("connectFromField", "reportsTo")
@@ -429,9 +468,9 @@ class GraphLookupStageParserTest {
             .append("as", "hierarchy")
             .append("restrictSearchWithMatch", "invalid");
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("restrictSearchWithMatch")
-            .withMessageContaining("document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("restrictSearchWithMatch")
+        .withMessageContaining("document");
+  }
 }

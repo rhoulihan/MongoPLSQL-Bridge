@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.ast.expression;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,173 +16,164 @@ import org.junit.jupiter.api.Test;
 
 class ConditionalExpressionTest {
 
-    private DefaultSqlGenerationContext context;
+  private DefaultSqlGenerationContext context;
 
-    @BeforeEach
-    void setUp() {
-        context = new DefaultSqlGenerationContext();
-    }
+  @BeforeEach
+  void setUp() {
+    context = new DefaultSqlGenerationContext();
+  }
 
-    @Test
-    void shouldRenderCondExpression() {
-        // { $cond: [ { $gt: ["$qty", 250] }, 30, 20 ] }
-        var condition = new ComparisonExpression(
+  @Test
+  void shouldRenderCondExpression() {
+    // { $cond: [ { $gt: ["$qty", 250] }, 30, 20 ] }
+    var condition =
+        new ComparisonExpression(
             ComparisonOp.GT,
             FieldPathExpression.of("qty", JsonReturnType.NUMBER),
-            LiteralExpression.of(250)
-        );
-        var expr = ConditionalExpression.cond(
-            condition,
-            LiteralExpression.of(30),
-            LiteralExpression.of(20)
-        );
+            LiteralExpression.of(250));
+    var expr =
+        ConditionalExpression.cond(condition, LiteralExpression.of(30), LiteralExpression.of(20));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .startsWith("CASE WHEN ")
-            .contains(" THEN ")
-            .contains(" ELSE ")
-            .endsWith(" END");
-    }
+    assertThat(context.toSql())
+        .startsWith("CASE WHEN ")
+        .contains(" THEN ")
+        .contains(" ELSE ")
+        .endsWith(" END");
+  }
 
-    @Test
-    void shouldRenderIfNullExpression() {
-        // { $ifNull: [ "$description", "No description" ] }
-        var expr = ConditionalExpression.ifNull(
-            FieldPathExpression.of("description"),
-            LiteralExpression.of("No description")
-        );
+  @Test
+  void shouldRenderIfNullExpression() {
+    // { $ifNull: [ "$description", "No description" ] }
+    var expr =
+        ConditionalExpression.ifNull(
+            FieldPathExpression.of("description"), LiteralExpression.of("No description"));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .startsWith("NVL(")
-            .contains("$.description")
-            .endsWith(")");
-    }
+    assertThat(context.toSql()).startsWith("NVL(").contains("$.description").endsWith(")");
+  }
 
-    @Test
-    void shouldRenderNestedConditional() {
-        // { $cond: [ condition1, { $cond: [ condition2, a, b ] }, c ] }
-        var innerCond = ConditionalExpression.cond(
-            new ComparisonExpression(ComparisonOp.EQ,
-                FieldPathExpression.of("type"), LiteralExpression.of("A")),
+  @Test
+  void shouldRenderNestedConditional() {
+    // { $cond: [ condition1, { $cond: [ condition2, a, b ] }, c ] }
+    var innerCond =
+        ConditionalExpression.cond(
+            new ComparisonExpression(
+                ComparisonOp.EQ, FieldPathExpression.of("type"), LiteralExpression.of("A")),
             LiteralExpression.of(1),
-            LiteralExpression.of(2)
-        );
+            LiteralExpression.of(2));
 
-        var outerCond = ConditionalExpression.cond(
-            new ComparisonExpression(ComparisonOp.GT,
-                FieldPathExpression.of("qty", JsonReturnType.NUMBER), LiteralExpression.of(100)),
+    var outerCond =
+        ConditionalExpression.cond(
+            new ComparisonExpression(
+                ComparisonOp.GT,
+                FieldPathExpression.of("qty", JsonReturnType.NUMBER),
+                LiteralExpression.of(100)),
             innerCond,
-            LiteralExpression.of(0)
-        );
+            LiteralExpression.of(0));
 
-        outerCond.render(context);
+    outerCond.render(context);
 
-        assertThat(context.toSql())
-            .contains("CASE WHEN")
-            .contains("THEN CASE WHEN"); // nested
-    }
+    assertThat(context.toSql()).contains("CASE WHEN").contains("THEN CASE WHEN"); // nested
+  }
 
-    @Test
-    void shouldRenderCondWithFieldExpressions() {
-        var expr = ConditionalExpression.cond(
-            new ComparisonExpression(ComparisonOp.EQ,
-                FieldPathExpression.of("status"), LiteralExpression.of("active")),
+  @Test
+  void shouldRenderCondWithFieldExpressions() {
+    var expr =
+        ConditionalExpression.cond(
+            new ComparisonExpression(
+                ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active")),
             FieldPathExpression.of("activePrice", JsonReturnType.NUMBER),
-            FieldPathExpression.of("defaultPrice", JsonReturnType.NUMBER)
-        );
+            FieldPathExpression.of("defaultPrice", JsonReturnType.NUMBER));
 
-        expr.render(context);
+    expr.render(context);
 
-        assertThat(context.toSql())
-            .contains("$.status")
-            .contains("$.activePrice")
-            .contains("$.defaultPrice");
-    }
+    assertThat(context.toSql())
+        .contains("$.status")
+        .contains("$.activePrice")
+        .contains("$.defaultPrice");
+  }
 
-    @Test
-    void shouldReturnCondType() {
-        var expr = ConditionalExpression.cond(
-            new ComparisonExpression(ComparisonOp.EQ,
-                FieldPathExpression.of("x"), LiteralExpression.of(1)),
+  @Test
+  void shouldReturnCondType() {
+    var expr =
+        ConditionalExpression.cond(
+            new ComparisonExpression(
+                ComparisonOp.EQ, FieldPathExpression.of("x"), LiteralExpression.of(1)),
             LiteralExpression.of(1),
-            LiteralExpression.of(0)
-        );
+            LiteralExpression.of(0));
 
-        assertThat(expr.getType()).isEqualTo(ConditionalType.COND);
-    }
+    assertThat(expr.getType()).isEqualTo(ConditionalType.COND);
+  }
 
-    @Test
-    void shouldReturnIfNullType() {
-        var expr = ConditionalExpression.ifNull(
-            FieldPathExpression.of("field"),
-            LiteralExpression.of("default")
-        );
+  @Test
+  void shouldReturnIfNullType() {
+    var expr =
+        ConditionalExpression.ifNull(
+            FieldPathExpression.of("field"), LiteralExpression.of("default"));
 
-        assertThat(expr.getType()).isEqualTo(ConditionalType.IF_NULL);
-    }
+    assertThat(expr.getType()).isEqualTo(ConditionalType.IF_NULL);
+  }
 
-    @Test
-    void shouldReturnCondition() {
-        var condition = new ComparisonExpression(ComparisonOp.EQ,
-            FieldPathExpression.of("x"), LiteralExpression.of(1));
-        var expr = ConditionalExpression.cond(condition,
-            LiteralExpression.of(1), LiteralExpression.of(0));
+  @Test
+  void shouldReturnCondition() {
+    var condition =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("x"), LiteralExpression.of(1));
+    var expr =
+        ConditionalExpression.cond(condition, LiteralExpression.of(1), LiteralExpression.of(0));
 
-        assertThat(expr.getCondition()).isEqualTo(condition);
-    }
+    assertThat(expr.getCondition()).isEqualTo(condition);
+  }
 
-    @Test
-    void shouldReturnNullConditionForIfNull() {
-        var expr = ConditionalExpression.ifNull(
-            FieldPathExpression.of("field"),
-            LiteralExpression.of("default")
-        );
+  @Test
+  void shouldReturnNullConditionForIfNull() {
+    var expr =
+        ConditionalExpression.ifNull(
+            FieldPathExpression.of("field"), LiteralExpression.of("default"));
 
-        assertThat(expr.getCondition()).isNull();
-    }
+    assertThat(expr.getCondition()).isNull();
+  }
 
-    @Test
-    void shouldProvideReadableToStringForCond() {
-        var expr = ConditionalExpression.cond(
-            new ComparisonExpression(ComparisonOp.EQ,
-                FieldPathExpression.of("x"), LiteralExpression.of(1)),
+  @Test
+  void shouldProvideReadableToStringForCond() {
+    var expr =
+        ConditionalExpression.cond(
+            new ComparisonExpression(
+                ComparisonOp.EQ, FieldPathExpression.of("x"), LiteralExpression.of(1)),
             LiteralExpression.of(1),
-            LiteralExpression.of(0)
-        );
+            LiteralExpression.of(0));
 
-        assertThat(expr.toString()).contains("Cond");
-    }
+    assertThat(expr.toString()).contains("Cond");
+  }
 
-    @Test
-    void shouldProvideReadableToStringForIfNull() {
-        var expr = ConditionalExpression.ifNull(
-            FieldPathExpression.of("field"),
-            LiteralExpression.of("default")
-        );
+  @Test
+  void shouldProvideReadableToStringForIfNull() {
+    var expr =
+        ConditionalExpression.ifNull(
+            FieldPathExpression.of("field"), LiteralExpression.of("default"));
 
-        assertThat(expr.toString()).contains("IfNull");
-    }
+    assertThat(expr.toString()).contains("IfNull");
+  }
 
-    @Test
-    void shouldMapConditionalTypeFromMongo() {
-        assertThat(ConditionalType.fromMongo("$cond")).isEqualTo(ConditionalType.COND);
-        assertThat(ConditionalType.fromMongo("$ifNull")).isEqualTo(ConditionalType.IF_NULL);
-    }
+  @Test
+  void shouldMapConditionalTypeFromMongo() {
+    assertThat(ConditionalType.fromMongo("$cond")).isEqualTo(ConditionalType.COND);
+    assertThat(ConditionalType.fromMongo("$ifNull")).isEqualTo(ConditionalType.IF_NULL);
+  }
 
-    @Test
-    void shouldThrowForUnknownConditionalOperator() {
-        assertThatThrownBy(() -> ConditionalType.fromMongo("$unknown"))
-            .isInstanceOf(IllegalArgumentException.class);
-    }
+  @Test
+  void shouldThrowForUnknownConditionalOperator() {
+    assertThatThrownBy(() -> ConditionalType.fromMongo("$unknown"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 
-    @Test
-    void shouldDetectConditionalOperator() {
-        assertThat(ConditionalType.isConditional("$cond")).isTrue();
-        assertThat(ConditionalType.isConditional("$ifNull")).isTrue();
-        assertThat(ConditionalType.isConditional("$eq")).isFalse();
-    }
+  @Test
+  void shouldDetectConditionalOperator() {
+    assertThat(ConditionalType.isConditional("$cond")).isTrue();
+    assertThat(ConditionalType.isConditional("$ifNull")).isTrue();
+    assertThat(ConditionalType.isConditional("$eq")).isFalse();
+  }
 }

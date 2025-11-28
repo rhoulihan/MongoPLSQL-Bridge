@@ -13,8 +13,9 @@ dependencies {
     // JSON processing
     implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
 
-    // Annotations
+    // Annotations (needed for both main and test compilation)
     compileOnly("com.github.spotbugs:spotbugs-annotations:4.8.3")
+    testCompileOnly("com.github.spotbugs:spotbugs-annotations:4.8.3")
 
     // Testing
     testImplementation(platform("org.junit:junit-bom:5.10.1"))

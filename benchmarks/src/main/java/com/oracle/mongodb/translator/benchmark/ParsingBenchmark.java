@@ -3,24 +3,33 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.benchmark;
 
 import com.oracle.mongodb.translator.parser.ExpressionParser;
 import com.oracle.mongodb.translator.parser.PipelineParser;
 import com.oracle.mongodb.translator.parser.StageParserRegistry;
-import org.bson.Document;
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.infra.Blackhole;
-
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.bson.Document;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 
 /**
  * JMH benchmarks for expression and pipeline parsing performance.
  *
- * <p>These benchmarks measure the parsing time for various expression and pipeline patterns.</p>
+ * <p>These benchmarks measure the parsing time for various expression and pipeline patterns.
  *
- * <p>Run with: ./gradlew :benchmarks:jmh</p>
+ * <p>Run with: ./gradlew :benchmarks:jmh
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -30,25 +39,28 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class ParsingBenchmark {
 
-    private ExpressionParser expressionParser;
-    private PipelineParser pipelineParser;
+  private ExpressionParser expressionParser;
+  private PipelineParser pipelineParser;
 
-    private Document simpleExpression;
-    private Document comparisonExpression;
-    private Document logicalExpression;
-    private Document nestedExpression;
-    private List<Document> fullPipeline;
+  private Document simpleExpression;
+  private Document comparisonExpression;
+  private Document logicalExpression;
+  private Document nestedExpression;
+  private List<Document> fullPipeline;
 
-    @Setup
-    public void setup() {
-        expressionParser = new ExpressionParser();
-        pipelineParser = new PipelineParser(new StageParserRegistry());
+  /** Initializes test data for benchmarks. */
+  @Setup
+  public void setup() {
+    expressionParser = new ExpressionParser();
+    pipelineParser = new PipelineParser(new StageParserRegistry());
 
-        // Simple field equality
-        simpleExpression = Document.parse("{\"status\": \"active\"}");
+    // Simple field equality
+    simpleExpression = Document.parse("{\"status\": \"active\"}");
 
-        // Comparison expression
-        comparisonExpression = Document.parse("""
+    // Comparison expression
+    comparisonExpression =
+        Document.parse(
+            """
             {
                 "amount": {"$gt": 100},
                 "quantity": {"$lte": 50},
@@ -56,8 +68,10 @@ public class ParsingBenchmark {
             }
             """);
 
-        // Logical expression with multiple conditions
-        logicalExpression = Document.parse("""
+    // Logical expression with multiple conditions
+    logicalExpression =
+        Document.parse(
+            """
             {
                 "$and": [
                     {"status": "active"},
@@ -70,8 +84,10 @@ public class ParsingBenchmark {
             }
             """);
 
-        // Deeply nested expression
-        nestedExpression = Document.parse("""
+    // Deeply nested expression
+    nestedExpression =
+        Document.parse(
+            """
             {
                 "$and": [
                     {"$or": [
@@ -86,38 +102,41 @@ public class ParsingBenchmark {
             }
             """);
 
-        // Full pipeline
-        fullPipeline = List.of(
+    // Full pipeline
+    fullPipeline =
+        List.of(
             Document.parse("{\"$match\": {\"status\": \"active\", \"amount\": {\"$gt\": 100}}}"),
-            Document.parse("{\"$project\": {\"category\": 1, \"amount\": 1, \"computed\": {\"$add\": [\"$amount\", 10]}}}"),
-            Document.parse("{\"$group\": {\"_id\": \"$category\", \"total\": {\"$sum\": \"$amount\"}}}"),
+            Document.parse(
+                "{\"$project\": {\"category\": 1, \"amount\": 1, \"computed\": {\"$add\":"
+                    + " [\"$amount\", 10]}}}"),
+            Document.parse(
+                "{\"$group\": {\"_id\": \"$category\", \"total\": {\"$sum\": \"$amount\"}}}"),
             Document.parse("{\"$sort\": {\"total\": -1}}"),
-            Document.parse("{\"$limit\": 10}")
-        );
-    }
+            Document.parse("{\"$limit\": 10}"));
+  }
 
-    @Benchmark
-    public void parseSimpleExpression(Blackhole bh) {
-        bh.consume(expressionParser.parse(simpleExpression));
-    }
+  @Benchmark
+  public void parseSimpleExpression(Blackhole bh) {
+    bh.consume(expressionParser.parse(simpleExpression));
+  }
 
-    @Benchmark
-    public void parseComparisonExpression(Blackhole bh) {
-        bh.consume(expressionParser.parse(comparisonExpression));
-    }
+  @Benchmark
+  public void parseComparisonExpression(Blackhole bh) {
+    bh.consume(expressionParser.parse(comparisonExpression));
+  }
 
-    @Benchmark
-    public void parseLogicalExpression(Blackhole bh) {
-        bh.consume(expressionParser.parse(logicalExpression));
-    }
+  @Benchmark
+  public void parseLogicalExpression(Blackhole bh) {
+    bh.consume(expressionParser.parse(logicalExpression));
+  }
 
-    @Benchmark
-    public void parseNestedExpression(Blackhole bh) {
-        bh.consume(expressionParser.parse(nestedExpression));
-    }
+  @Benchmark
+  public void parseNestedExpression(Blackhole bh) {
+    bh.consume(expressionParser.parse(nestedExpression));
+  }
 
-    @Benchmark
-    public void parsePipeline(Blackhole bh) {
-        bh.consume(pipelineParser.parse("benchmark_collection", fullPipeline));
-    }
+  @Benchmark
+  public void parsePipeline(Blackhole bh) {
+    bh.consume(pipelineParser.parse("benchmark_collection", fullPipeline));
+  }
 }

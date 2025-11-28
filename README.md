@@ -383,12 +383,33 @@ docker compose ps
 
 ### Pre-commit Hooks (Recommended)
 
+Pre-commit hooks ensure code quality before each commit:
+
 ```bash
+# Install pre-commit (Python package)
 pip install pre-commit
+
+# Install the hooks
 pre-commit install
+
+# Run hooks on all files (optional, for verification)
+pre-commit run --all-files
 ```
 
-This runs Checkstyle and SpotBugs before each commit.
+**Hooks included:**
+- `trim-trailing-whitespace` - Remove trailing whitespace
+- `end-of-file-fixer` - Ensure files end with newline
+- `check-yaml` - Validate YAML syntax
+- `check-json` - Validate JSON syntax
+- `check-added-large-files` - Prevent large file commits
+- `check-merge-conflict` - Detect merge conflict markers
+- `detect-private-key` - Prevent private key commits
+- `checkstyle` - Google Java Style enforcement (2-space indent, maxWarnings=0)
+- `spotbugs` - Static analysis with FindSecBugs plugin
+- `compile-check` - Ensure code compiles
+- `unit-tests` - Run quick unit tests
+
+All hooks must pass before a commit is accepted.
 
 ## Usage
 

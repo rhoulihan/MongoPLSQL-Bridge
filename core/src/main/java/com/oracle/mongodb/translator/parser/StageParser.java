@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.stage.Stage;
@@ -15,11 +16,11 @@ import com.oracle.mongodb.translator.ast.stage.Stage;
 @FunctionalInterface
 public interface StageParser<T extends Stage> {
 
-    /**
-     * Parses the stage value into an AST node.
-     *
-     * @param value the value from the BSON document
-     * @return the parsed stage AST node
-     */
-    T parse(Object value);
+  /**
+   * Parses the stage value into an AST node.
+   *
+   * @param value the value from the BSON document
+   * @return the parsed stage AST node
+   */
+  T parse(Object value);
 }

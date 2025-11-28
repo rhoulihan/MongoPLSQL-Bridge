@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,32 +16,36 @@ import org.junit.jupiter.api.Test;
 
 class BucketAutoStageParserTest {
 
-    private BucketAutoStageParser parser;
+  private BucketAutoStageParser parser;
 
-    @BeforeEach
-    void setUp() {
-        parser = new BucketAutoStageParser();
-    }
+  @BeforeEach
+  void setUp() {
+    parser = new BucketAutoStageParser();
+  }
 
-    @Test
-    void shouldParseBasicBucketAuto() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseBasicBucketAuto() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": 5
             }
             """);
 
-        BucketAutoStage stage = parser.parse(doc);
+    BucketAutoStage stage = parser.parse(doc);
 
-        assertThat(stage.getBuckets()).isEqualTo(5);
-        assertThat(stage.getOutput()).isEmpty();
-        assertThat(stage.hasGranularity()).isFalse();
-    }
+    assertThat(stage.getBuckets()).isEqualTo(5);
+    assertThat(stage.getOutput()).isEmpty();
+    assertThat(stage.hasGranularity()).isFalse();
+  }
 
-    @Test
-    void shouldParseWithOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$amount",
                 "buckets": 10,
@@ -51,16 +56,18 @@ class BucketAutoStageParserTest {
             }
             """);
 
-        BucketAutoStage stage = parser.parse(doc);
+    BucketAutoStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).hasSize(2);
-        assertThat(stage.getOutput()).containsKey("count");
-        assertThat(stage.getOutput()).containsKey("average");
-    }
+    assertThat(stage.getOutput()).hasSize(2);
+    assertThat(stage.getOutput()).containsKey("count");
+    assertThat(stage.getOutput()).containsKey("average");
+  }
 
-    @Test
-    void shouldParseWithGranularity() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithGranularity() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": 5,
@@ -68,98 +75,112 @@ class BucketAutoStageParserTest {
             }
             """);
 
-        BucketAutoStage stage = parser.parse(doc);
+    BucketAutoStage stage = parser.parse(doc);
 
-        assertThat(stage.hasGranularity()).isTrue();
-        assertThat(stage.getGranularity()).isEqualTo("R5");
-    }
+    assertThat(stage.hasGranularity()).isTrue();
+    assertThat(stage.getGranularity()).isEqualTo("R5");
+  }
 
-    @Test
-    void shouldParseComplexGroupBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseComplexGroupBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": { "$add": ["$price", 10] },
                 "buckets": 3
             }
             """);
 
-        BucketAutoStage stage = parser.parse(doc);
+    BucketAutoStage stage = parser.parse(doc);
 
-        assertThat(stage.getGroupBy()).isNotNull();
-    }
+    assertThat(stage.getGroupBy()).isNotNull();
+  }
 
-    @Test
-    void shouldThrowOnMissingGroupBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingGroupBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "buckets": 5
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("groupBy");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("groupBy");
+  }
 
-    @Test
-    void shouldThrowOnMissingBuckets() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingBuckets() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price"
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("buckets");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("buckets");
+  }
 
-    @Test
-    void shouldThrowOnNonNumericBuckets() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonNumericBuckets() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": "five"
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("buckets")
-            .withMessageContaining("number");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("buckets")
+        .withMessageContaining("number");
+  }
 
-    @Test
-    void shouldThrowOnZeroBuckets() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnZeroBuckets() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": 0
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("positive");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("positive");
+  }
 
-    @Test
-    void shouldThrowOnNegativeBuckets() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNegativeBuckets() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": -1
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("positive");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("positive");
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonDocumentOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": 5,
@@ -167,15 +188,17 @@ class BucketAutoStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("output")
-            .withMessageContaining("document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("output")
+        .withMessageContaining("document");
+  }
 
-    @Test
-    void shouldThrowOnNonStringGranularity() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonStringGranularity() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "buckets": 5,
@@ -183,9 +206,9 @@ class BucketAutoStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("granularity")
-            .withMessageContaining("string");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("granularity")
+        .withMessageContaining("string");
+  }
 }

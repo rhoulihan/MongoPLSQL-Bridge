@@ -295,10 +295,23 @@ This project follows strict Test-Driven Development:
 - Regressions are caught early
 
 ### Code Style
-- Google Java Style (enforced via Checkstyle)
+- Google Java Style (enforced via Checkstyle with 2-space indentation)
 - Use sealed interfaces for type hierarchies
 - Prefer immutable objects (records where appropriate)
 - No null returns - use Optional or throw exceptions
+- Return defensive copies or unmodifiable views for collections
+- Use entrySet() instead of keySet() when iterating maps with values
+
+### Pre-commit Hooks
+The project uses pre-commit hooks to enforce code quality:
+```bash
+# Install hooks
+pip install pre-commit && pre-commit install
+
+# Run on all files
+pre-commit run --all-files
+```
+All hooks (Checkstyle, SpotBugs, compile, tests) must pass before commit.
 
 ### Adding a New Operator
 

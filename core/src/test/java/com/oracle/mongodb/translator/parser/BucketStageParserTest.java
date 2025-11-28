@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,32 +16,36 @@ import org.junit.jupiter.api.Test;
 
 class BucketStageParserTest {
 
-    private BucketStageParser parser;
+  private BucketStageParser parser;
 
-    @BeforeEach
-    void setUp() {
-        parser = new BucketStageParser();
-    }
+  @BeforeEach
+  void setUp() {
+    parser = new BucketStageParser();
+  }
 
-    @Test
-    void shouldParseBasicBucket() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseBasicBucket() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100, 200, 300]
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getBoundaries()).containsExactly(0, 100, 200, 300);
-        assertThat(stage.hasDefault()).isFalse();
-        assertThat(stage.getOutput()).isEmpty();
-    }
+    assertThat(stage.getBoundaries()).containsExactly(0, 100, 200, 300);
+    assertThat(stage.hasDefault()).isFalse();
+    assertThat(stage.getOutput()).isEmpty();
+  }
 
-    @Test
-    void shouldParseWithDefault() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithDefault() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$age",
                 "boundaries": [0, 18, 65, 100],
@@ -48,15 +53,17 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.hasDefault()).isTrue();
-        assertThat(stage.getDefaultBucket()).isEqualTo("Other");
-    }
+    assertThat(stage.hasDefault()).isTrue();
+    assertThat(stage.getDefaultBucket()).isEqualTo("Other");
+  }
 
-    @Test
-    void shouldParseWithNumericDefault() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithNumericDefault() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$score",
                 "boundaries": [0, 50, 100],
@@ -64,14 +71,16 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getDefaultBucket()).isEqualTo(-1);
-    }
+    assertThat(stage.getDefaultBucket()).isEqualTo(-1);
+  }
 
-    @Test
-    void shouldParseWithOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100, 200],
@@ -82,85 +91,97 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).hasSize(2);
-        assertThat(stage.getOutput()).containsKey("count");
-        assertThat(stage.getOutput()).containsKey("total");
-    }
+    assertThat(stage.getOutput()).hasSize(2);
+    assertThat(stage.getOutput()).containsKey("count");
+    assertThat(stage.getOutput()).containsKey("total");
+  }
 
-    @Test
-    void shouldParseComplexGroupBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseComplexGroupBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": { "$multiply": ["$price", 1.1] },
                 "boundaries": [0, 100, 200]
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getGroupBy()).isNotNull();
-    }
+    assertThat(stage.getGroupBy()).isNotNull();
+  }
 
-    @Test
-    void shouldThrowOnMissingGroupBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingGroupBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "boundaries": [0, 100]
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("groupBy");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("groupBy");
+  }
 
-    @Test
-    void shouldThrowOnMissingBoundaries() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingBoundaries() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price"
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("boundaries");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("boundaries");
+  }
 
-    @Test
-    void shouldThrowOnNonArrayBoundaries() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonArrayBoundaries() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": "invalid"
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("boundaries")
-            .withMessageContaining("array");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("boundaries")
+        .withMessageContaining("array");
+  }
 
-    @Test
-    void shouldThrowOnTooFewBoundaries() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnTooFewBoundaries() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0]
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("at least 2");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("at least 2");
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonDocumentOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -168,30 +189,34 @@ class BucketStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("output")
-            .withMessageContaining("document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("output")
+        .withMessageContaining("document");
+  }
 
-    @Test
-    void shouldCreateWithExpressionParser() {
-        var customParser = new BucketStageParser(new ExpressionParser());
-        var doc = Document.parse("""
+  @Test
+  void shouldCreateWithExpressionParser() {
+    var customParser = new BucketStageParser(new ExpressionParser());
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100]
             }
             """);
 
-        BucketStage stage = customParser.parse(doc);
+    BucketStage stage = customParser.parse(doc);
 
-        assertThat(stage).isNotNull();
-    }
+    assertThat(stage).isNotNull();
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentOutputField() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonDocumentOutputField() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -201,15 +226,17 @@ class BucketStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("output field")
-            .withMessageContaining("accumulator document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("output field")
+        .withMessageContaining("accumulator document");
+  }
 
-    @Test
-    void shouldThrowOnAccumulatorWithMultipleOperators() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnAccumulatorWithMultipleOperators() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -219,14 +246,16 @@ class BucketStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("exactly one operator");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("exactly one operator");
+  }
 
-    @Test
-    void shouldThrowOnUnsupportedAccumulator() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnUnsupportedAccumulator() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -236,26 +265,29 @@ class BucketStageParserTest {
             }
             """);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> parser.parse(doc))
-            .isInstanceOf(com.oracle.mongodb.translator.exception.UnsupportedOperatorException.class)
-            .hasMessageContaining("$unknown");
-    }
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> parser.parse(doc))
+        .isInstanceOf(com.oracle.mongodb.translator.exception.UnsupportedOperatorException.class)
+        .hasMessageContaining("$unknown");
+  }
 
-    @Test
-    void shouldParseAccumulatorWithNullArgument() {
-        var doc = new Document()
+  @Test
+  void shouldParseAccumulatorWithNullArgument() {
+    var doc =
+        new Document()
             .append("groupBy", "$price")
             .append("boundaries", java.util.List.of(0, 100))
             .append("output", new Document("count", new Document("$count", new Document())));
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).containsKey("count");
-    }
+    assertThat(stage.getOutput()).containsKey("count");
+  }
 
-    @Test
-    void shouldParseAccumulatorWithFieldPath() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseAccumulatorWithFieldPath() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -265,14 +297,16 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).containsKey("total");
-    }
+    assertThat(stage.getOutput()).containsKey("total");
+  }
 
-    @Test
-    void shouldParseAccumulatorWithStringLiteral() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseAccumulatorWithStringLiteral() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -282,14 +316,16 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).containsKey("label");
-    }
+    assertThat(stage.getOutput()).containsKey("label");
+  }
 
-    @Test
-    void shouldParseAccumulatorWithComplexExpression() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseAccumulatorWithComplexExpression() {
+    var doc =
+        Document.parse(
+            """
             {
                 "groupBy": "$price",
                 "boundaries": [0, 100],
@@ -299,20 +335,21 @@ class BucketStageParserTest {
             }
             """);
 
-        BucketStage stage = parser.parse(doc);
+    BucketStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).containsKey("total");
-    }
+    assertThat(stage.getOutput()).containsKey("total");
+  }
 
-    @Test
-    void shouldThrowOnInvalidAccumulatorArgument() {
-        var doc = new Document()
+  @Test
+  void shouldThrowOnInvalidAccumulatorArgument() {
+    var doc =
+        new Document()
             .append("groupBy", "$price")
             .append("boundaries", java.util.List.of(0, 100))
             .append("output", new Document("invalid", new Document("$sum", true)));
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("Unsupported accumulator argument");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("Unsupported accumulator argument");
+  }
 }

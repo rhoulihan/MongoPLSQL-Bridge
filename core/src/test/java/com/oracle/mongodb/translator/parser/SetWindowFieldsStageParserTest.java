@@ -3,6 +3,7 @@
  * Licensed under the Universal Permissive License v 1.0 as shown at
  * https://oss.oracle.com/licenses/upl/
  */
+
 package com.oracle.mongodb.translator.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,16 +16,18 @@ import org.junit.jupiter.api.Test;
 
 class SetWindowFieldsStageParserTest {
 
-    private SetWindowFieldsStageParser parser;
+  private SetWindowFieldsStageParser parser;
 
-    @BeforeEach
-    void setUp() {
-        parser = new SetWindowFieldsStageParser();
-    }
+  @BeforeEach
+  void setUp() {
+    parser = new SetWindowFieldsStageParser();
+  }
 
-    @Test
-    void shouldParseBasicWindowFieldsWithRank() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseBasicWindowFieldsWithRank() {
+    var doc =
+        Document.parse(
+            """
             {
                 "partitionBy": "$department",
                 "sortBy": { "salary": -1 },
@@ -34,17 +37,19 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getPartitionBy()).isEqualTo("$department");
-        assertThat(stage.getSortBy()).containsEntry("salary", -1);
-        assertThat(stage.getOutput()).containsKey("salaryRank");
-        assertThat(stage.getOutput().get("salaryRank").operator()).isEqualTo("$rank");
-    }
+    assertThat(stage.getPartitionBy()).isEqualTo("$department");
+    assertThat(stage.getSortBy()).containsEntry("salary", -1);
+    assertThat(stage.getOutput()).containsKey("salaryRank");
+    assertThat(stage.getOutput().get("salaryRank").operator()).isEqualTo("$rank");
+  }
 
-    @Test
-    void shouldParseSumWithWindow() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseSumWithWindow() {
+    var doc =
+        Document.parse(
+            """
             {
                 "partitionBy": "$state",
                 "sortBy": { "orderDate": 1 },
@@ -57,22 +62,24 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getPartitionBy()).isEqualTo("$state");
-        assertThat(stage.getSortBy()).containsEntry("orderDate", 1);
+    assertThat(stage.getPartitionBy()).isEqualTo("$state");
+    assertThat(stage.getSortBy()).containsEntry("orderDate", 1);
 
-        var cumulativeSum = stage.getOutput().get("cumulativeSum");
-        assertThat(cumulativeSum.operator()).isEqualTo("$sum");
-        assertThat(cumulativeSum.argument()).isEqualTo("$quantity");
-        assertThat(cumulativeSum.window()).isNotNull();
-        assertThat(cumulativeSum.window().type()).isEqualTo("documents");
-        assertThat(cumulativeSum.window().bounds()).containsExactly("unbounded", "current");
-    }
+    var cumulativeSum = stage.getOutput().get("cumulativeSum");
+    assertThat(cumulativeSum.operator()).isEqualTo("$sum");
+    assertThat(cumulativeSum.argument()).isEqualTo("$quantity");
+    assertThat(cumulativeSum.window()).isNotNull();
+    assertThat(cumulativeSum.window().type()).isEqualTo("documents");
+    assertThat(cumulativeSum.window().bounds()).containsExactly("unbounded", "current");
+  }
 
-    @Test
-    void shouldParseRangeWindow() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseRangeWindow() {
+    var doc =
+        Document.parse(
+            """
             {
                 "sortBy": { "price": 1 },
                 "output": {
@@ -84,17 +91,19 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getPartitionBy()).isNull();
-        var avgPrice = stage.getOutput().get("avgPrice");
-        assertThat(avgPrice.window().type()).isEqualTo("range");
-        assertThat(avgPrice.window().bounds()).containsExactly("-10", "10");
-    }
+    assertThat(stage.getPartitionBy()).isNull();
+    var avgPrice = stage.getOutput().get("avgPrice");
+    assertThat(avgPrice.window().type()).isEqualTo("range");
+    assertThat(avgPrice.window().bounds()).containsExactly("-10", "10");
+  }
 
-    @Test
-    void shouldParseWithoutPartitionBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithoutPartitionBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "sortBy": { "date": 1 },
                 "output": {
@@ -103,16 +112,18 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getPartitionBy()).isNull();
-        assertThat(stage.getSortBy()).containsEntry("date", 1);
-        assertThat(stage.getOutput().get("rowNum").operator()).isEqualTo("$rowNumber");
-    }
+    assertThat(stage.getPartitionBy()).isNull();
+    assertThat(stage.getSortBy()).containsEntry("date", 1);
+    assertThat(stage.getOutput().get("rowNum").operator()).isEqualTo("$rowNumber");
+  }
 
-    @Test
-    void shouldParseWithoutSortBy() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseWithoutSortBy() {
+    var doc =
+        Document.parse(
+            """
             {
                 "partitionBy": "$category",
                 "output": {
@@ -121,15 +132,17 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getPartitionBy()).isEqualTo("$category");
-        assertThat(stage.getSortBy()).isEmpty();
-    }
+    assertThat(stage.getPartitionBy()).isEqualTo("$category");
+    assertThat(stage.getSortBy()).isEmpty();
+  }
 
-    @Test
-    void shouldParseMultipleOutputFields() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseMultipleOutputFields() {
+    var doc =
+        Document.parse(
+            """
             {
                 "partitionBy": "$dept",
                 "sortBy": { "amount": -1 },
@@ -141,17 +154,19 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput()).hasSize(3);
-        assertThat(stage.getOutput().get("rank").operator()).isEqualTo("$rank");
-        assertThat(stage.getOutput().get("denseRank").operator()).isEqualTo("$denseRank");
-        assertThat(stage.getOutput().get("total").operator()).isEqualTo("$sum");
-    }
+    assertThat(stage.getOutput()).hasSize(3);
+    assertThat(stage.getOutput().get("rank").operator()).isEqualTo("$rank");
+    assertThat(stage.getOutput().get("denseRank").operator()).isEqualTo("$denseRank");
+    assertThat(stage.getOutput().get("total").operator()).isEqualTo("$sum");
+  }
 
-    @Test
-    void shouldParseMultipleSortFields() {
-        var doc = Document.parse("""
+  @Test
+  void shouldParseMultipleSortFields() {
+    var doc =
+        Document.parse(
+            """
             {
                 "sortBy": { "category": 1, "price": -1, "name": 1 },
                 "output": {
@@ -160,17 +175,19 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getSortBy()).hasSize(3);
-        assertThat(stage.getSortBy().get("category")).isEqualTo(1);
-        assertThat(stage.getSortBy().get("price")).isEqualTo(-1);
-        assertThat(stage.getSortBy().get("name")).isEqualTo(1);
-    }
+    assertThat(stage.getSortBy()).hasSize(3);
+    assertThat(stage.getSortBy().get("category")).isEqualTo(1);
+    assertThat(stage.getSortBy().get("price")).isEqualTo(-1);
+    assertThat(stage.getSortBy().get("name")).isEqualTo(1);
+  }
 
-    @Test
-    void shouldHandleStringArgumentForOperator() {
-        var doc = Document.parse("""
+  @Test
+  void shouldHandleStringArgumentForOperator() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "firstValue": { "$first": "$amount" }
@@ -178,15 +195,17 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput().get("firstValue").operator()).isEqualTo("$first");
-        assertThat(stage.getOutput().get("firstValue").argument()).isEqualTo("$amount");
-    }
+    assertThat(stage.getOutput().get("firstValue").operator()).isEqualTo("$first");
+    assertThat(stage.getOutput().get("firstValue").argument()).isEqualTo("$amount");
+  }
 
-    @Test
-    void shouldHandleNonStringArgumentForOperator() {
-        var doc = Document.parse("""
+  @Test
+  void shouldHandleNonStringArgumentForOperator() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "sumLiteral": { "$sum": 1 }
@@ -194,15 +213,17 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getOutput().get("sumLiteral").operator()).isEqualTo("$sum");
-        assertThat(stage.getOutput().get("sumLiteral").argument()).isEqualTo("1");
-    }
+    assertThat(stage.getOutput().get("sumLiteral").operator()).isEqualTo("$sum");
+    assertThat(stage.getOutput().get("sumLiteral").argument()).isEqualTo("1");
+  }
 
-    @Test
-    void shouldHandleWindowWithNullBounds() {
-        var doc = Document.parse("""
+  @Test
+  void shouldHandleWindowWithNullBounds() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "runningSum": {
@@ -213,43 +234,49 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        var window = stage.getOutput().get("runningSum").window();
-        assertThat(window.bounds()).containsExactly("current", "current");
-    }
+    var window = stage.getOutput().get("runningSum").window();
+    assertThat(window.bounds()).containsExactly("current", "current");
+  }
 
-    @Test
-    void shouldThrowOnMissingOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnMissingOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "partitionBy": "$dept",
                 "sortBy": { "salary": 1 }
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("output");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("output");
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentOutput() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonDocumentOutput() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": "invalid"
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("output")
-            .withMessageContaining("document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("output")
+        .withMessageContaining("document");
+  }
 
-    @Test
-    void shouldThrowOnNonDocumentOutputField() {
-        var doc = Document.parse("""
+  @Test
+  void shouldThrowOnNonDocumentOutputField() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "badField": "not a document"
@@ -257,15 +284,17 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        assertThatIllegalArgumentException()
-            .isThrownBy(() -> parser.parse(doc))
-            .withMessageContaining("badField")
-            .withMessageContaining("document");
-    }
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parser.parse(doc))
+        .withMessageContaining("badField")
+        .withMessageContaining("document");
+  }
 
-    @Test
-    void shouldReturnCorrectOperatorName() {
-        var doc = Document.parse("""
+  @Test
+  void shouldReturnCorrectOperatorName() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "rank": { "$rank": {} }
@@ -273,14 +302,16 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        assertThat(stage.getOperatorName()).isEqualTo("$setWindowFields");
-    }
+    assertThat(stage.getOperatorName()).isEqualTo("$setWindowFields");
+  }
 
-    @Test
-    void shouldHandleEmptyDocumentArgument() {
-        var doc = Document.parse("""
+  @Test
+  void shouldHandleEmptyDocumentArgument() {
+    var doc =
+        Document.parse(
+            """
             {
                 "output": {
                     "docNum": { "$documentNumber": {} }
@@ -288,16 +319,18 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        var docNum = stage.getOutput().get("docNum");
-        assertThat(docNum.operator()).isEqualTo("$documentNumber");
-        assertThat(docNum.argument()).isNull();
-    }
+    var docNum = stage.getOutput().get("docNum");
+    assertThat(docNum.operator()).isEqualTo("$documentNumber");
+    assertThat(docNum.argument()).isNull();
+  }
 
-    @Test
-    void shouldIgnoreNonNumericSortByValues() {
-        var doc = Document.parse("""
+  @Test
+  void shouldIgnoreNonNumericSortByValues() {
+    var doc =
+        Document.parse(
+            """
             {
                 "sortBy": { "field1": 1, "field2": "invalid", "field3": -1 },
                 "output": {
@@ -306,11 +339,11 @@ class SetWindowFieldsStageParserTest {
             }
             """);
 
-        SetWindowFieldsStage stage = parser.parse(doc);
+    SetWindowFieldsStage stage = parser.parse(doc);
 
-        // Only numeric values should be in sortBy
-        assertThat(stage.getSortBy()).hasSize(2);
-        assertThat(stage.getSortBy()).containsEntry("field1", 1);
-        assertThat(stage.getSortBy()).containsEntry("field3", -1);
-    }
+    // Only numeric values should be in sortBy
+    assertThat(stage.getSortBy()).hasSize(2);
+    assertThat(stage.getSortBy()).containsEntry("field1", 1);
+    assertThat(stage.getSortBy()).containsEntry("field3", -1);
+  }
 }
