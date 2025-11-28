@@ -38,6 +38,7 @@ import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.Stage;
 import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
 import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -287,32 +288,35 @@ public final class PipelineRenderer {
 
   private void renderGraphLookupJoins(PipelineComponents components, SqlGenerationContext ctx) {
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
+      // Validate table name and field names to prevent injection
+      FieldNameValidator.validateTableName(graphLookup.getFrom());
+      String validConnectToField =
+          FieldNameValidator.validateAndNormalizeFieldPath(graphLookup.getConnectToField());
+      String validStartField =
+          FieldNameValidator.validateAndNormalizeFieldPath(graphLookup.getStartWith());
+
       // Use LATERAL join (CROSS APPLY) which allows referencing outer query columns
       ctx.sql(" LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS ");
       ctx.identifier(graphLookup.getAs());
 
       ctx.sql(" FROM ");
-      ctx.sql(graphLookup.getFrom());
+      ctx.tableName(graphLookup.getFrom());
       ctx.sql(" g WHERE JSON_VALUE(g.data, '$.");
-      ctx.sql(graphLookup.getConnectToField());
+      ctx.sql(validConnectToField);
       ctx.sql("') = JSON_VALUE(");
       ctx.sql(ctx.getBaseTableAlias());
       ctx.sql(".data, '$.");
-      String startField = graphLookup.getStartWith();
-      if (startField.startsWith("$")) {
-        startField = startField.substring(1);
-      }
-      ctx.sql(startField);
+      ctx.sql(validStartField);
       ctx.sql("')");
 
       // Add restrictSearchWithMatch filter if specified
       if (graphLookup.getRestrictSearchWithMatch() != null
           && !graphLookup.getRestrictSearchWithMatch().isEmpty()) {
         for (var entry : graphLookup.getRestrictSearchWithMatch().entrySet()) {
-          String field = entry.getKey();
+          String validField = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
           final Object value = entry.getValue();
           ctx.sql(" AND JSON_VALUE(g.data, '$.");
-          ctx.sql(field);
+          ctx.sql(validField);
           ctx.sql("') = ");
           if (value instanceof String) {
             ctx.sql("'");
@@ -705,10 +709,13 @@ public final class PipelineRenderer {
 
   private void renderUnionWithClauses(PipelineComponents components, SqlGenerationContext ctx) {
     for (UnionWithStage unionWith : components.unionWithStages) {
+      // Validate table name to prevent injection
+      FieldNameValidator.validateTableName(unionWith.getCollection());
+
       ctx.sql(" UNION ALL SELECT ");
       ctx.sql(config.dataColumnName());
       ctx.sql(" FROM ");
-      ctx.sql(unionWith.getCollection());
+      ctx.tableName(unionWith.getCollection());
 
       // If the unionWith has a pipeline, we need to render it as a subquery
       if (unionWith.hasPipeline()) {

@@ -25,6 +25,24 @@ public interface SqlGenerationContext {
   /** Appends an identifier, quoting if necessary. */
   void identifier(String name);
 
+  /**
+   * Appends a validated field name for use in JSON paths. Validates that the field name contains
+   * only safe characters to prevent JSON path injection.
+   *
+   * @param fieldName the field name to validate and append
+   * @throws com.oracle.mongodb.translator.exception.ValidationException if field name is invalid
+   */
+  void jsonField(String fieldName);
+
+  /**
+   * Appends a validated table/collection name. Validates that the table name contains only safe
+   * characters and quotes it if necessary.
+   *
+   * @param tableName the table name to validate and append
+   * @throws com.oracle.mongodb.translator.exception.ValidationException if table name is invalid
+   */
+  void tableName(String tableName);
+
   /** Returns whether values should be inlined (for debugging). */
   boolean inline();
 

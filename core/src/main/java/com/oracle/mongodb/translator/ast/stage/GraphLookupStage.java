@@ -7,6 +7,7 @@
 package com.oracle.mongodb.translator.ast.stage;
 
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.Map;
 import java.util.Objects;
 import org.bson.Document;
@@ -164,9 +165,16 @@ public final class GraphLookupStage implements Stage {
 
   @Override
   public void render(SqlGenerationContext ctx) {
+    // Validate all field names and table name to prevent injection
+    FieldNameValidator.validateTableName(from);
+    final String validConnectToField =
+        FieldNameValidator.validateAndNormalizeFieldPath(connectToField);
+    final String validConnectFromField =
+        FieldNameValidator.validateAndNormalizeFieldPath(connectFromField);
+    final String validStartField = FieldNameValidator.validateAndNormalizeFieldPath(startWith);
+
     // Render as recursive CTE
     String cteName = "graph_" + as;
-    String startField = startWith.startsWith("$") ? startWith.substring(1) : startWith;
 
     // Generate the recursive CTE
     ctx.sql("WITH ");
@@ -175,13 +183,13 @@ public final class GraphLookupStage implements Stage {
 
     // Base case: find initial matching documents
     ctx.sql("SELECT id, data, 0 AS graph_depth FROM ");
-    ctx.sql(from);
+    ctx.tableName(from);
     ctx.sql(" WHERE JSON_VALUE(data, '$.");
-    ctx.sql(connectToField);
+    ctx.sql(validConnectToField);
     ctx.sql("') = JSON_VALUE(");
     ctx.sql(ctx.getBaseTableAlias());
     ctx.sql(".data, '$.");
-    ctx.sql(startField);
+    ctx.sql(validStartField);
     ctx.sql("')");
 
     // Add restrictSearchWithMatch filter to base case
@@ -193,13 +201,13 @@ public final class GraphLookupStage implements Stage {
 
     // Recursive case: traverse the graph
     ctx.sql("SELECT c.id, c.data, g.graph_depth + 1 FROM ");
-    ctx.sql(from);
+    ctx.tableName(from);
     ctx.sql(" c JOIN ");
     ctx.sql(cteName);
     ctx.sql(" g ON JSON_VALUE(c.data, '$.");
-    ctx.sql(connectToField);
+    ctx.sql(validConnectToField);
     ctx.sql("') = JSON_VALUE(g.data, '$.");
-    ctx.sql(connectFromField);
+    ctx.sql(validConnectFromField);
     ctx.sql("')");
 
     // Add depth limit and restrictSearchWithMatch filter if specified
@@ -247,7 +255,7 @@ public final class GraphLookupStage implements Stage {
     String dataRef = tableAlias.isEmpty() ? "data" : tableAlias + ".data";
 
     for (Map.Entry<String, Object> entry : restrictSearchWithMatch.entrySet()) {
-      String field = entry.getKey();
+      String field = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
       final Object value = entry.getValue();
 
       ctx.sql(" AND JSON_VALUE(");
@@ -340,7 +348,10 @@ public final class GraphLookupStage implements Stage {
    * maxDepth=0, this is a simple lookup. For deeper recursion, we use a recursive CTE.
    */
   public void renderCteDefinition(SqlGenerationContext ctx, String sourceAlias) {
-    String startField = startWith.startsWith("$") ? startWith.substring(1) : startWith;
+    // Validate all field names and table name to prevent injection
+    FieldNameValidator.validateTableName(from);
+    String validStartField = FieldNameValidator.validateAndNormalizeFieldPath(startWith);
+    String validConnectToField = FieldNameValidator.validateAndNormalizeFieldPath(connectToField);
 
     ctx.sql(getCteName());
 
@@ -348,22 +359,22 @@ public final class GraphLookupStage implements Stage {
       // maxDepth=0 means no recursion - just find immediate matches
       // This is like a simple $lookup
       ctx.sql(" AS (SELECT g.id, g.data FROM ");
-      ctx.sql(from);
+      ctx.tableName(from);
       ctx.sql(" g WHERE JSON_VALUE(g.data, '$.");
-      ctx.sql(connectToField);
+      ctx.sql(validConnectToField);
       ctx.sql("') = JSON_VALUE(");
       ctx.sql(sourceAlias);
       ctx.sql(".data, '$.");
-      ctx.sql(startField);
+      ctx.sql(validStartField);
       ctx.sql("')");
 
       // Add restrictSearchWithMatch filter if specified
       if (restrictSearchWithMatch != null && !restrictSearchWithMatch.isEmpty()) {
         for (Map.Entry<String, Object> entry : restrictSearchWithMatch.entrySet()) {
-          String field = entry.getKey();
+          String validField = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
           final Object value = entry.getValue();
           ctx.sql(" AND JSON_VALUE(g.data, '$.");
-          ctx.sql(field);
+          ctx.sql(validField);
           ctx.sql("') = ");
           renderLiteralValue(ctx, value);
         }

@@ -9,6 +9,7 @@ package com.oracle.mongodb.translator.generator;
 import com.oracle.mongodb.translator.ast.AstNode;
 import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -137,8 +138,6 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
           "WHERE",
           "WITH");
 
-  private static final String DEFAULT_BASE_ALIAS = "base";
-
   private final StringBuilder sql = new StringBuilder();
   private final List<Object> bindVariables = new ArrayList<>();
   private final Map<String, Integer> tableAliasCounters = new HashMap<>();
@@ -200,6 +199,20 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     } else {
       sql.append("\"").append(name).append("\"");
     }
+  }
+
+  @Override
+  public void jsonField(String fieldName) {
+    // Validate field name to prevent JSON path injection
+    FieldNameValidator.validateFieldName(fieldName);
+    sql.append(fieldName);
+  }
+
+  @Override
+  public void tableName(String name) {
+    // Validate table name to prevent SQL injection
+    FieldNameValidator.validateTableName(name);
+    identifier(name);
   }
 
   @Override

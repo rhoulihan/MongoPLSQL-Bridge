@@ -8,6 +8,7 @@ package com.oracle.mongodb.translator.ast.stage;
 
 import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Collections;
 import java.util.List;
@@ -153,21 +154,26 @@ public final class LookupStage implements Stage {
   }
 
   private void renderEqualityForm(SqlGenerationContext ctx) {
+    // Validate table name and field names to prevent injection
+    FieldNameValidator.validateTableName(from);
+    String validLocalField = FieldNameValidator.validateAndNormalizeFieldPath(localField);
+    String validForeignField = FieldNameValidator.validateAndNormalizeFieldPath(foreignField);
+
     // Generate a unique alias for the joined table
     String alias = ctx.generateTableAlias(from);
 
     ctx.sql("LEFT OUTER JOIN ");
-    ctx.sql(from);
+    ctx.tableName(from);
     ctx.sql(" ");
     ctx.sql(alias);
     ctx.sql(" ON JSON_VALUE(");
     ctx.sql(ctx.getBaseTableAlias());
     ctx.sql(".data, '$.");
-    ctx.sql(localField);
+    ctx.sql(validLocalField);
     ctx.sql("') = JSON_VALUE(");
     ctx.sql(alias);
     ctx.sql(".data, '$.");
-    ctx.sql(foreignField);
+    ctx.sql(validForeignField);
     ctx.sql("')");
   }
 

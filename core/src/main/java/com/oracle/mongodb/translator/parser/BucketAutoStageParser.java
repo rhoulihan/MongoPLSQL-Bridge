@@ -7,12 +7,8 @@
 package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
-import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
 import com.oracle.mongodb.translator.ast.expression.Expression;
-import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
-import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
-import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.bson.Document;
@@ -105,64 +101,6 @@ public final class BucketAutoStageParser {
   }
 
   private Map<String, AccumulatorExpression> parseOutput(Document outputDoc) {
-    Map<String, AccumulatorExpression> result = new LinkedHashMap<>();
-    for (Map.Entry<String, Object> entry : outputDoc.entrySet()) {
-      String fieldName = entry.getKey();
-      Object fieldValue = entry.getValue();
-      if (!(fieldValue instanceof Document)) {
-        throw new IllegalArgumentException(
-            "$bucketAuto output field '" + fieldName + "' must be an accumulator document");
-      }
-      result.put(fieldName, parseAccumulator((Document) fieldValue));
-    }
-    return result;
-  }
-
-  private AccumulatorExpression parseAccumulator(Document accDoc) {
-    if (accDoc.size() != 1) {
-      throw new IllegalArgumentException(
-          "Accumulator document must have exactly one operator, got: " + accDoc.keySet());
-    }
-
-    Map.Entry<String, Object> entry = accDoc.entrySet().iterator().next();
-    String operator = entry.getKey();
-    Object argument = entry.getValue();
-
-    if (!AccumulatorOp.isAccumulator(operator)) {
-      throw new UnsupportedOperatorException(operator);
-    }
-
-    AccumulatorOp accOp = AccumulatorOp.fromMongo(operator);
-    Expression argumentExpr = parseAccumulatorArgument(argument);
-
-    return new AccumulatorExpression(accOp, argumentExpr);
-  }
-
-  private Expression parseAccumulatorArgument(Object argument) {
-    if (argument == null) {
-      return null;
-    }
-
-    if (argument instanceof Document doc && doc.isEmpty()) {
-      return null;
-    }
-
-    if (argument instanceof String strVal) {
-      if (strVal.startsWith("$")) {
-        return FieldPathExpression.of(strVal.substring(1));
-      }
-      return LiteralExpression.of(strVal);
-    }
-
-    if (argument instanceof Number) {
-      return LiteralExpression.of(argument);
-    }
-
-    if (argument instanceof Document) {
-      // Complex expression (e.g., { $cond: [...] }, { $multiply: [...] })
-      return expressionParser.parseValue(argument);
-    }
-
-    throw new IllegalArgumentException("Unsupported accumulator argument: " + argument);
+    return AccumulatorParserUtil.parseOutput(outputDoc, expressionParser, "$bucketAuto");
   }
 }

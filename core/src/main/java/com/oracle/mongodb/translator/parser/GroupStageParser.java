@@ -7,13 +7,11 @@
 package com.oracle.mongodb.translator.parser;
 
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
-import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
-import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.bson.Document;
@@ -39,7 +37,11 @@ public final class GroupStageParser {
       }
 
       Object value = entry.getValue();
-      accumulators.put(fieldName, parseAccumulator(value));
+      if (!(value instanceof Document)) {
+        throw new IllegalArgumentException("Accumulator must be a document, got: " + value);
+      }
+      accumulators.put(
+          fieldName, AccumulatorParserUtil.parseAccumulator((Document) value, expressionParser));
     }
 
     return new GroupStage(idExpression, accumulators);
@@ -81,61 +83,5 @@ public final class GroupStageParser {
 
     // Literal value for _id
     return LiteralExpression.of(idValue);
-  }
-
-  private AccumulatorExpression parseAccumulator(Object value) {
-    if (!(value instanceof Document)) {
-      throw new IllegalArgumentException("Accumulator must be a document, got: " + value);
-    }
-
-    Document accDoc = (Document) value;
-    if (accDoc.size() != 1) {
-      throw new IllegalArgumentException(
-          "Accumulator document must have exactly one operator, got: " + accDoc.keySet());
-    }
-
-    Map.Entry<String, Object> entry = accDoc.entrySet().iterator().next();
-    String operator = entry.getKey();
-    Object argument = entry.getValue();
-
-    if (!AccumulatorOp.isAccumulator(operator)) {
-      throw new UnsupportedOperatorException(operator);
-    }
-
-    AccumulatorOp accOp = AccumulatorOp.fromMongo(operator);
-    Expression argumentExpr = parseAccumulatorArgument(argument);
-
-    return new AccumulatorExpression(accOp, argumentExpr);
-  }
-
-  private Expression parseAccumulatorArgument(Object argument) {
-    if (argument == null) {
-      return null;
-    }
-
-    // Handle $count: {} or $count: 1
-    if (argument instanceof Document doc && doc.isEmpty()) {
-      return null;
-    }
-
-    if (argument instanceof String strVal) {
-      if (strVal.startsWith("$")) {
-        // Field reference
-        return FieldPathExpression.of(strVal.substring(1));
-      }
-      return LiteralExpression.of(strVal);
-    }
-
-    if (argument instanceof Number) {
-      // Literal number (e.g., { $sum: 1 } for counting)
-      return LiteralExpression.of(argument);
-    }
-
-    if (argument instanceof Document) {
-      // Complex expression (e.g., { $cond: [...] }, { $multiply: [...] })
-      return expressionParser.parseValue(argument);
-    }
-
-    throw new IllegalArgumentException("Unsupported accumulator argument: " + argument);
   }
 }

@@ -7,6 +7,7 @@
 package com.oracle.mongodb.translator.ast.expression;
 
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.Objects;
 
 /** Represents a field path reference like "$status" or "$customer.address.city". */
@@ -37,12 +38,17 @@ public final class FieldPathExpression implements Expression {
     return new FieldPathExpression(path, returnType, dataColumn != null ? dataColumn : "data");
   }
 
-  /** Returns the JSON path for this field (e.g., "$.status"). */
+  /**
+   * Returns the JSON path for this field (e.g., "$.status"). Validates the path to prevent JSON
+   * path injection attacks.
+   */
   public String getJsonPath() {
     String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
     if (normalizedPath.startsWith(".")) {
       normalizedPath = normalizedPath.substring(1);
     }
+    // Validate path to prevent JSON path injection
+    FieldNameValidator.validateFieldName(normalizedPath);
     return "$." + normalizedPath;
   }
 

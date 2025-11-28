@@ -45,17 +45,25 @@ import org.bson.Document;
 public final class LookupStageParser {
 
   // Use lazy initialization to avoid circular dependency with PipelineParser
-  private PipelineParser pipelineParser;
+  // volatile ensures thread-safe publication of the instance
+  private volatile PipelineParser pipelineParser;
 
   public LookupStageParser() {
     // Don't initialize pipelineParser here to avoid circular dependency
   }
 
   private PipelineParser getPipelineParser() {
-    if (pipelineParser == null) {
-      pipelineParser = new PipelineParser();
+    // Double-checked locking for thread-safe lazy initialization
+    PipelineParser localRef = pipelineParser;
+    if (localRef == null) {
+      synchronized (this) {
+        localRef = pipelineParser;
+        if (localRef == null) {
+          pipelineParser = localRef = new PipelineParser();
+        }
+      }
     }
-    return pipelineParser;
+    return localRef;
   }
 
   /**
