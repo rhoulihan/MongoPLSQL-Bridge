@@ -402,14 +402,18 @@ public final class ExpressionParser {
   private Expression parseStringExpression(String op, Object operand) {
     StringOp stringOp = StringOp.fromMongo(op);
 
-    // Single argument operators (toLower, toUpper, trim, strlen)
+    // Single argument operators (toLower, toUpper, strlen)
     if (stringOp == StringOp.TO_LOWER
         || stringOp == StringOp.TO_UPPER
-        || stringOp == StringOp.TRIM
-        || stringOp == StringOp.LTRIM
-        || stringOp == StringOp.RTRIM
         || stringOp == StringOp.STRLEN) {
       return new StringExpression(stringOp, List.of(parseValue(operand)));
+    }
+
+    // Trim operators: {input: <string>, chars: <string>} or just <string>
+    if (stringOp == StringOp.TRIM
+        || stringOp == StringOp.LTRIM
+        || stringOp == StringOp.RTRIM) {
+      return parseTrimExpression(stringOp, operand);
     }
 
     // Document argument operators (regexMatch, regexFind, replaceOne, replaceAll)
@@ -479,6 +483,32 @@ public final class ExpressionParser {
 
     return new StringExpression(
         stringOp, List.of(parseValue(input), parseValue(find), parseValue(replacement)));
+  }
+
+  private Expression parseTrimExpression(StringOp stringOp, Object operand) {
+    // $trim, $ltrim, $rtrim can take either:
+    // 1. A document: {input: <string>, chars: <string>}
+    // 2. A simple value (backward compatibility or field reference)
+    if (operand instanceof Document doc) {
+      Object input = doc.get("input");
+      if (input == null) {
+        throw new IllegalArgumentException(
+            stringOp.getMongoOperator() + " requires 'input' field when using document syntax");
+      }
+
+      List<Expression> args = new ArrayList<>();
+      args.add(parseValue(input));
+
+      Object chars = doc.get("chars");
+      if (chars != null) {
+        args.add(parseValue(chars));
+      }
+
+      return new StringExpression(stringOp, args);
+    }
+
+    // Simple value (field reference, etc.)
+    return new StringExpression(stringOp, List.of(parseValue(operand)));
   }
 
   private Expression parseArithmeticExpression(String op, Object operand) {

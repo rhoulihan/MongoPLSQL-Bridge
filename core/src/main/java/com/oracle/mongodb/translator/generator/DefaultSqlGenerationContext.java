@@ -7,6 +7,7 @@
 package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.ast.AstNode;
+import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import com.oracle.mongodb.translator.util.FieldNameValidator;
@@ -141,6 +142,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final StringBuilder sql = new StringBuilder();
   private final List<Object> bindVariables = new ArrayList<>();
   private final Map<String, Integer> tableAliasCounters = new HashMap<>();
+  private final Map<String, Expression> virtualFields = new HashMap<>();
   private final boolean inlineValues;
   private final OracleDialect dialect;
   private final String baseTableAlias;
@@ -248,7 +250,21 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
 
   @Override
   public SqlGenerationContext createNestedContext() {
-    return new DefaultSqlGenerationContext(inlineValues, dialect, baseTableAlias);
+    DefaultSqlGenerationContext nested =
+        new DefaultSqlGenerationContext(inlineValues, dialect, baseTableAlias);
+    // Copy virtual fields to nested context so they can be resolved
+    nested.virtualFields.putAll(this.virtualFields);
+    return nested;
+  }
+
+  @Override
+  public void registerVirtualField(String fieldName, Expression expression) {
+    virtualFields.put(fieldName, expression);
+  }
+
+  @Override
+  public Expression getVirtualField(String fieldName) {
+    return virtualFields.get(fieldName);
   }
 
   private String formatInlineValue(Object value) {

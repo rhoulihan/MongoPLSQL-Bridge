@@ -60,6 +60,31 @@ public final class ComparisonExpression implements Expression {
       return;
     }
 
+    // Handle comparing field to empty array [] - use array size check
+    if ((op == ComparisonOp.EQ || op == ComparisonOp.NE)
+        && right instanceof LiteralExpression lit
+        && lit.getValue() instanceof List<?> listVal
+        && listVal.isEmpty()
+        && left instanceof FieldPathExpression fieldPath) {
+      // For field $ne [], check if array has elements: JSON_VALUE(data, '$.field.size()') > 0
+      // For field $eq [], check if array is empty: JSON_VALUE(data, '$.field.size()') = 0
+      ctx.sql("JSON_VALUE(");
+      String alias = ctx.getBaseTableAlias();
+      if (alias != null && !alias.isEmpty()) {
+        ctx.sql(alias);
+        ctx.sql(".");
+      }
+      ctx.sql("data, '$.");
+      ctx.sql(fieldPath.getPath());
+      ctx.sql(".size()')");
+      if (op == ComparisonOp.NE) {
+        ctx.sql(" > 0");
+      } else {
+        ctx.sql(" = 0");
+      }
+      return;
+    }
+
     // Handle $in/$nin with array literal as right operand
     if ((op == ComparisonOp.IN || op == ComparisonOp.NIN)
         && right instanceof LiteralExpression lit

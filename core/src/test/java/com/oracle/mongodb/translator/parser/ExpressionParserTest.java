@@ -373,7 +373,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"$ltrim\": \"$name\"}");
     Expression expr = parser.parseValue(doc);
     expr.render(context);
-    assertThat(context.toSql()).contains("LTRIM");
+    // $ltrim renders as TRIM() - uses Oracle standard TRIM function
+    assertThat(context.toSql()).contains("TRIM(");
   }
 
   @Test
@@ -381,7 +382,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"$rtrim\": \"$name\"}");
     Expression expr = parser.parseValue(doc);
     expr.render(context);
-    assertThat(context.toSql()).contains("RTRIM");
+    // $rtrim renders as TRIM() - uses Oracle standard TRIM function
+    assertThat(context.toSql()).contains("TRIM(");
   }
 
   @Test

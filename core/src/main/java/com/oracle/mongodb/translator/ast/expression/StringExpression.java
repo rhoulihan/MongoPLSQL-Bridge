@@ -192,7 +192,9 @@ public final class StringExpression implements Expression {
     switch (op) {
       case CONCAT -> renderConcat(ctx);
       case SUBSTR -> renderSubstr(ctx);
-      case TRIM -> renderTrim(ctx);
+      case TRIM -> renderTrim(ctx, "BOTH");
+      case LTRIM -> renderTrim(ctx, "LEADING");
+      case RTRIM -> renderTrim(ctx, "TRAILING");
       case SPLIT -> renderSplit(ctx);
       case INDEX_OF_CP -> renderIndexOfCp(ctx);
       case REGEX_MATCH -> renderRegexMatch(ctx);
@@ -239,9 +241,19 @@ public final class StringExpression implements Expression {
     ctx.sql(")");
   }
 
-  private void renderTrim(SqlGenerationContext ctx) {
+  private void renderTrim(SqlGenerationContext ctx, String direction) {
+    // Oracle TRIM syntax: TRIM([LEADING|TRAILING|BOTH] [chars] FROM string)
+    // MongoDB: {$trim: {input: <string>, chars: <string>}} or {$trim: <string>}
     ctx.sql("TRIM(");
-    if (!arguments.isEmpty()) {
+    if (arguments.size() >= 2) {
+      // Has explicit chars to trim
+      ctx.sql(direction);
+      ctx.sql(" ");
+      ctx.visit(arguments.get(1)); // chars
+      ctx.sql(" FROM ");
+      ctx.visit(arguments.get(0)); // input
+    } else if (!arguments.isEmpty()) {
+      // Just trim whitespace
       ctx.visit(arguments.get(0));
     }
     ctx.sql(")");

@@ -175,28 +175,47 @@ public final class ArrayExpression implements Expression {
       }
     }
 
-    // Get the field path from the array expression
-    if (!(arrayExpression instanceof FieldPathExpression fieldPath)) {
-      throw new IllegalStateException("Array expression must be a field path");
-    }
-
-    String path = fieldPath.getPath();
-
-    switch (op) {
-      case ARRAY_ELEM_AT -> renderArrayElemAt(ctx, path);
-      case SIZE -> renderSize(ctx, path);
-      case FIRST -> renderFirst(ctx, path);
-      case LAST -> renderLast(ctx, path);
-      case SLICE -> renderSlice(ctx, path);
-      default -> throw new IllegalStateException("Unexpected array operator: " + op);
+    // For field path expressions, use optimized JSON path rendering
+    if (arrayExpression instanceof FieldPathExpression fieldPath) {
+      String path = fieldPath.getPath();
+      switch (op) {
+        case ARRAY_ELEM_AT -> renderArrayElemAt(ctx, path);
+        case SIZE -> renderSize(ctx, path);
+        case FIRST -> renderFirst(ctx, path);
+        case LAST -> renderLast(ctx, path);
+        case SLICE -> renderSlice(ctx, path);
+        default -> throw new IllegalStateException("Unexpected array operator: " + op);
+      }
+    } else {
+      // For expression-based arrays (like $split result), use subquery-based approach
+      switch (op) {
+        case ARRAY_ELEM_AT -> renderArrayElemAtExpression(ctx);
+        case SIZE -> renderSizeExpression(ctx);
+        case FIRST -> renderFirstExpression(ctx);
+        case LAST -> renderLastExpression(ctx);
+        case SLICE -> renderSliceExpression(ctx);
+        default -> throw new IllegalStateException("Unexpected array operator: " + op);
+      }
     }
   }
 
+  /** Renders "alias.data" or just "data" if no alias is set. */
+  private void renderDataColumn(SqlGenerationContext ctx) {
+    String alias = ctx.getBaseTableAlias();
+    if (alias != null && !alias.isEmpty()) {
+      ctx.sql(alias);
+      ctx.sql(".");
+    }
+    ctx.sql("data");
+  }
+
   private void renderArrayElemAt(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(data, '$.items[index]')
+    // JSON_VALUE(alias.data, '$.items[index]')
     if (indexExpression instanceof LiteralExpression lit && lit.getValue() instanceof Number num) {
       final int idx = num.intValue();
-      ctx.sql("JSON_VALUE(data, '$.");
+      ctx.sql("JSON_VALUE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
       ctx.sql(path);
       ctx.sql("[");
       if (idx >= 0) {
@@ -218,22 +237,28 @@ public final class ArrayExpression implements Expression {
   }
 
   private void renderSize(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(data, '$.items.size()')
-    ctx.sql("JSON_VALUE(data, '$.");
+    // JSON_VALUE(alias.data, '$.items.size()')
+    ctx.sql("JSON_VALUE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(path);
     ctx.sql(".size()')");
   }
 
   private void renderFirst(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(data, '$.items[0]')
-    ctx.sql("JSON_VALUE(data, '$.");
+    // JSON_VALUE(alias.data, '$.items[0]')
+    ctx.sql("JSON_VALUE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(path);
     ctx.sql("[0]')");
   }
 
   private void renderLast(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(data, '$.items[last]')
-    ctx.sql("JSON_VALUE(data, '$.");
+    // JSON_VALUE(alias.data, '$.items[last]')
+    ctx.sql("JSON_VALUE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(path);
     ctx.sql("[last]')");
   }
@@ -243,7 +268,9 @@ public final class ArrayExpression implements Expression {
     // negative)
     // MongoDB: {$slice: ["$items", skip, n]} - skip elements, then take n
     // Oracle: JSON_QUERY with array slice syntax
-    ctx.sql("JSON_QUERY(data, '$.");
+    ctx.sql("JSON_QUERY(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(path);
 
     if (additionalArgs != null && !additionalArgs.isEmpty()) {
@@ -348,6 +375,162 @@ public final class ArrayExpression implements Expression {
         ctx.sql("/* $reduce not fully supported */ NULL");
       }
       default -> throw new IllegalStateException("Unexpected complex array operator: " + op);
+    }
+  }
+
+  /**
+   * Renders $arrayElemAt when the array is an expression (not a field path). Uses Oracle's
+   * REGEXP_SUBSTR or JSON_TABLE to extract elements from the expression result.
+   */
+  private void renderArrayElemAtExpression(SqlGenerationContext ctx) {
+    if (!(indexExpression instanceof LiteralExpression lit)
+        || !(lit.getValue() instanceof Number num)) {
+      throw new IllegalArgumentException("$arrayElemAt index must be a literal number");
+    }
+
+    int idx = num.intValue();
+
+    // For $split results, use REGEXP_SUBSTR to get the nth element
+    if (arrayExpression instanceof StringExpression stringExpr
+        && stringExpr.getOp() == StringOp.SPLIT) {
+      List<Expression> splitArgs = stringExpr.getArguments();
+      if (splitArgs.size() >= 2) {
+        Expression inputExpr = splitArgs.get(0);
+        Expression delimiterExpr = splitArgs.get(1);
+
+        // REGEXP_SUBSTR(input, '[^delimiter]+', 1, position)
+        ctx.sql("REGEXP_SUBSTR(");
+        ctx.visit(inputExpr);
+        ctx.sql(", '[^'||");
+        ctx.visit(delimiterExpr);
+        ctx.sql("||']+', 1, ");
+        ctx.sql(String.valueOf(idx + 1)); // Oracle REGEXP_SUBSTR is 1-based
+        ctx.sql(")");
+        return;
+      }
+    }
+
+    // For other expressions, wrap in JSON_TABLE
+    ctx.sql("(SELECT val FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY)) WHERE rn = ");
+    ctx.sql(String.valueOf(idx + 1));
+    ctx.sql(")");
+  }
+
+  /** Renders $size when the array is an expression. */
+  private void renderSizeExpression(SqlGenerationContext ctx) {
+    // For $split results, count delimiters + 1
+    if (arrayExpression instanceof StringExpression stringExpr
+        && stringExpr.getOp() == StringOp.SPLIT) {
+      List<Expression> splitArgs = stringExpr.getArguments();
+      if (splitArgs.size() >= 2) {
+        Expression inputExpr = splitArgs.get(0);
+        Expression delimiterExpr = splitArgs.get(1);
+
+        // REGEXP_COUNT(input, delimiter) + 1
+        ctx.sql("(REGEXP_COUNT(");
+        ctx.visit(inputExpr);
+        ctx.sql(", ");
+        ctx.visit(delimiterExpr);
+        ctx.sql(") + 1)");
+        return;
+      }
+    }
+
+    // For other expressions, use JSON_TABLE
+    ctx.sql("(SELECT COUNT(*) FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+  }
+
+  /** Renders $first when the array is an expression. */
+  private void renderFirstExpression(SqlGenerationContext ctx) {
+    // $first is equivalent to $arrayElemAt with index 0
+    if (arrayExpression instanceof StringExpression stringExpr
+        && stringExpr.getOp() == StringOp.SPLIT) {
+      List<Expression> splitArgs = stringExpr.getArguments();
+      if (splitArgs.size() >= 2) {
+        Expression inputExpr = splitArgs.get(0);
+        Expression delimiterExpr = splitArgs.get(1);
+
+        ctx.sql("REGEXP_SUBSTR(");
+        ctx.visit(inputExpr);
+        ctx.sql(", '[^'||");
+        ctx.visit(delimiterExpr);
+        ctx.sql("||']+', 1, 1)");
+        return;
+      }
+    }
+
+    ctx.sql("(SELECT val FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[0]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+  }
+
+  /** Renders $last when the array is an expression. */
+  private void renderLastExpression(SqlGenerationContext ctx) {
+    // For $split results, get the last element
+    if (arrayExpression instanceof StringExpression stringExpr
+        && stringExpr.getOp() == StringOp.SPLIT) {
+      List<Expression> splitArgs = stringExpr.getArguments();
+      if (splitArgs.size() >= 2) {
+        Expression inputExpr = splitArgs.get(0);
+        Expression delimiterExpr = splitArgs.get(1);
+
+        // Get last element: REGEXP_SUBSTR(input, '[^delim]+', 1, REGEXP_COUNT(...)+1)
+        ctx.sql("REGEXP_SUBSTR(");
+        ctx.visit(inputExpr);
+        ctx.sql(", '[^'||");
+        ctx.visit(delimiterExpr);
+        ctx.sql("||']+', 1, REGEXP_COUNT(");
+        ctx.visit(inputExpr);
+        ctx.sql(", ");
+        ctx.visit(delimiterExpr);
+        ctx.sql(") + 1)");
+        return;
+      }
+    }
+
+    ctx.sql("(SELECT val FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[last]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+  }
+
+  /** Renders $slice when the array is an expression. */
+  private void renderSliceExpression(SqlGenerationContext ctx) {
+    // For expression arrays, use JSON_TABLE with row limiting
+    ctx.sql("(SELECT JSON_ARRAYAGG(val ORDER BY rn) FROM (SELECT val, rn FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY))");
+
+    if (additionalArgs != null && !additionalArgs.isEmpty()) {
+      // Three argument form: array, skip, count
+      if (indexExpression instanceof LiteralExpression skipLit
+          && skipLit.getValue() instanceof Number skipNum
+          && additionalArgs.get(0) instanceof LiteralExpression countLit
+          && countLit.getValue() instanceof Number countNum) {
+        int skip = skipNum.intValue();
+        int count = countNum.intValue();
+        ctx.sql(" WHERE rn > ");
+        ctx.sql(String.valueOf(skip));
+        ctx.sql(" FETCH FIRST ");
+        ctx.sql(String.valueOf(count));
+        ctx.sql(" ROWS ONLY))");
+      }
+    } else if (indexExpression instanceof LiteralExpression lit
+        && lit.getValue() instanceof Number num) {
+      int count = num.intValue();
+      if (count >= 0) {
+        ctx.sql(" FETCH FIRST ");
+        ctx.sql(String.valueOf(count));
+        ctx.sql(" ROWS ONLY))");
+      } else {
+        // Negative count: last |n| elements
+        ctx.sql(" ORDER BY rn DESC FETCH FIRST ");
+        ctx.sql(String.valueOf(-count));
+        ctx.sql(" ROWS ONLY) ORDER BY rn))");
+      }
     }
   }
 

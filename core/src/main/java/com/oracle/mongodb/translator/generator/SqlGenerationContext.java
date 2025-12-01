@@ -7,6 +7,7 @@
 package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.ast.AstNode;
+import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import java.util.List;
 
@@ -79,4 +80,22 @@ public interface SqlGenerationContext {
    * @return a new nested context
    */
   SqlGenerationContext createNestedContext();
+
+  /**
+   * Registers a virtual field defined by $addFields. When a subsequent stage references this field,
+   * the expression will be inlined rather than generating a JSON path.
+   *
+   * @param fieldName the virtual field name (without $ prefix)
+   * @param expression the expression that defines this field
+   */
+  void registerVirtualField(String fieldName, Expression expression);
+
+  /**
+   * Looks up a virtual field defined by $addFields. Returns the expression if found, null
+   * otherwise.
+   *
+   * @param fieldName the virtual field name (without $ prefix)
+   * @return the expression defining this field, or null if not a virtual field
+   */
+  Expression getVirtualField(String fieldName);
 }

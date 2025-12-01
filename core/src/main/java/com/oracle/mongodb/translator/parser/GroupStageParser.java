@@ -64,7 +64,17 @@ public final class GroupStageParser {
     }
 
     if (idValue instanceof Document idDoc) {
-      // Complex _id expression - could be multiple fields or expressions
+      // Check if this is an operator expression (like {$month: "$date"})
+      // vs a compound _id (like {field1: "$f1", field2: "$f2"})
+      if (idDoc.size() == 1) {
+        String key = idDoc.keySet().iterator().next();
+        if (key.startsWith("$")) {
+          // This is an operator expression, not a compound _id
+          return expressionParser.parseValue(idDoc);
+        }
+      }
+
+      // Complex _id expression - multiple fields or single non-operator field
       Map<String, Expression> fields = new LinkedHashMap<>();
 
       for (Map.Entry<String, Object> entry : idDoc.entrySet()) {

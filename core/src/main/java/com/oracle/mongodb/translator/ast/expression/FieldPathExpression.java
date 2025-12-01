@@ -66,6 +66,18 @@ public final class FieldPathExpression implements Expression {
 
   @Override
   public void render(SqlGenerationContext ctx) {
+    // Check if this path references a virtual field defined by $addFields
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+    if (normalizedPath.startsWith(".")) {
+      normalizedPath = normalizedPath.substring(1);
+    }
+    Expression virtualExpr = ctx.getVirtualField(normalizedPath);
+    if (virtualExpr != null) {
+      // Inline the virtual field expression instead of generating JSON path
+      ctx.visit(virtualExpr);
+      return;
+    }
+
     ctx.sql("JSON_VALUE(");
     // Use table alias qualified column name when there's a base alias
     String baseAlias = ctx.getBaseTableAlias();

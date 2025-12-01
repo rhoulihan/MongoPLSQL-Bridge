@@ -85,10 +85,8 @@ public final class UnwindStage implements Stage {
     ctx.sql(path);
     ctx.sql("[*]'");
 
-    // Error handling
-    if (preserveNullAndEmptyArrays) {
-      ctx.sql(" ERROR ON ERROR");
-    }
+    // Note: preserveNullAndEmptyArrays is handled by PipelineRenderer
+    // which uses LEFT OUTER JOIN when this flag is true
 
     ctx.sql(" COLUMNS (");
 

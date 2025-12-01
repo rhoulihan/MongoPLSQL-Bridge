@@ -87,8 +87,10 @@ class UnwindStageTest {
     stage.render(context);
 
     String sql = context.toSql();
-    // Oracle uses OUTER for preserving nulls
-    assertThat(sql).containsIgnoringCase("ERROR ON ERROR");
+    // The stage itself just renders JSON_TABLE; PipelineRenderer handles the LEFT OUTER JOIN
+    // This flag is checked by PipelineRenderer to determine join type
+    assertThat(stage.isPreserveNullAndEmptyArrays()).isTrue();
+    assertThat(sql).contains("JSON_TABLE");
   }
 
   @Test

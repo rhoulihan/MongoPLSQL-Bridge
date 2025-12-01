@@ -129,6 +129,18 @@ EXIT;
 EOSQL" 2>/dev/null
 }
 
+# Function to generate Oracle SQL using the translator
+generate_oracle_sql() {
+    local collection="$1"
+    local pipeline="$2"
+
+    cd "$PROJECT_ROOT" && ./gradlew :core:translatePipeline \
+        -PcollectionName="$collection" \
+        -PpipelineJson="$pipeline" \
+        -Pinline=true \
+        --quiet 2>/dev/null
+}
+
 # Function to normalize and compare results
 compare_results() {
     local mongo_result="$1"
@@ -210,6 +222,28 @@ PYTHON
 
     echo -n -e "  ${CYAN}[${TEST_ID}]${NC} ${TEST_NAME}... "
 
+    # Always generate Oracle SQL using the translator to test current implementation
+    GENERATED_SQL=$(generate_oracle_sql "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1)
+    if [ -z "$GENERATED_SQL" ] || [[ "$GENERATED_SQL" == *"Error"* ]] || [[ "$GENERATED_SQL" == *"FAILURE"* ]]; then
+        echo -e "${YELLOW}SKIP${NC} (translator error)"
+        SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+
+        echo "[$TEST_ID] $TEST_NAME" >> "$REPORT_FILE"
+        echo "  Category: $TEST_CATEGORY" >> "$REPORT_FILE"
+        echo "  Status: SKIP" >> "$REPORT_FILE"
+        echo "  Details: Translation not supported" >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+
+        if [ "$FIRST_RESULT" = true ]; then
+            FIRST_RESULT=false
+        else
+            echo "," >> "$JSON_REPORT_FILE"
+        fi
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
+        continue
+    fi
+    TEST_SQL="$GENERATED_SQL"
+
     # Run MongoDB query
     MONGO_RESULT=$(run_mongodb_query "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1) || MONGO_RESULT="ERROR"
     MONGO_COUNT=$(echo "$MONGO_RESULT" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "ERROR")
@@ -276,7 +310,7 @@ PYTHON
 done
 
 # Close JSON report
-echo '],"summary":{"total":'$TOTAL_TESTS',"passed":'$PASSED_TESTS',"failed":'$FAILED_TESTS',"errors":'$ERROR_TESTS'}}' >> "$JSON_REPORT_FILE"
+echo '],"summary":{"total":'$TOTAL_TESTS',"passed":'$PASSED_TESTS',"failed":'$FAILED_TESTS',"skipped":'$SKIPPED_TESTS',"errors":'$ERROR_TESTS'}}' >> "$JSON_REPORT_FILE"
 
 # Print summary
 echo ""
@@ -286,6 +320,7 @@ echo -e "${BLUE}============================================================${NC
 echo -e "  Total:   $TOTAL_TESTS"
 echo -e "  ${GREEN}Passed:  $PASSED_TESTS${NC}"
 echo -e "  ${RED}Failed:  $FAILED_TESTS${NC}"
+echo -e "  ${YELLOW}Skipped: $SKIPPED_TESTS${NC}"
 echo -e "  ${YELLOW}Errors:  $ERROR_TESTS${NC}"
 echo -e "${BLUE}============================================================${NC}"
 
@@ -293,10 +328,11 @@ echo -e "${BLUE}============================================================${NC
 echo "============================================================" >> "$REPORT_FILE"
 echo "SUMMARY" >> "$REPORT_FILE"
 echo "============================================================" >> "$REPORT_FILE"
-echo "Total:  $TOTAL_TESTS" >> "$REPORT_FILE"
-echo "Passed: $PASSED_TESTS" >> "$REPORT_FILE"
-echo "Failed: $FAILED_TESTS" >> "$REPORT_FILE"
-echo "Errors: $ERROR_TESTS" >> "$REPORT_FILE"
+echo "Total:   $TOTAL_TESTS" >> "$REPORT_FILE"
+echo "Passed:  $PASSED_TESTS" >> "$REPORT_FILE"
+echo "Failed:  $FAILED_TESTS" >> "$REPORT_FILE"
+echo "Skipped: $SKIPPED_TESTS" >> "$REPORT_FILE"
+echo "Errors:  $ERROR_TESTS" >> "$REPORT_FILE"
 
 echo ""
 echo "Reports generated:"

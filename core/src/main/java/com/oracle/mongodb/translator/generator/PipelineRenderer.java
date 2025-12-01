@@ -75,6 +75,14 @@ public final class PipelineRenderer {
     // Analyze pipeline to extract components
     PipelineComponents components = analyzePipeline(pipeline);
 
+    // Register virtual fields from $addFields stages
+    // These fields can then be referenced by subsequent stages like $group
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      for (var entry : addFields.getFields().entrySet()) {
+        ctx.registerVirtualField(entry.getKey(), entry.getValue());
+      }
+    }
+
     // Render WITH clause for CTEs ($graphLookup stages)
     renderCteClause(components, ctx);
 
@@ -540,10 +548,18 @@ public final class PipelineRenderer {
     ctx.sql(" ");
     ctx.sql(ctx.getBaseTableAlias());
 
-    // Render unwind stages as cross joins with JSON_TABLE
+    // Render unwind stages as joins with JSON_TABLE
+    // When preserveNullAndEmptyArrays is true, use LEFT OUTER JOIN
+    // to preserve rows with null/empty arrays
     for (UnwindStage unwind : components.unwindStages) {
-      ctx.sql(", ");
-      ctx.visit(unwind);
+      if (unwind.isPreserveNullAndEmptyArrays()) {
+        ctx.sql(" LEFT OUTER JOIN ");
+        ctx.visit(unwind);
+        ctx.sql(" ON 1=1");
+      } else {
+        ctx.sql(", ");
+        ctx.visit(unwind);
+      }
     }
   }
 
