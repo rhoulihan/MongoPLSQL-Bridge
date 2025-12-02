@@ -20,6 +20,8 @@ import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
+import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
+import com.oracle.mongodb.translator.ast.expression.LogicalOp;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
 import com.oracle.mongodb.translator.ast.stage.BucketStage;
@@ -1073,6 +1075,789 @@ class PipelineRendererTest {
     // Should NOT wrap in subquery since no match on window field
     assertThat(sql).doesNotContain("FROM (SELECT");
     assertThat(sql).contains("SUM(");
+    assertThat(sql).contains("runningTotal");
+  }
+
+  // Additional tests for improved coverage
+
+  @Test
+  void shouldRenderUnionWithFollowedByGroupStage() {
+    // Test post-union group: $unionWith followed by $group
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("returns", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderUnionWithFollowedByGroupWithNullId() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("totalCount", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("returns", List.of()),
+            new GroupStage(null, accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("COUNT(*)");
+  }
+
+  @Test
+  void shouldRenderPostWindowMatchWithoutProject() {
+    // $setWindowFields followed by $match with no $project - uses SELECT *
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            "$category", Map.of("score", -1), Map.of("categoryRank", windowField));
+
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.LTE,
+                FieldPathExpression.of("categoryRank", JsonReturnType.NUMBER),
+                LiteralExpression.of(3)));
+
+    Pipeline pipeline = Pipeline.of("items", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("SELECT *");
+    assertThat(sql).contains("FROM (SELECT");
+    assertThat(sql).contains("RANK()");
+  }
+
+  @Test
+  void shouldRenderPostWindowMatchWithPreWindowWhere() {
+    // $match before $setWindowFields (goes in inner WHERE), then $match after (outer WHERE)
+    var preWindowMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ, FieldPathExpression.of("active"), LiteralExpression.of(true)));
+
+    var windowField = new WindowField("$rowNumber", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(null, Map.of("date", 1), Map.of("rowNum", windowField));
+
+    var postWindowMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("rowNum", JsonReturnType.NUMBER),
+                LiteralExpression.of(1)));
+
+    Pipeline pipeline =
+        Pipeline.of("events", preWindowMatch, setWindowFields, postWindowMatch);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Pre-window match should be in inner WHERE
+    assertThat(sql).contains("WHERE");
+    // Post-window match on outer
+    assertThat(sql).contains("rowNum");
+  }
+
+  @Test
+  void shouldRenderPostWindowMatchWithSortOnDataField() {
+    var windowField = new WindowField("$denseRank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage("$region", Map.of("sales", -1), Map.of("rank", windowField));
+
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("rank", JsonReturnType.NUMBER),
+                LiteralExpression.of(1)));
+
+    // Sort by a data field (not window field)
+    var sort =
+        new SortStage(
+            List.of(new SortField(FieldPathExpression.of("region"), SortDirection.ASC)));
+
+    Pipeline pipeline = Pipeline.of("sales", setWindowFields, match, sort);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("JSON_VALUE(data");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithSum() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "totalSales",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 5, accumulators, null));
+
+    renderer.render(pipeline, context);
+
+    assertThat(context.toSql()).contains("SUM(groupby_value)").contains("NTILE(5)");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithAvg() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "avgPrice",
+        AccumulatorExpression.avg(FieldPathExpression.of("price", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 3, accumulators, null));
+
+    renderer.render(pipeline, context);
+
+    assertThat(context.toSql()).contains("AVG(groupby_value)").contains("NTILE(3)");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithMin() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "minPrice",
+        AccumulatorExpression.min(FieldPathExpression.of("price", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 4, accumulators, null));
+
+    renderer.render(pipeline, context);
+
+    assertThat(context.toSql()).contains("MIN(groupby_value)").contains("NTILE(4)");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithMax() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "maxPrice",
+        AccumulatorExpression.max(FieldPathExpression.of("price", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 4, accumulators, null));
+
+    renderer.render(pipeline, context);
+
+    assertThat(context.toSql()).contains("MAX(groupby_value)").contains("NTILE(4)");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithMatchFilter() {
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.GT,
+                FieldPathExpression.of("quantity", JsonReturnType.NUMBER),
+                LiteralExpression.of(0)));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            match,
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 3, accumulators, null));
+
+    renderer.render(pipeline, context);
+
+    assertThat(context.toSql()).contains("WHERE").contains("NTILE(3)");
+  }
+
+  @Test
+  void shouldRenderUnionWithFollowedByProjectAndGroup() {
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("type", ProjectionField.include(FieldPathExpression.of("docType")));
+    projections.put("amount", ProjectionField.include(FieldPathExpression.of("value")));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "total",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new ProjectStage(projections),
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderPostWindowProjectWithId() {
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            "$department", Map.of("salary", -1), Map.of("salaryRank", windowField));
+
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("_id", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("department", ProjectionField.include(FieldPathExpression.of("department")));
+    projections.put(
+        "salaryRank", ProjectionField.include(FieldPathExpression.of("salaryRank")));
+
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("salaryRank", JsonReturnType.NUMBER),
+                LiteralExpression.of(1)));
+
+    Pipeline pipeline =
+        Pipeline.of("employees", setWindowFields, match, new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("SELECT ");
+    assertThat(sql).contains("id"); // _id maps to id column
+    assertThat(sql).contains("salaryRank");
+  }
+
+  @Test
+  void shouldRenderPostWindowMatchWithLogicalExpression() {
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            "$category", Map.of("score", -1), Map.of("rank", windowField));
+
+    // Match using logical expression (not directly a ComparisonExpression)
+    var logicalExpr =
+        new LogicalExpression(
+            LogicalOp.OR,
+            List.of(
+                new ComparisonExpression(
+                    ComparisonOp.EQ,
+                    FieldPathExpression.of("rank", JsonReturnType.NUMBER),
+                    LiteralExpression.of(1)),
+                new ComparisonExpression(
+                    ComparisonOp.EQ,
+                    FieldPathExpression.of("rank", JsonReturnType.NUMBER),
+                    LiteralExpression.of(2))));
+
+    var match = new MatchStage(logicalExpr);
+
+    Pipeline pipeline = Pipeline.of("items", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("OR");
+  }
+
+  @Test
+  void shouldRenderPostWindowMatchWithGtOperator() {
+    var windowField = new WindowField("$rowNumber", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(null, Map.of("date", 1), Map.of("rowNum", windowField));
+
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.GT,
+                FieldPathExpression.of("rowNum", JsonReturnType.NUMBER),
+                LiteralExpression.of(5)));
+
+    Pipeline pipeline = Pipeline.of("events", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WHERE rowNum > ");
+  }
+
+  // Tests for $facet stage
+  @Test
+  void shouldRenderFacetWithGroupPipeline() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put(
+        "categoryCounts",
+        List.of(new GroupStage(FieldPathExpression.of("category"), accumulators)));
+
+    Pipeline pipeline = Pipeline.of("products", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_OBJECT");
+    assertThat(sql).contains("categoryCounts");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderFacetWithProjectPipeline() {
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+    projections.put("price", ProjectionField.include(FieldPathExpression.of("price")));
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("topProducts", List.of(new ProjectStage(projections), new LimitStage(5)));
+
+    Pipeline pipeline = Pipeline.of("products", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_OBJECT");
+    assertThat(sql).contains("topProducts");
+    assertThat(sql).contains("FROM DUAL");
+  }
+
+  @Test
+  void shouldRenderFacetWithMultiplePipelines() {
+    var countAccumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    countAccumulators.put("total", AccumulatorExpression.count());
+
+    var sumAccumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    sumAccumulators.put(
+        "totalValue",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("counts", List.of(new GroupStage(null, countAccumulators)));
+    facets.put(
+        "totals", List.of(new GroupStage(FieldPathExpression.of("type"), sumAccumulators)));
+
+    Pipeline pipeline = Pipeline.of("transactions", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("'counts' VALUE");
+    assertThat(sql).contains("'totals' VALUE");
+  }
+
+  @Test
+  void shouldRenderFacetWithMatchAndGroup() {
+    var matchFilter =
+        new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("price", JsonReturnType.NUMBER),
+            LiteralExpression.of(100));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put(
+        "expensiveItems",
+        List.of(
+            new MatchStage(matchFilter),
+            new GroupStage(FieldPathExpression.of("category"), accumulators)));
+
+    Pipeline pipeline = Pipeline.of("products", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("expensiveItems");
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderFacetWithProjectAndSort() {
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+    projections.put("score", ProjectionField.include(FieldPathExpression.of("score")));
+
+    var sortFields = List.of(new SortField(FieldPathExpression.of("score"), SortDirection.DESC));
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put(
+        "sortedByScore",
+        List.of(new ProjectStage(projections), new SortStage(sortFields), new LimitStage(10)));
+
+    Pipeline pipeline = Pipeline.of("players", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("sortedByScore");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("DESC");
+  }
+
+  @Test
+  void shouldRenderFacetWithGroupNullId() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "avgPrice",
+        AccumulatorExpression.avg(FieldPathExpression.of("price", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "maxPrice",
+        AccumulatorExpression.max(FieldPathExpression.of("price", JsonReturnType.NUMBER)));
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("priceStats", List.of(new GroupStage(null, accumulators)));
+
+    Pipeline pipeline = Pipeline.of("products", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("priceStats");
+    assertThat(sql).contains("'_id' VALUE NULL");
+    assertThat(sql).contains("AVG(");
+    assertThat(sql).contains("MAX(");
+  }
+
+  // Tests for post-union sort and limit
+  @Test
+  void shouldRenderUnionWithSortAndLimit() {
+    var sortFields = List.of(new SortField(FieldPathExpression.of("date"), SortDirection.DESC));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new SortStage(sortFields),
+            new LimitStage(20));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("FETCH FIRST 20 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderUnionWithSkipAndLimit() {
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new SkipStage(10),
+            new LimitStage(5));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("OFFSET 10 ROWS");
+    assertThat(sql).contains("FETCH FIRST 5 ROWS ONLY");
+  }
+
+  // Tests for more post-union accumulator types
+  @Test
+  void shouldRenderPostUnionGroupWithAvg() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "avgAmount",
+        AccumulatorExpression.avg(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("AVG(");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderPostUnionGroupWithMin() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "minAmount",
+        AccumulatorExpression.min(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("MIN(");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderPostUnionGroupWithMax() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "maxAmount",
+        AccumulatorExpression.max(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("MAX(");
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderPostUnionGroupWithMultipleAccumulators() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "totalAmount",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "avgAmount",
+        AccumulatorExpression.avg(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "minAmount",
+        AccumulatorExpression.min(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "maxAmount",
+        AccumulatorExpression.max(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    accumulators.put("count", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("category"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("SUM(");
+    assertThat(sql).contains("AVG(");
+    assertThat(sql).contains("MIN(");
+    assertThat(sql).contains("MAX(");
+    assertThat(sql).contains("COUNT(*)");
+  }
+
+  @Test
+  void shouldRenderPostUnionGroupWithSumOfOne() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.sum(LiteralExpression.of(1)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new UnionWithStage("refunds", List.of()),
+            new GroupStage(FieldPathExpression.of("type"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("COUNT(*)");
+  }
+
+  // Tests for unwind on lookup field
+  @Test
+  void shouldRenderUnwindOnLookupField() {
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            LookupStage.equality("products", "productId", "_id", "items"),
+            new UnwindStage("$items", null, false));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Unwind uses JSON_TABLE with arrays
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("LEFT OUTER JOIN");
+  }
+
+  // Tests for BucketAuto with more configurations
+  @Test
+  void shouldRenderBucketAutoWithLimitAfter() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 5, accumulators, null),
+            new LimitStage(3));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("NTILE(5)");
+    // BucketAuto is a grouped query, limit may be handled differently
+    assertThat(sql).contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderBucketAutoWithSortAfter() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "totalValue",
+        AccumulatorExpression.sum(FieldPathExpression.of("value", JsonReturnType.NUMBER)));
+
+    var sortFields =
+        List.of(new SortField(FieldPathExpression.of("totalValue"), SortDirection.DESC));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new BucketAutoStage(
+                FieldPathExpression.of("price", JsonReturnType.NUMBER), 4, accumulators, null),
+            new SortStage(sortFields));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("NTILE(4)");
+    assertThat(sql).contains("ORDER BY");
+  }
+
+  // Test for post-window expression referencing non-window field
+  @Test
+  void shouldRenderPostWindowMatchWithNonWindowField() {
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage("$dept", Map.of("salary", -1), Map.of("rank", windowField));
+
+    // Match references both window field and regular field
+    var match =
+        new MatchStage(
+            new LogicalExpression(
+                LogicalOp.AND,
+                List.of(
+                    new ComparisonExpression(
+                        ComparisonOp.EQ,
+                        FieldPathExpression.of("rank", JsonReturnType.NUMBER),
+                        LiteralExpression.of(1)),
+                    new ComparisonExpression(
+                        ComparisonOp.EQ,
+                        FieldPathExpression.of("status"),
+                        LiteralExpression.of("active")))));
+
+    Pipeline pipeline = Pipeline.of("employees", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("AND");
+  }
+
+  // Test for bucket literal rendering with different types
+  @Test
+  void shouldRenderBucketWithStringBoundaries() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    // Bucket with string boundaries
+    List<Object> boundaries = List.of("A", "M", "Z");
+    Object defaultBucket = "Other";
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "customers",
+            new BucketStage(
+                FieldPathExpression.of("lastName"), boundaries, defaultBucket, accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("CASE WHEN");
+  }
+
+  @Test
+  void shouldRenderBucketWithDecimalBoundaries() {
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    List<Object> boundaries = List.of(0.0, 25.5, 50.0, 75.5, 100.0);
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "grades",
+            new BucketStage(
+                FieldPathExpression.of("score", JsonReturnType.NUMBER),
+                boundaries,
+                "unknown",
+                accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("CASE WHEN");
+    assertThat(sql).contains("25.5");
+    assertThat(sql).contains("75.5");
+  }
+
+  // Test for expressionReferencesFields with complex expressions
+  @Test
+  void shouldRenderPostWindowMatchWithArithmeticExpression() {
+    // WindowField takes String argument, not Expression
+    var windowField = new WindowField("$sum", "$amount", null);
+    var setWindowFields =
+        new SetWindowFieldsStage("$type", Map.of("date", 1), Map.of("runningTotal", windowField));
+
+    // Match with arithmetic expression - this tests expressionReferencesFields
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.GT,
+                FieldPathExpression.of("runningTotal", JsonReturnType.NUMBER),
+                LiteralExpression.of(1000)));
+
+    Pipeline pipeline = Pipeline.of("transactions", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WHERE");
     assertThat(sql).contains("runningTotal");
   }
 }

@@ -12,7 +12,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 85% instruction coverage and 103 passing cross-database validation tests.
+**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 103 passing cross-database validation tests.
 
 ### Implemented Operators
 
@@ -55,11 +55,11 @@ All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See 
 
 | Package | Instruction Coverage | Branch Coverage |
 |---------|---------------------|-----------------|
-| Overall | **85%** | **73%** |
+| Overall | **93%** | **83%** |
 | `api` | 97% | 100% |
-| `ast.expression` | 85% | 67% |
+| `ast.expression` | 96% | 80% |
 | `ast.stage` | 97% | 91% |
-| `generator` | 70% | 54% |
+| `generator` | 93% | 82% |
 | `parser` | 90% | 86% |
 | `optimizer` | 92% | 86% |
 | `exception` | 100% | 100% |
