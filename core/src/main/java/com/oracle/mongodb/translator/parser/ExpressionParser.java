@@ -15,6 +15,7 @@ import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.DateExpression;
 import com.oracle.mongodb.translator.ast.expression.DateOp;
+import com.oracle.mongodb.translator.ast.expression.ExistsExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.InExpression;
@@ -202,6 +203,8 @@ public final class ExpressionParser {
         conditions.add(parseComparisonOperator(fieldPath, op, value));
       } else if (op.equals("$not")) {
         conditions.add(parseNotOperator(fieldPath, value));
+      } else if (op.equals("$exists")) {
+        conditions.add(parseExistsOperator(fieldPath, value));
       } else {
         throw new UnsupportedOperatorException(op);
       }
@@ -247,6 +250,13 @@ public final class ExpressionParser {
 
     Expression inner = parseFieldOperators(fieldPath, (Document) value);
     return new LogicalExpression(LogicalOp.NOT, List.of(inner));
+  }
+
+  private Expression parseExistsOperator(String fieldPath, Object value) {
+    if (!(value instanceof Boolean)) {
+      throw new IllegalArgumentException("$exists requires a boolean value");
+    }
+    return new ExistsExpression(fieldPath, (Boolean) value);
   }
 
   private FieldPathExpression createFieldPath(String path, Object sampleValue) {

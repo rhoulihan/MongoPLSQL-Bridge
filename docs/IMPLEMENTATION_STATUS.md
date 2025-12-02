@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-01
+**Last Updated:** 2025-12-02
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -122,7 +122,8 @@ ast/
 │   ├── ArrayOp.java ✅
 │   ├── ArrayExpression.java ✅
 │   ├── TypeConversionOp.java ✅
-│   └── TypeConversionExpression.java ✅
+│   ├── TypeConversionExpression.java ✅
+│   └── ExistsExpression.java ✅
 └── stage/
     ├── Stage.java ✅
     ├── LimitStage.java ✅
@@ -223,7 +224,8 @@ ast/
 │   ├── ArrayExpressionTest.java ✅
 │   ├── TypeConversionOpTest.java ✅
 │   ├── TypeConversionExpressionTest.java ✅
-│   └── CompoundIdExpressionTest.java ✅
+│   ├── CompoundIdExpressionTest.java ✅
+│   └── ExistsExpressionTest.java ✅
 └── stage/
     ├── LimitStageTest.java ✅
     ├── SkipStageTest.java ✅
@@ -301,12 +303,12 @@ All tests passing: ✅ Yes
 
 | Package | Instruction Coverage | Branch Coverage |
 |---------|---------------------|-----------------|
-| **Overall** | **85%** | **73%** |
+| **Overall** | **93%** | **83%** |
 | `api` | 97% | 100% |
-| `ast.expression` | 85% | 67% |
+| `ast.expression` | 94% | 78% |
 | `ast.stage` | 97% | 91% |
-| `generator` | 70% | 54% |
-| `parser` | 90% | 86% |
+| `generator` | 93% | 82% |
+| `parser` | 90% | 85% |
 | `optimizer` | 92% | 86% |
 | `exception` | 100% | 100% |
 | `util` | 96% | 91% |
@@ -324,7 +326,7 @@ All tests passing: ✅ Yes
 | Conditional operators | 3 | ✅ Pass |
 | String operators | 11 | ✅ Pass |
 | Date operators | 5 | ✅ Pass |
-| Array operators | 8 | ✅ Pass |
+| Array operators | 10 | ✅ Pass |
 | Type Conversion operators | 5 | ✅ Pass |
 | $lookup/$unwind | 4 | ✅ Pass |
 | $addFields/$set | 2 | ✅ Pass |
@@ -335,6 +337,10 @@ All tests passing: ✅ Yes
 | $bucketAuto | 2 | ✅ Pass |
 | $facet | 3 | ✅ Pass |
 | $setWindowFields | 4 | ✅ Pass |
+| $redact | 2 | ✅ Pass |
+| $sample | 2 | ✅ Pass |
+| $count | 3 | ✅ Pass |
+| $graphLookup | 1 | ✅ Pass |
 | **Total** | **103** | **✅ 100%** |
 
 ## Example Translations
@@ -551,7 +557,7 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 | Code Style | Checkstyle (Google Java Style, 2-space indent) | Pre-commit | ✅ Pass (maxWarnings=0) |
 | Static Analysis | SpotBugs with FindSecBugs | Pre-commit | ✅ Pass |
 | Dependency Security | OWASP Dependency Check | CI/CD | ✅ Configured |
-| Test Coverage | JaCoCo | CI/CD | ✅ 85% instruction, 73% branch |
+| Test Coverage | JaCoCo | CI/CD | ✅ 93% instruction, 83% branch |
 | Case Conflicts | check-case-conflict | Pre-commit | ✅ Pass |
 | Line Endings | mixed-line-ending (LF) | Pre-commit | ✅ Pass |
 | Branch Protection | no-commit-to-branch | Pre-commit | ✅ Configured |

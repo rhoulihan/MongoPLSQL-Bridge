@@ -28,7 +28,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 - `$addFields`/`$set` - Computed columns
 
 **Expression Operators:**
-- Comparison: `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`
+- Comparison: `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`, `$exists`
 - Logical: `$and`, `$or`, `$not`, `$nor`
 - Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`
 - Conditional: `$cond`, `$ifNull`
@@ -49,7 +49,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (8), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (10), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4), $redact (2), $sample (2), $count (3), $graphLookup (1)
 
 ### Test Coverage
 
@@ -111,7 +111,7 @@ All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See 
 
 | Category | Operators | Status |
 |----------|-----------|--------|
-| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin` | ✅ Implemented |
+| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` | ✅ Implemented |
 | Logical | `$and`, `$or`, `$not`, `$nor` | ✅ Implemented |
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` | ✅ Implemented |
 | Conditional | `$cond`, `$ifNull` | ✅ Implemented |

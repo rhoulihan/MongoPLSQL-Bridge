@@ -339,16 +339,52 @@ public final class ArrayExpression implements Expression {
       if (arr instanceof FieldPathExpression fieldPath) {
         ctx.sql("SELECT val, ROWNUM + ");
         ctx.sql(String.valueOf(idx * 1000)); // Ensure ordering is preserved
-        ctx.sql(" AS rn FROM JSON_TABLE(data, '$.");
+        ctx.sql(" AS rn FROM JSON_TABLE(");
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
         ctx.sql(fieldPath.getPath());
         ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
+      } else if (arr instanceof LiteralExpression lit && lit.getValue() instanceof List<?> list) {
+        // Handle literal arrays like ["extra"]
+        ctx.sql("SELECT val, ROWNUM + ");
+        ctx.sql(String.valueOf(idx * 1000));
+        ctx.sql(" AS rn FROM JSON_TABLE('");
+        ctx.sql(toJsonArray(list));
+        ctx.sql("', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
       } else {
-        throw new IllegalArgumentException("$concatArrays arguments must be field paths");
+        throw new IllegalArgumentException(
+            "$concatArrays arguments must be field paths or literal arrays");
       }
       first = false;
       idx++;
     }
     ctx.sql("))");
+  }
+
+  /** Converts a Java List to a JSON array string. */
+  private String toJsonArray(List<?> list) {
+    StringBuilder sb = new StringBuilder("[");
+    boolean first = true;
+    for (Object item : list) {
+      if (!first) {
+        sb.append(",");
+      }
+      if (item instanceof String s) {
+        // Escape any single quotes in the string value
+        sb.append("\"").append(s.replace("\"", "\\\"")).append("\"");
+      } else if (item instanceof Number) {
+        sb.append(item);
+      } else if (item instanceof Boolean) {
+        sb.append(item);
+      } else if (item == null) {
+        sb.append("null");
+      } else {
+        sb.append("\"").append(item.toString().replace("\"", "\\\"")).append("\"");
+      }
+      first = false;
+    }
+    sb.append("]");
+    return sb.toString();
   }
 
   private void renderComplexArrayOp(SqlGenerationContext ctx) {
