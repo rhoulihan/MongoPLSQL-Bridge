@@ -198,10 +198,21 @@ public final class SetWindowFieldsStage implements Stage {
       return;
     }
 
-    String field = fieldPath.startsWith("$") ? fieldPath.substring(1) : fieldPath;
-    ctx.sql("JSON_VALUE(data, '$.");
+    final String field = fieldPath.startsWith("$") ? fieldPath.substring(1) : fieldPath;
+    ctx.sql("JSON_VALUE(");
+    renderDataColumnRef(ctx);
+    ctx.sql(", '$.");
     ctx.sql(field);
     ctx.sql("' RETURNING NUMBER)");
+  }
+
+  private void renderDataColumnRef(SqlGenerationContext ctx) {
+    String alias = ctx.getBaseTableAlias();
+    if (alias != null && !alias.isEmpty()) {
+      ctx.sql(alias);
+      ctx.sql(".");
+    }
+    ctx.sql("data");
   }
 
   private void renderOverClause(SqlGenerationContext ctx, WindowSpec window) {
@@ -210,8 +221,10 @@ public final class SetWindowFieldsStage implements Stage {
     // PARTITION BY clause
     if (partitionBy != null) {
       ctx.sql("PARTITION BY ");
-      String partField = partitionBy.startsWith("$") ? partitionBy.substring(1) : partitionBy;
-      ctx.sql("JSON_VALUE(data, '$.");
+      final String partField = partitionBy.startsWith("$") ? partitionBy.substring(1) : partitionBy;
+      ctx.sql("JSON_VALUE(");
+      renderDataColumnRef(ctx);
+      ctx.sql(", '$.");
       ctx.sql(partField);
       ctx.sql("')");
       hasClause = true;
@@ -228,8 +241,10 @@ public final class SetWindowFieldsStage implements Stage {
         if (!firstSort) {
           ctx.sql(", ");
         }
-        String sortField = sortEntry.getKey();
-        ctx.sql("JSON_VALUE(data, '$.");
+        final String sortField = sortEntry.getKey();
+        ctx.sql("JSON_VALUE(");
+        renderDataColumnRef(ctx);
+        ctx.sql(", '$.");
         ctx.sql(sortField);
         ctx.sql("')");
         if (sortEntry.getValue() < 0) {

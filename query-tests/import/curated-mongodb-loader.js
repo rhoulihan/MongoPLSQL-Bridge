@@ -268,5 +268,3 @@ db.acc_tests.insertMany([
     "status": "pending"
   }
 ]);
-
-

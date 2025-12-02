@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-11-28
+**Last Updated:** 2025-12-01
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -290,25 +290,26 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1031 test methods across 50+ test files
+**Unit Tests:** 1103 test methods across 76 test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 103 tests (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
 All tests passing: ✅ Yes
 
 ### Code Coverage (JaCoCo)
 
-| Package | Line Coverage | Branch Coverage |
-|---------|---------------|-----------------|
-| **Overall** | **95%+** | **85%+** |
-| `api` | 99% | 100% |
-| `ast.expression` | 97% | 82% |
-| `ast.stage` | 98% | 91% |
-| `generator` | 98% | 92% |
-| `parser` | 93% | 86% |
-| `optimizer` | 94% | 86% |
+| Package | Instruction Coverage | Branch Coverage |
+|---------|---------------------|-----------------|
+| **Overall** | **85%** | **73%** |
+| `api` | 97% | 100% |
+| `ast.expression` | 85% | 67% |
+| `ast.stage` | 97% | 91% |
+| `generator` | 70% | 54% |
+| `parser` | 90% | 86% |
+| `optimizer` | 92% | 86% |
 | `exception` | 100% | 100% |
+| `util` | 96% | 91% |
 | `generator.dialect` | 100% | n/a |
 
 ### Cross-Database Validation Test Categories
@@ -321,9 +322,10 @@ All tests passing: ✅ Yes
 | Stage operators | 7 | ✅ Pass |
 | Arithmetic operators | 5 | ✅ Pass |
 | Conditional operators | 3 | ✅ Pass |
-| String operators | 6 | ✅ Pass |
+| String operators | 11 | ✅ Pass |
 | Date operators | 5 | ✅ Pass |
-| Array operators | 4 | ✅ Pass |
+| Array operators | 8 | ✅ Pass |
+| Type Conversion operators | 5 | ✅ Pass |
 | $lookup/$unwind | 4 | ✅ Pass |
 | $addFields/$set | 2 | ✅ Pass |
 | Complex pipelines | 5 | ✅ Pass |
@@ -333,7 +335,7 @@ All tests passing: ✅ Yes
 | $bucketAuto | 2 | ✅ Pass |
 | $facet | 3 | ✅ Pass |
 | $setWindowFields | 4 | ✅ Pass |
-| **Total** | **79** | **✅ 100%** |
+| **Total** | **103** | **✅ 100%** |
 
 ## Example Translations
 
@@ -549,7 +551,7 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 | Code Style | Checkstyle (Google Java Style, 2-space indent) | Pre-commit | ✅ Pass (maxWarnings=0) |
 | Static Analysis | SpotBugs with FindSecBugs | Pre-commit | ✅ Pass |
 | Dependency Security | OWASP Dependency Check | CI/CD | ✅ Configured |
-| Test Coverage | JaCoCo | CI/CD | ✅ 95%+ line, 85%+ branch |
+| Test Coverage | JaCoCo | CI/CD | ✅ 85% instruction, 73% branch |
 | Case Conflicts | check-case-conflict | Pre-commit | ✅ Pass |
 | Line Endings | mixed-line-ending (LF) | Pre-commit | ✅ Pass |
 | Branch Protection | no-commit-to-branch | Pre-commit | ✅ Configured |

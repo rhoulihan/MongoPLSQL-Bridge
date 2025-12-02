@@ -379,6 +379,11 @@ public final class ExpressionParser {
       return parseLogicalOperator(op, operand);
     }
 
+    if ("$literal".equals(op)) {
+      // $literal returns the value exactly as-is (no field path interpretation)
+      return LiteralExpression.of(operand);
+    }
+
     // For other operators, throw unsupported
     throw new UnsupportedOperatorException(op);
   }

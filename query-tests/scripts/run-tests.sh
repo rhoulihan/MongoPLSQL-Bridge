@@ -129,6 +129,22 @@ EXIT;
 EOSQL" 2>/dev/null
 }
 
+# Function to run Oracle count query (counts actual rows)
+run_oracle_count() {
+    local sql="$1"
+
+    docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET PAGESIZE 0
+SET LINESIZE 100
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING OFF
+SELECT COUNT(*) FROM (${sql});
+EXIT;
+EOSQL" 2>/dev/null | grep -v "^$" | head -1 | tr -d ' \t'
+}
+
 # Function to generate Oracle SQL using the translator
 generate_oracle_sql() {
     local collection="$1"
@@ -250,7 +266,8 @@ PYTHON
 
     # Run Oracle query
     ORACLE_RESULT=$(run_oracle_query "$TEST_SQL" 2>&1) || ORACLE_RESULT="ERROR"
-    ORACLE_COUNT=$(echo "$ORACLE_RESULT" | grep -v "^$" | wc -l)
+    # Use separate count query for accurate row count (avoids multi-line output issues)
+    ORACLE_COUNT=$(run_oracle_count "$TEST_SQL" 2>&1) || ORACLE_COUNT="ERROR"
 
     # Determine result
     STATUS=""

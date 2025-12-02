@@ -8,11 +8,13 @@ package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.ast.AstNode;
 import com.oracle.mongodb.translator.ast.expression.Expression;
+import com.oracle.mongodb.translator.ast.expression.LookupSizeExpression;
 import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -143,9 +145,15 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final List<Object> bindVariables = new ArrayList<>();
   private final Map<String, Integer> tableAliasCounters = new HashMap<>();
   private final Map<String, Expression> virtualFields = new HashMap<>();
+  private final Map<String, LookupFieldInfo> lookupFields = new HashMap<>();
+  private final Set<String> lookupsConsumedBySize = new HashSet<>();
+  private final Map<String, String> lookupTableAliases = new HashMap<>();
   private final boolean inlineValues;
   private final OracleDialect dialect;
   private final String baseTableAlias;
+
+  /** Stores metadata about a $lookup field for generating correlated subqueries. */
+  private record LookupFieldInfo(String foreignTable, String localField, String foreignField) {}
 
   public DefaultSqlGenerationContext() {
     this(false, Oracle26aiDialect.INSTANCE, null);
@@ -252,8 +260,11 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   public SqlGenerationContext createNestedContext() {
     DefaultSqlGenerationContext nested =
         new DefaultSqlGenerationContext(inlineValues, dialect, baseTableAlias);
-    // Copy virtual fields to nested context so they can be resolved
+    // Copy virtual fields, lookup fields, consumed lookups, and table aliases to nested context
     nested.virtualFields.putAll(this.virtualFields);
+    nested.lookupFields.putAll(this.lookupFields);
+    nested.lookupsConsumedBySize.addAll(this.lookupsConsumedBySize);
+    nested.lookupTableAliases.putAll(this.lookupTableAliases);
     return nested;
   }
 
@@ -265,6 +276,51 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public Expression getVirtualField(String fieldName) {
     return virtualFields.get(fieldName);
+  }
+
+  @Override
+  public void registerLookupField(
+      String asField, String foreignTable, String localField, String foreignField) {
+    lookupFields.put(asField, new LookupFieldInfo(foreignTable, localField, foreignField));
+  }
+
+  @Override
+  public Expression getLookupSizeExpression(String fieldName) {
+    LookupFieldInfo info = lookupFields.get(fieldName);
+    if (info != null) {
+      // Mark this lookup as consumed by $size - the JOIN won't be needed
+      lookupsConsumedBySize.add(fieldName);
+      return new LookupSizeExpression(info.foreignTable, info.localField, info.foreignField);
+    }
+    return null;
+  }
+
+  @Override
+  public boolean isLookupConsumedBySize(String asField) {
+    return lookupsConsumedBySize.contains(asField);
+  }
+
+  @Override
+  public void registerLookupTableAlias(String asField, String tableAlias) {
+    lookupTableAliases.put(asField, tableAlias);
+  }
+
+  @Override
+  public String getLookupTableAlias(String fieldPath) {
+    // Check if fieldPath starts with a lookup "as" field
+    // e.g., "customer.tier" -> check if "customer" is a lookup field
+    for (var entry : lookupTableAliases.entrySet()) {
+      String asField = entry.getKey();
+      if (fieldPath.equals(asField) || fieldPath.startsWith(asField + ".")) {
+        return entry.getValue();
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public String getLookupTableAliasByAs(String asField) {
+    return lookupTableAliases.get(asField);
   }
 
   private String formatInlineValue(Object value) {

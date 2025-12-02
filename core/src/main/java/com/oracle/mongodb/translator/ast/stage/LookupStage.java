@@ -156,11 +156,16 @@ public final class LookupStage implements Stage {
   private void renderEqualityForm(SqlGenerationContext ctx) {
     // Validate table name and field names to prevent injection
     FieldNameValidator.validateTableName(from);
-    String validLocalField = FieldNameValidator.validateAndNormalizeFieldPath(localField);
-    String validForeignField = FieldNameValidator.validateAndNormalizeFieldPath(foreignField);
+    final String validLocalField = FieldNameValidator.validateAndNormalizeFieldPath(localField);
+    final String validForeignField = FieldNameValidator.validateAndNormalizeFieldPath(foreignField);
 
-    // Generate a unique alias for the joined table
-    String alias = ctx.generateTableAlias(from);
+    // Use pre-registered alias if available, otherwise generate a new one
+    String alias = ctx.getLookupTableAliasByAs(as);
+    if (alias == null) {
+      alias = ctx.generateTableAlias(from);
+      // Register this alias so field paths like "$customer.tier" can resolve to this table
+      ctx.registerLookupTableAlias(as, alias);
+    }
 
     ctx.sql("LEFT OUTER JOIN ");
     ctx.tableName(from);

@@ -12,7 +12,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 90% test coverage.
+**Phase 4 Complete** - All operators implemented with 85% instruction coverage and 103 passing cross-database validation tests.
 
 ### Implemented Operators
 
@@ -47,22 +47,23 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 102 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (10), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4), $redact (2), $sample (2), $count (3), $graphLookup (1)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (8), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4)
 
 ### Test Coverage
 
-| Package | Line Coverage | Branch Coverage |
-|---------|---------------|-----------------|
-| Overall | **95%+** | **85%+** |
-| `api` | 99% | 100% |
-| `ast.expression` | 97% | 82% |
-| `ast.stage` | 98% | 91% |
-| `generator` | 98% | 92% |
-| `parser` | 93% | 86% |
-| `optimizer` | 94% | 86% |
+| Package | Instruction Coverage | Branch Coverage |
+|---------|---------------------|-----------------|
+| Overall | **85%** | **73%** |
+| `api` | 97% | 100% |
+| `ast.expression` | 85% | 67% |
+| `ast.stage` | 97% | 91% |
+| `generator` | 70% | 54% |
+| `parser` | 90% | 86% |
+| `optimizer` | 92% | 86% |
 | `exception` | 100% | 100% |
+| `util` | 96% | 91% |
 | `generator.dialect` | 100% | n/a |
 
 ### Additional Stages Implemented
@@ -207,7 +208,7 @@ docker compose logs -f oracle
 ./gradlew :core:test
 ```
 
-Runs 1031 unit tests covering all operators and parsers.
+Runs 1103 unit tests covering all operators and parsers.
 
 #### Integration Tests (Requires Docker)
 
@@ -238,12 +239,12 @@ docker compose up -d
 
 **Expected Output:**
 ```
-Running 102 cross-database validation tests...
+Running 103 cross-database validation tests...
 ✅ PASS: CMP001 - Basic equality match
 ✅ PASS: CMP002 - Greater than comparison
 ...
 ============================================
-Results: 102 passed, 0 failed, 0 errors
+Results: 103 passed, 0 failed, 0 errors
 ============================================
 ```
 

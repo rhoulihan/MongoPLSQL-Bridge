@@ -237,6 +237,13 @@ public final class ArrayExpression implements Expression {
   }
 
   private void renderSize(SqlGenerationContext ctx, String path) {
+    // Check if this is a $lookup result field - use correlated subquery instead
+    Expression lookupSizeExpr = ctx.getLookupSizeExpression(path);
+    if (lookupSizeExpr != null) {
+      ctx.visit(lookupSizeExpr);
+      return;
+    }
+
     // JSON_VALUE(alias.data, '$.items.size()')
     ctx.sql("JSON_VALUE(");
     renderDataColumn(ctx);

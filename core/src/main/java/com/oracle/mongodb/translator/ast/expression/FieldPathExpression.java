@@ -78,6 +78,14 @@ public final class FieldPathExpression implements Expression {
       return;
     }
 
+    // Check if this path references a $lookup result field
+    // e.g., "customer.tier" where "customer" is from $lookup
+    String lookupAlias = ctx.getLookupTableAlias(normalizedPath);
+    if (lookupAlias != null && "data".equals(dataColumn)) {
+      renderLookupFieldPath(ctx, lookupAlias, normalizedPath);
+      return;
+    }
+
     ctx.sql("JSON_VALUE(");
     // Use table alias qualified column name when there's a base alias
     String baseAlias = ctx.getBaseTableAlias();
@@ -88,6 +96,35 @@ public final class FieldPathExpression implements Expression {
     ctx.sql(dataColumn);
     ctx.sql(", '");
     ctx.sql(getJsonPath());
+    ctx.sql("'");
+
+    if (returnType != null) {
+      ctx.sql(" RETURNING ");
+      ctx.sql(returnType.getOracleSyntax());
+    }
+
+    ctx.sql(")");
+  }
+
+  /**
+   * Renders a field path that references a $lookup result. Redirects to the joined table's data
+   * column with the nested path.
+   */
+  private void renderLookupFieldPath(SqlGenerationContext ctx, String lookupAlias, String path) {
+    // path is like "customer.tier", lookupAlias is like "customers_1"
+    // We need: JSON_VALUE(customers_1.data, '$.tier')
+    int dotIndex = path.indexOf('.');
+    final String remainingPath = dotIndex >= 0 ? path.substring(dotIndex + 1) : "";
+
+    ctx.sql("JSON_VALUE(");
+    ctx.sql(lookupAlias);
+    ctx.sql(".data, '$");
+    if (!remainingPath.isEmpty()) {
+      ctx.sql(".");
+      // Validate the remaining path
+      FieldNameValidator.validateFieldName(remainingPath);
+      ctx.sql(remainingPath);
+    }
     ctx.sql("'");
 
     if (returnType != null) {

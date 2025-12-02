@@ -74,4 +74,3 @@ INSERT INTO acc_tests (id, data) VALUES ('5', '{"_id":5,"group":"B","value":null
 INSERT INTO acc_tests (id, data) VALUES ('6', '{"_id":6,"group":"C","value":100,"status":"pending"}');
 
 COMMIT;
-

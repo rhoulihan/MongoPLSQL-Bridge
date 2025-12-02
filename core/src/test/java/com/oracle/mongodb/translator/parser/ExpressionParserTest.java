@@ -926,4 +926,37 @@ class ExpressionParserTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("cond");
   }
+
+  // $literal expression tests
+
+  @Test
+  void shouldParseLiteralStringExpression() {
+    var doc = Document.parse("{\"$literal\": \"employee\"}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isInstanceOf(LiteralExpression.class);
+    expr.render(context);
+    assertThat(context.toSql()).isEqualTo(":1");
+    assertThat(context.getBindVariables()).containsExactly("employee");
+  }
+
+  @Test
+  void shouldParseLiteralNumberExpression() {
+    var doc = Document.parse("{\"$literal\": 42}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isInstanceOf(LiteralExpression.class);
+    expr.render(context);
+    assertThat(context.toSql()).isEqualTo(":1");
+    assertThat(context.getBindVariables()).containsExactly(42);
+  }
+
+  @Test
+  void shouldParseLiteralFieldPathAsLiteral() {
+    // $literal prevents field path interpretation - "$field" is treated as literal string
+    var doc = Document.parse("{\"$literal\": \"$notAFieldPath\"}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isInstanceOf(LiteralExpression.class);
+    expr.render(context);
+    assertThat(context.toSql()).isEqualTo(":1");
+    assertThat(context.getBindVariables()).containsExactly("$notAFieldPath");
+  }
 }

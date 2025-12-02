@@ -384,7 +384,11 @@ class PipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    assertThat(context.toSql()).contains("UNION ALL").contains("pipeline");
+    // Pipeline is now rendered with proper SQL
+    assertThat(context.toSql())
+        .contains("UNION ALL")
+        .contains("inventory")
+        .contains("FETCH FIRST 5 ROWS ONLY");
   }
 
   @Test
@@ -1023,5 +1027,52 @@ class PipelineRendererTest {
     localRenderer.render(pipeline, ctx);
 
     assertThat(ctx.toSql()).isEqualTo("SELECT data FROM orders ");
+  }
+
+  @Test
+  void shouldWrapSetWindowFieldsInSubqueryWhenMatchOnWindowField() {
+    // $setWindowFields with $rank, followed by $match on the rank field
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            "$department", Map.of("salary", -1), Map.of("salaryRank", windowField));
+
+    // $match on the window result field
+    var match =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("salaryRank", JsonReturnType.NUMBER),
+                LiteralExpression.of(1)));
+
+    Pipeline pipeline = Pipeline.of("employees", setWindowFields, match);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should wrap in subquery so we can filter on window result
+    assertThat(sql).contains("FROM (SELECT");
+    assertThat(sql).contains("RANK()");
+    assertThat(sql).contains("WHERE salaryRank");
+  }
+
+  @Test
+  void shouldNotWrapSetWindowFieldsWithoutMatchOnWindowField() {
+    // $setWindowFields with cumulative sum, no subsequent match
+    var windowSpec =
+        new SetWindowFieldsStage.WindowSpec("documents", List.of("unbounded", "current"));
+    var windowField = new WindowField("$sum", "$amount", windowSpec);
+    var setWindowFields =
+        new SetWindowFieldsStage(null, Map.of("orderDate", 1), Map.of("runningTotal", windowField));
+
+    Pipeline pipeline = Pipeline.of("sales", setWindowFields);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should NOT wrap in subquery since no match on window field
+    assertThat(sql).doesNotContain("FROM (SELECT");
+    assertThat(sql).contains("SUM(");
+    assertThat(sql).contains("runningTotal");
   }
 }

@@ -98,4 +98,59 @@ public interface SqlGenerationContext {
    * @return the expression defining this field, or null if not a virtual field
    */
   Expression getVirtualField(String fieldName);
+
+  /**
+   * Registers a $lookup field. When $size is called on this field, it will generate a correlated
+   * subquery COUNT instead of a JSON path.
+   *
+   * @param asField the output array field name (from $lookup "as")
+   * @param foreignTable the foreign table name (from $lookup "from")
+   * @param localField the local field path (from $lookup "localField")
+   * @param foreignField the foreign field path (from $lookup "foreignField")
+   */
+  void registerLookupField(
+      String asField, String foreignTable, String localField, String foreignField);
+
+  /**
+   * Creates an expression for $size on a lookup field. Returns a LookupSizeExpression if the field
+   * is from a $lookup, null otherwise. Also marks the lookup as "consumed" (used only for size).
+   *
+   * @param fieldName the field name to check
+   * @return LookupSizeExpression if this is a lookup field, null otherwise
+   */
+  Expression getLookupSizeExpression(String fieldName);
+
+  /**
+   * Checks if a lookup field has been "consumed" by a $size operation. If a lookup is only used
+   * with $size, the JOIN should be skipped since the correlated subquery replaces it.
+   *
+   * @param asField the lookup "as" field name
+   * @return true if this lookup was used only with $size
+   */
+  boolean isLookupConsumedBySize(String asField);
+
+  /**
+   * Registers the SQL table alias for a $lookup stage. When a field path starts with the lookup's
+   * "as" field, we need to redirect it to the joined table's data column.
+   *
+   * @param asField the lookup's "as" field name
+   * @param tableAlias the SQL table alias generated for this lookup
+   */
+  void registerLookupTableAlias(String asField, String tableAlias);
+
+  /**
+   * Gets the SQL table alias for a $lookup field. Returns null if the field is not from a lookup.
+   *
+   * @param fieldPath the field path (e.g., "customer.tier")
+   * @return the table alias if this is a lookup field, null otherwise
+   */
+  String getLookupTableAlias(String fieldPath);
+
+  /**
+   * Gets the SQL table alias for a $lookup by its "as" field name. Returns null if not found.
+   *
+   * @param asField the lookup's "as" field name
+   * @return the table alias if registered, null otherwise
+   */
+  String getLookupTableAliasByAs(String asField);
 }
