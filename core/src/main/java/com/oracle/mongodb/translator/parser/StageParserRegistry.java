@@ -88,11 +88,11 @@ public final class StageParserRegistry {
     OutStageParser outParser = new OutStageParser();
     register("$out", outParser::parse);
 
-    // $graphLookup stage - recursive search (stub)
+    // $graphLookup stage - recursive hierarchical search
     GraphLookupStageParser graphLookupParser = new GraphLookupStageParser();
     register("$graphLookup", value -> graphLookupParser.parse((Document) value));
 
-    // $setWindowFields stage - window functions (stub)
+    // $setWindowFields stage - window functions
     SetWindowFieldsStageParser setWindowFieldsParser = new SetWindowFieldsStageParser();
     register("$setWindowFields", value -> setWindowFieldsParser.parse((Document) value));
 
