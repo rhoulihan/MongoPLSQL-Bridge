@@ -1,6 +1,6 @@
 # Test Catalog
 
-*Auto-generated on 2025-12-03 08:31:53. SQL is regenerated fresh each time this catalog is built.*
+*Auto-generated on 2025-12-03 09:28:30. SQL is regenerated fresh each time this catalog is built.*
 
 ---
 
@@ -16,10 +16,10 @@
 
 | Status | Count |
 |--------|-------|
-| Passed | 142 |
+| Passed | 152 |
 | Failed | 0 |
 | Skipped | 0 |
-| **Total** | **142** |
+| **Total** | **152** |
 
 ---
 
@@ -7160,6 +7160,308 @@ SELECT base.data."_id" AS "_id",
        AVG(base.data.salary) OVER (
                                    ORDER BY base.data.salary ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary
 FROM employees base
+```
+
+---
+
+## Large-Scale Pipeline Tests
+
+These complex aggregation pipelines are validated against ~219,000 documents across 10 collections, comparing MongoDB and Oracle results for correctness.
+
+| Test ID | Name | Collection | Status |
+|---------|------|------------|--------|
+| PIPE001 | E-commerce Order Revenue Analysis | ecommerce_orders | **PASS** |
+| PIPE002 | Product Performance Analysis | ecommerce_products | **PASS** |
+| PIPE003 | Customer Lifetime Value Analysis | ecommerce_customers | **PASS** |
+| PIPE004 | Review Sentiment and Quality Analysis | ecommerce_reviews | **PASS** |
+| PIPE005 | Analytics Session Funnel Analysis | analytics_sessions | **PASS** |
+| PIPE006 | Social Post Engagement Analysis | social_posts | **PASS** |
+| PIPE007 | IoT Device Health Analysis by Building | iot_devices | **PASS** |
+| PIPE008 | IoT Time-Series Aggregation | iot_readings | **PASS** |
+| PIPE009 | User Follower Network Analysis | social_users | **PASS** |
+| PIPE010 | Order Analysis by Payment Method | ecommerce_orders | **PASS** |
+
+---
+
+### PIPE001: E-commerce Order Revenue Analysis
+
+**Description:** Order-level revenue analysis by status and time period (without array unwinding)  
+**Collection:** `ecommerce_orders`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "status": { "$in": ["delivered", "shipped"] } } },
+  { "$group": {
+      "_id": { "status": "$status", "month": { "$month": "$timestamps.createdAt" }, "year": { "$year": "$timestamps.createdAt" } },
+      "totalRevenue": { "$sum": "$pricing.subtotal" },
+      "orderCount": { "$sum": 1 },
+      "avgShipping": { "$avg": "$pricing.shipping" },
+      "avgTax": { "$avg": "$pricing.tax" }
+    }
+  },
+  { "$addFields": { "avgRevenuePerOrder": { "$round": [{ "$divide": ["$totalRevenue", "$orderCount"] }, 2] } } },
+  { "$sort": { "totalRevenue": -1 } },
+  { "$limit": 50 }
+]
+```
+
+---
+
+### PIPE002: Product Performance Analysis
+
+**Description:** Analyze all products by category and brand with rating metrics  
+**Collection:** `ecommerce_products`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$group": {
+      "_id": { "category": "$category.primary", "brand": "$brand.name" },
+      "productCount": { "$sum": 1 },
+      "avgRating": { "$avg": "$ratings.average" },
+      "totalReviews": { "$sum": "$ratings.count" },
+      "avgPrice": { "$avg": "$pricing.basePrice" },
+      "minPrice": { "$min": "$pricing.basePrice" },
+      "maxPrice": { "$max": "$pricing.basePrice" }
+    }
+  },
+  { "$addFields": { "priceRange": { "$round": [{ "$subtract": ["$maxPrice", "$minPrice"] }, 2] } } },
+  { "$sort": { "totalReviews": -1 } },
+  { "$limit": 30 }
+]
+```
+
+---
+
+### PIPE003: Customer Lifetime Value Analysis
+
+**Description:** Calculate customer value with loyalty tier analysis and purchase patterns  
+**Collection:** `ecommerce_customers`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "metadata.status": "active", "orderHistory.totalOrders": { "$gte": 1 } } },
+  { "$group": {
+      "_id": "$loyalty.tier",
+      "customerCount": { "$sum": 1 },
+      "avgTotalSpent": { "$avg": "$orderHistory.totalSpent" },
+      "avgTotalOrders": { "$avg": "$orderHistory.totalOrders" },
+      "avgOrderValue": { "$avg": "$orderHistory.averageOrderValue" },
+      "avgReturnRate": { "$avg": "$orderHistory.returnRate" }
+    }
+  },
+  { "$addFields": { "avgReturnRatePercent": { "$round": [{ "$multiply": ["$avgReturnRate", 100] }, 1] } } },
+  { "$sort": { "avgTotalSpent": -1 } }
+]
+```
+
+---
+
+### PIPE004: Review Sentiment and Quality Analysis
+
+**Description:** Analyze review quality with aspect ratings and helpfulness metrics  
+**Collection:** `ecommerce_reviews`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "metadata.status": "published", "verified": true } },
+  { "$group": {
+      "_id": { "sentiment": "$metadata.sentiment" },
+      "reviewCount": { "$sum": 1 },
+      "avgOverallRating": { "$avg": "$rating.overall" },
+      "avgQualityRating": { "$avg": "$rating.aspects.quality" },
+      "avgValueRating": { "$avg": "$rating.aspects.value" },
+      "totalUpvotes": { "$sum": "$helpful.upvotes" },
+      "totalDownvotes": { "$sum": "$helpful.downvotes" }
+    }
+  },
+  { "$addFields": { "helpfulnessRatio": { "$round": [{ "$cond": [{ "$gt": [{ "$add": ["$totalUpvotes", "$totalDownvotes"] }, 0] }, { "$divide": ["$totalUpvotes", { "$add": ["$totalUpvotes", "$totalDownvotes"] }] }, 0] }, 2] } } },
+  { "$sort": { "reviewCount": -1 } },
+  { "$limit": 40 }
+]
+```
+
+---
+
+### PIPE005: Analytics Session Funnel Analysis
+
+**Description:** Analyze conversion funnel with device and traffic source breakdown  
+**Collection:** `analytics_sessions`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "duration": { "$gte": 10 } } },
+  { "$group": {
+      "_id": { "deviceType": "$device.type", "trafficSource": "$traffic.source" },
+      "sessionCount": { "$sum": 1 },
+      "avgPageViews": { "$avg": "$engagement.pageViews" },
+      "avgDuration": { "$avg": "$duration" },
+      "conversions": { "$sum": { "$cond": ["$conversion.converted", 1, 0] } },
+      "totalRevenue": { "$sum": "$conversion.revenue" },
+      "bounceCount": { "$sum": { "$cond": ["$bounced", 1, 0] } }
+    }
+  },
+  { "$addFields": {
+      "conversionRate": { "$round": [{ "$multiply": [{ "$divide": ["$conversions", "$sessionCount"] }, 100] }, 2] },
+      "bounceRate": { "$round": [{ "$multiply": [{ "$divide": ["$bounceCount", "$sessionCount"] }, 100] }, 2] }
+    }
+  },
+  { "$sort": { "conversionRate": -1, "sessionCount": -1 } },
+  { "$limit": 30 }
+]
+```
+
+---
+
+### PIPE006: Social Post Engagement Analysis
+
+**Description:** Analyze post engagement including reaction and comment metrics  
+**Collection:** `social_posts`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "metadata.status": "published", "visibility": { "$in": ["public", "followers"] } } },
+  { "$group": {
+      "_id": { "postType": "$type" },
+      "postCount": { "$sum": 1 },
+      "avgLikes": { "$avg": "$reactions.like" },
+      "avgViews": { "$avg": "$engagement.views" },
+      "avgReach": { "$avg": "$engagement.reach" },
+      "totalShares": { "$sum": "$shares.count" },
+      "sponsoredCount": { "$sum": { "$cond": ["$metadata.sponsored", 1, 0] } }
+    }
+  },
+  { "$addFields": { "sponsoredPercentage": { "$round": [{ "$multiply": [{ "$divide": ["$sponsoredCount", "$postCount"] }, 100] }, 1] } } },
+  { "$sort": { "avgViews": -1 } }
+]
+```
+
+---
+
+### PIPE007: IoT Device Health Analysis by Building
+
+**Description:** Analyze device health status by building  
+**Collection:** `iot_devices`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$group": {
+      "_id": { "building": "$location.building", "floor": "$location.floor" },
+      "deviceCount": { "$sum": 1 },
+      "onlineCount": { "$sum": { "$cond": ["$status.online", 1, 0] } },
+      "healthyCount": { "$sum": { "$cond": [{ "$eq": ["$status.health", "healthy"] }, 1, 0] } },
+      "avgBattery": { "$avg": "$status.battery" }
+    }
+  },
+  { "$addFields": {
+      "onlinePercentage": { "$round": [{ "$multiply": [{ "$divide": ["$onlineCount", "$deviceCount"] }, 100] }, 1] },
+      "healthyPercentage": { "$round": [{ "$multiply": [{ "$divide": ["$healthyCount", "$deviceCount"] }, 100] }, 1] }
+    }
+  },
+  { "$sort": { "healthyPercentage": 1, "deviceCount": -1 } },
+  { "$limit": 40 }
+]
+```
+
+---
+
+### PIPE008: IoT Time-Series Aggregation
+
+**Description:** Aggregate sensor readings by hour  
+**Collection:** `iot_readings`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$group": {
+      "_id": { "hourOfDay": { "$hour": "$timestamp" } },
+      "readingCount": { "$sum": 1 },
+      "avgTemperature": { "$avg": "$readings.temperature.value" },
+      "minTemperature": { "$min": "$readings.temperature.value" },
+      "maxTemperature": { "$max": "$readings.temperature.value" },
+      "avgHumidity": { "$avg": "$readings.humidity.value" },
+      "goodTempReadings": { "$sum": { "$cond": [{ "$eq": ["$readings.temperature.quality", "good"] }, 1, 0] } }
+    }
+  },
+  { "$addFields": {
+      "temperatureRange": { "$subtract": ["$maxTemperature", "$minTemperature"] },
+      "dataQualityRate": { "$round": [{ "$multiply": [{ "$divide": ["$goodTempReadings", "$readingCount"] }, 100] }, 1] }
+    }
+  },
+  { "$sort": { "readingCount": -1 } },
+  { "$limit": 24 }
+]
+```
+
+---
+
+### PIPE009: User Follower Network Analysis
+
+**Description:** Analyze social user networks with engagement using bucket aggregation  
+**Collection:** `social_users`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$match": { "metadata.status": "active" } },
+  { "$bucket": {
+      "groupBy": "$stats.followers",
+      "boundaries": [0, 100, 1000, 10000, 100000, 1000000, 10000000],
+      "default": 10000001,
+      "output": {
+        "userCount": { "$sum": 1 },
+        "verifiedCount": { "$sum": { "$cond": ["$profile.verified", 1, 0] } },
+        "avgFollowing": { "$avg": "$stats.following" },
+        "avgPosts": { "$avg": "$stats.posts" }
+      }
+    }
+  },
+  { "$addFields": { "verifiedPercentage": { "$round": [{ "$multiply": [{ "$divide": ["$verifiedCount", "$userCount"] }, 100] }, 1] } } }
+]
+```
+
+---
+
+### PIPE010: Order Analysis by Payment Method
+
+**Description:** Analyze orders by payment and shipping method  
+**Collection:** `ecommerce_orders`  
+**Status:** **PASS**
+
+**MongoDB Pipeline:**
+```json
+[
+  { "$group": {
+      "_id": { "paymentMethod": "$payment.method", "shippingMethod": "$shipping.method" },
+      "orderCount": { "$sum": 1 },
+      "totalRevenue": { "$sum": "$pricing.subtotal" },
+      "totalShipping": { "$sum": "$pricing.shipping" },
+      "avgOrderValue": { "$avg": "$pricing.subtotal" }
+    }
+  },
+  { "$addFields": {
+      "avgRevenuePerOrder": { "$round": [{ "$divide": ["$totalRevenue", "$orderCount"] }, 2] },
+      "shippingPercent": { "$round": [{ "$cond": [{ "$gt": ["$totalRevenue", 0] }, { "$multiply": [{ "$divide": ["$totalShipping", "$totalRevenue"] }, 100] }, 0] }, 1] }
+    }
+  },
+  { "$sort": { "totalRevenue": -1 } },
+  { "$limit": 50 }
+]
 ```
 
 ---

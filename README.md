@@ -16,7 +16,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 | Metric | Value |
 |--------|-------|
-| Unit Tests | 1,272 |
+| Unit Tests | 1,408 |
 | Integration Tests | 142 |
 | Large-Scale Tests | 10 |
 | Instruction Coverage | 93% |
@@ -143,7 +143,7 @@ System.out.println(result.sql());
 ./gradlew :core:test
 ```
 
-Runs 1,272 unit tests covering all operators, parsers, and pipeline scenarios.
+Runs 1,408 unit tests covering all operators, parsers, and pipeline scenarios.
 
 ### Integration Tests
 
@@ -202,7 +202,7 @@ mongo-oracle-translator/
 ├── core/                    # Main translation library
 │   └── src/
 │       ├── main/java/       # API, AST, parser, optimizer, generator
-│       └── test/java/       # Unit tests (1,272)
+│       └── test/java/       # Unit tests (1,408)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
 │   ├── tests/               # Test case definitions (142)

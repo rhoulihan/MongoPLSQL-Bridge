@@ -6,13 +6,14 @@
  * Oracle data is loaded using SQL with PL/SQL for CLOB handling.
  *
  * Usage:
- *   node load-data.js --target mongodb|oracle|both [--data-dir <dir>] [--drop]
+ *   node load-data.js --target mongodb|oracle|both [--data-dir <dir>] [--drop] [--skip-existing]
  *
  * Options:
- *   --target    Target database(s): mongodb, oracle, or both (default: both)
- *   --data-dir  Directory containing generated data (default: ./data)
- *   --drop      Drop existing collections/tables before loading
- *   --batch     Batch size for inserts (default: 100)
+ *   --target         Target database(s): mongodb, oracle, or both (default: both)
+ *   --data-dir       Directory containing generated data (default: ./data)
+ *   --drop           Drop existing collections/tables before loading
+ *   --skip-existing  Skip collections that already exist with expected count
+ *   --batch          Batch size for inserts (default: 100)
  */
 
 const fs = require('fs');
@@ -24,6 +25,7 @@ const args = process.argv.slice(2);
 let target = 'both';
 let dataDir = path.join(__dirname, 'data');
 let dropExisting = false;
+let skipExisting = false;
 let batchSize = 100;
 
 for (let i = 0; i < args.length; i++) {
@@ -35,6 +37,8 @@ for (let i = 0; i < args.length; i++) {
         i++;
     } else if (args[i] === '--drop') {
         dropExisting = true;
+    } else if (args[i] === '--skip-existing') {
+        skipExisting = true;
     } else if (args[i] === '--batch' && args[i + 1]) {
         batchSize = parseInt(args[i + 1]);
         i++;
@@ -54,7 +58,7 @@ const ORACLE_CONNECT_STRING = '//localhost:1521/FREEPDB1';
 /**
  * Load data into MongoDB
  */
-async function loadMongoDb(dataDir, dropExisting, batchSize) {
+async function loadMongoDb(dataDir, dropExisting, skipExisting, batchSize) {
     const { MongoClient } = require('mongodb');
 
     console.log('\n=== Loading data into MongoDB ===');
@@ -85,6 +89,18 @@ async function loadMongoDb(dataDir, dropExisting, batchSize) {
             console.log(`\n--- ${collectionName} (${expectedCount.toLocaleString()} documents) ---`);
 
             const collection = db.collection(collectionName);
+
+            // Check if we should skip this collection
+            if (skipExisting && !dropExisting) {
+                const existingCount = await collection.countDocuments();
+                if (existingCount >= expectedCount) {
+                    console.log(`  SKIPPED: Already has ${existingCount.toLocaleString()} documents (expected ${expectedCount.toLocaleString()})`);
+                    continue;
+                } else if (existingCount > 0) {
+                    console.log(`  Partial data exists (${existingCount.toLocaleString()}/${expectedCount.toLocaleString()}), will reload...`);
+                    await collection.drop().catch(() => {});
+                }
+            }
 
             if (dropExisting) {
                 console.log('  Dropping existing collection...');
@@ -226,9 +242,47 @@ function executeOracleSql(sqlFile) {
 }
 
 /**
+ * Get row count from Oracle table
+ */
+function getOracleTableCount(tableName) {
+    try {
+        const result = execSync(
+            `docker exec ${ORACLE_CONTAINER} sqlplus -s ${ORACLE_USER}/${ORACLE_PASSWORD}@${ORACLE_CONNECT_STRING} << 'EOF'
+SET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF ECHO OFF
+SELECT COUNT(*) FROM ${tableName};
+EXIT;
+EOF`,
+            { encoding: 'utf8' }
+        );
+        const count = parseInt(result.trim());
+        return isNaN(count) ? 0 : count;
+    } catch (err) {
+        return 0; // Table doesn't exist
+    }
+}
+
+/**
+ * Drop an Oracle table
+ */
+function dropOracleTable(tableName) {
+    try {
+        execSync(
+            `docker exec ${ORACLE_CONTAINER} sqlplus -s ${ORACLE_USER}/${ORACLE_PASSWORD}@${ORACLE_CONNECT_STRING} << 'EOF'
+DROP TABLE ${tableName} CASCADE CONSTRAINTS;
+EXIT;
+EOF`,
+            { encoding: 'utf8' }
+        );
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
  * Load data into Oracle using SQL
  */
-async function loadOracle(dataDir, dropExisting, batchSize) {
+async function loadOracle(dataDir, dropExisting, skipExisting, batchSize) {
     console.log('\n=== Loading data into Oracle ===');
     console.log(`Container: ${ORACLE_CONTAINER}`);
     console.log(`User: ${ORACLE_USER}`);
@@ -249,6 +303,18 @@ async function loadOracle(dataDir, dropExisting, batchSize) {
         const expectedCount = collectionInfo.count;
 
         console.log(`\n--- ${collectionName} (${expectedCount.toLocaleString()} documents) ---`);
+
+        // Check if we should skip this collection
+        if (skipExisting && !dropExisting) {
+            const existingCount = getOracleTableCount(collectionName);
+            if (existingCount >= expectedCount) {
+                console.log(`  SKIPPED: Already has ${existingCount.toLocaleString()} documents (expected ${expectedCount.toLocaleString()})`);
+                continue;
+            } else if (existingCount > 0) {
+                console.log(`  Partial data exists (${existingCount.toLocaleString()}/${expectedCount.toLocaleString()}), will reload...`);
+                dropOracleTable(collectionName);
+            }
+        }
 
         // Get batch files
         const collectionDir = path.join(dataDir, collectionName);
@@ -455,6 +521,7 @@ async function main() {
     console.log(`Target: ${target}`);
     console.log(`Data directory: ${dataDir}`);
     console.log(`Drop existing: ${dropExisting}`);
+    console.log(`Skip existing: ${skipExisting}`);
     console.log(`Batch size: ${batchSize}`);
 
     if (!fs.existsSync(dataDir)) {
@@ -467,11 +534,11 @@ async function main() {
 
     try {
         if (target === 'mongodb' || target === 'both') {
-            await loadMongoDb(dataDir, dropExisting, batchSize);
+            await loadMongoDb(dataDir, dropExisting, skipExisting, batchSize);
         }
 
         if (target === 'oracle' || target === 'both') {
-            await loadOracle(dataDir, dropExisting, batchSize);
+            await loadOracle(dataDir, dropExisting, skipExisting, batchSize);
         }
 
         const totalElapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);

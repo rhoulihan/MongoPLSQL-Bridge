@@ -6,12 +6,13 @@
 # executes complex aggregation pipelines on both databases, and compares results.
 #
 # Usage:
-#   ./run-comparison.sh [--size small|medium|large|xlarge] [--skip-generate] [--skip-load]
+#   ./run-comparison.sh [--size small|medium|large|xlarge] [--skip-generate] [--skip-load] [--skip-existing]
 #
 # Options:
 #   --size           Data size (default: small for testing)
 #   --skip-generate  Skip data generation (use existing data)
 #   --skip-load      Skip data loading (use existing loaded data)
+#   --skip-existing  Skip loading collections that already have full data (drops incomplete ones)
 #   --mongodb-only   Only run MongoDB tests
 #   --oracle-only    Only run Oracle tests
 #
@@ -22,6 +23,7 @@ set -e
 SIZE="small"
 SKIP_GENERATE=false
 SKIP_LOAD=false
+SKIP_EXISTING=false
 MONGODB_ONLY=false
 ORACLE_ONLY=false
 
@@ -38,6 +40,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-load)
             SKIP_LOAD=true
+            shift
+            ;;
+        --skip-existing)
+            SKIP_EXISTING=true
             shift
             ;;
         --mongodb-only)
@@ -73,6 +79,7 @@ echo "  Data directory: $DATA_DIR"
 echo "  Results directory: $RESULTS_DIR"
 echo "  Skip generate: $SKIP_GENERATE"
 echo "  Skip load: $SKIP_LOAD"
+echo "  Skip existing: $SKIP_EXISTING"
 echo ""
 
 # Check for Node.js
@@ -135,7 +142,14 @@ if [ "$SKIP_LOAD" = false ]; then
     echo "Loading data into: $TARGET"
     echo ""
 
-    node "$SCRIPT_DIR/load-data.js" --target "$TARGET" --data-dir "$DATA_DIR" --drop
+    LOAD_ARGS="--target $TARGET --data-dir $DATA_DIR"
+    if [ "$SKIP_EXISTING" = true ]; then
+        LOAD_ARGS="$LOAD_ARGS --skip-existing"
+    else
+        LOAD_ARGS="$LOAD_ARGS --drop"
+    fi
+
+    node "$SCRIPT_DIR/load-data.js" $LOAD_ARGS
 
     if [ $? -ne 0 ]; then
         echo "Error: Data loading failed"
