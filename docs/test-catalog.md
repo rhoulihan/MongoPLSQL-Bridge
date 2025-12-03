@@ -1,6 +1,6 @@
 # Test Catalog
 
-*Auto-generated on 2025-12-03 08:04:07. SQL is regenerated fresh each time this catalog is built.*
+*Auto-generated on 2025-12-03 08:31:53. SQL is regenerated fresh each time this catalog is built.*
 
 ---
 
@@ -93,7 +93,11 @@
 
 **Generated SQL:**
 ```sql
-SELECT base.data.status AS "_id", SUM(1) AS count FROM sales base GROUP BY base.data.status ORDER BY "_id"
+SELECT base.data.status AS "_id",
+       SUM(1) AS COUNT
+FROM sales base
+GROUP BY base.data.status
+ORDER BY "_id"
 ```
 
 ---
@@ -135,7 +139,12 @@ SELECT base.data.status AS "_id", SUM(1) AS count FROM sales base GROUP BY base.
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount FROM sales base WHERE base.data.status = 'completed' GROUP BY base.data.category ORDER BY "_id"
+SELECT base.data.category AS "_id",
+       SUM(base.data.amount) AS totalAmount
+FROM sales base
+WHERE base.data.status = 'completed'
+GROUP BY base.data.category
+ORDER BY "_id"
 ```
 
 ---
@@ -172,7 +181,11 @@ SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount FROM sa
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", AVG(base.data.salary) AS avgSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       AVG(base.data.salary) AS avgSalary
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -214,7 +227,12 @@ SELECT base.data.department AS "_id", AVG(base.data.salary) AS avgSalary FROM em
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", MIN(base.data.price) AS minPrice FROM products base WHERE base.data.active = true GROUP BY base.data.category ORDER BY "_id"
+SELECT base.data.category AS "_id",
+       MIN(base.data.price) AS minPrice
+FROM products base
+WHERE base.data.active = TRUE
+GROUP BY base.data.category
+ORDER BY "_id"
 ```
 
 ---
@@ -251,7 +269,11 @@ SELECT base.data.category AS "_id", MIN(base.data.price) AS minPrice FROM produc
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MAX(base.data.salary) AS maxSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       MAX(base.data.salary) AS maxSalary
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -300,7 +322,15 @@ SELECT base.data.department AS "_id", MAX(base.data.salary) AS maxSalary FROM em
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", SUM(1) AS count, SUM(base.data.salary) AS totalSalary, AVG(base.data.salary) AS avgSalary, MIN(base.data.salary) AS minSalary, MAX(base.data.salary) AS maxSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       SUM(1) AS COUNT,
+       SUM(base.data.salary) AS totalSalary,
+       AVG(base.data.salary) AS avgSalary,
+       MIN(base.data.salary) AS minSalary,
+       MAX(base.data.salary) AS maxSalary
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -337,7 +367,11 @@ SELECT base.data.department AS "_id", SUM(1) AS count, SUM(base.data.salary) AS 
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", JSON_ARRAYAGG(base.data.name) AS employees FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       JSON_ARRAYAGG(base.data.name) AS employees
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -374,7 +408,12 @@ SELECT base.data.department AS "_id", JSON_ARRAYAGG(base.data.name) AS employees
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", JSON_QUERY('[' || LISTAGG(DISTINCT '"' || base.data.status || '"', ',') WITHIN GROUP (ORDER BY base.data.status) || ']', '$' RETURNING CLOB) AS statuses FROM sales base GROUP BY base.data.region ORDER BY "_id"
+SELECT base.data.region AS "_id",
+       JSON_QUERY('[' || LISTAGG(DISTINCT '"' || base.data.status || '"', ',') WITHIN GROUP (
+                                                                                             ORDER BY base.data.status) || ']', '$' RETURNING CLOB) AS statuses
+FROM sales base
+GROUP BY base.data.region
+ORDER BY "_id"
 ```
 
 ---
@@ -416,7 +455,11 @@ SELECT base.data.region AS "_id", JSON_QUERY('[' || LISTAGG(DISTINCT '"' || base
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MIN(base.data.name) AS highestPaidEmployee FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       MIN(base.data.name) AS highestPaidEmployee
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -458,7 +501,11 @@ SELECT base.data.department AS "_id", MIN(base.data.name) AS highestPaidEmployee
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MAX(base.data.name) AS lowestPaidEmployee FROM employees base GROUP BY base.data.department ORDER BY "_id"
+SELECT base.data.department AS "_id",
+       MAX(base.data.name) AS lowestPaidEmployee
+FROM employees base
+GROUP BY base.data.department
+ORDER BY "_id"
 ```
 
 ---
@@ -506,7 +553,11 @@ SELECT base.data.department AS "_id", MAX(base.data.name) AS lowestPaidEmployee 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + base.data.bonus) AS totalCompensation FROM employees base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       (base.data.salary + base.data.bonus) AS totalCompensation
+FROM employees base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -557,7 +608,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + bas
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profitMargin FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       (base.data.price - base.data.cost) AS profitMargin
+FROM products base
+WHERE base.data.active = TRUE
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -605,7 +661,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (base.data.amount + base.data.tax) AS total FROM sales base WHERE base.data.status = 'completed' ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       (base.data.amount + base.data.tax) AS total
+FROM sales base
+WHERE base.data.status = 'completed'
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -651,7 +712,12 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (base.data.amount
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profit FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       (base.data.price - base.data.cost) AS profit
+FROM products base
+WHERE base.data.active = TRUE
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -697,7 +763,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + (base.data.bonus * 1)) AS totalComp FROM employees base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       (base.data.salary + (base.data.bonus * 1)) AS totalComp
+FROM employees base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -750,7 +820,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + (ba
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, ((base.data.price - base.data.cost) / base.data.cost) AS margin FROM products base WHERE CAST(base.data.cost AS NUMBER) > 0 ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       ((base.data.price - base.data.cost) / base.data.cost) AS margin
+FROM products base
+WHERE CAST(base.data.cost AS NUMBER) > 0
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -791,7 +866,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, ((base.data.price - bas
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, MOD(base.data.orderId, 3) AS orderIdMod3 FROM sales base ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       MOD(base.data.orderId, 3) AS orderIdMod3
+FROM sales base
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -825,7 +904,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, MOD(base.data.ord
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ABS(base.data.amount) AS absoluteAmount FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       ABS(base.data.amount) AS absoluteAmount
+FROM sales base
 ```
 
 ---
@@ -859,7 +942,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.tax AS tax, CEIL(base.data.tax) AS taxCeiled FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.tax AS tax,
+       CEIL(base.data.tax) AS taxCeiled
+FROM sales base
 ```
 
 ---
@@ -893,7 +980,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.tax AS 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, FLOOR(base.data.amount) AS amountFloored FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       FLOOR(base.data.amount) AS amountFloored
+FROM sales base
 ```
 
 ---
@@ -930,7 +1021,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ROUND(base.data.amount, 0) AS amountRounded FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       ROUND(base.data.amount, 0) AS amountRounded
+FROM sales base
 ```
 
 ---
@@ -967,7 +1062,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, TRUNC(base.data.amount, 1) AS amountTruncated FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       TRUNC(base.data.amount, 1) AS amountTruncated
+FROM sales base
 ```
 
 ---
@@ -1017,7 +1116,12 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag FROM products base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       JSON_VALUE(base.data, '$.tags[0]') AS firstTag
+FROM products base
+WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -1055,7 +1159,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.items.size()') AS itemCount FROM sales base ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       JSON_VALUE(base.data, '$.items.size()') AS itemCount
+FROM sales base
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -1100,7 +1208,12 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.d
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag FROM products base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       JSON_VALUE(base.data, '$.tags[0]') AS firstTag
+FROM products base
+WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -1145,7 +1258,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.tags[last]') AS lastTag FROM sales base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       JSON_VALUE(base.data, '$.tags[last]') AS lastTag
+FROM sales base
+WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -1195,7 +1313,14 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.d
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(val) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE base.data.item.qty > 1) AS highValueItems FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+
+  (SELECT JSON_ARRAYAGG(val)
+   FROM JSON_TABLE(DATA, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
+   WHERE base.data.item.qty > 1) AS highValueItems
+FROM sales base
+ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1240,7 +1365,13 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRA
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(base.data.item.product) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))) AS itemProducts FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+
+  (SELECT JSON_ARRAYAGG(base.data.item.product)
+   FROM JSON_TABLE(DATA, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))) AS itemProducts
+FROM sales base
+ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1290,7 +1421,10 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRA
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, /* $reduce not fully supported */ NULL AS totalQty FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId, /* $reduce not fully supported */ NULL AS totalQty
+FROM sales base
+ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1343,7 +1477,19 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, /* $reduce not fu
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(val ORDER BY rn) FROM (SELECT val, ROWNUM + 0 AS rn FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) UNION ALL SELECT val, ROWNUM + 1000 AS rn FROM JSON_TABLE('["extra"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS allLabels FROM sales base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+
+  (SELECT JSON_ARRAYAGG(val
+                        ORDER BY rn)
+   FROM
+     (SELECT val, ROWNUM + 0 AS rn
+      FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
+      UNION ALL SELECT val, ROWNUM + 1000 AS rn
+      FROM JSON_TABLE('["extra"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS allLabels
+FROM sales base
+WHERE JSON_EXISTS(base.data, '$.tags')
+ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1394,7 +1540,12 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRA
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[0 to 1]') AS firstTwoTags FROM products base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       JSON_QUERY(base.data, '$.tags[0 to 1]') AS firstTwoTags
+FROM products base
+WHERE JSON_EXISTS(base.data, '$.tags')
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1445,7 +1596,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[last-1 to last]') AS lastTwoTags FROM products base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       JSON_QUERY(base.data, '$.tags[last-1 to last]') AS lastTwoTags
+FROM products base
+WHERE JSON_EXISTS(base.data, '$.tags')
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1483,7 +1639,16 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val ORDER BY rn DESC) FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY))) AS reversedTags FROM sales base WHERE base.data."_id" = 'S001'
+SELECT base.data."_id" AS "_id",
+       base.data.tags AS tags,
+
+  (SELECT JSON_ARRAYAGG(val
+                        ORDER BY rn DESC)
+   FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn
+                                                   FOR
+                                                   ORDINALITY))) AS reversedTags
+FROM sales base
+WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1519,7 +1684,17 @@ SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(v
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, CASE WHEN JSON_EXISTS(base.data, '$.tags[0]') THEN 1 ELSE 0 END AS isTagsArray, CASE WHEN JSON_EXISTS(base.data, '$.amount[0]') THEN 1 ELSE 0 END AS isAmountArray FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       CASE
+           WHEN JSON_EXISTS(base.data, '$.tags[0]') THEN 1
+           ELSE 0
+       END AS isTagsArray,
+       CASE
+           WHEN JSON_EXISTS(base.data, '$.amount[0]') THEN 1
+           ELSE 0
+       END AS isAmountArray
+FROM sales base
 ```
 
 ---
@@ -1563,7 +1738,19 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, CASE WHEN JSON_EX
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val) FROM (SELECT DISTINCT val FROM (SELECT val FROM JSON_TABLE(JSON_QUERY(base.data, '$.tags'), '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) UNION SELECT val FROM JSON_TABLE('["new-tag","premium"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))) AS unionResult FROM sales base WHERE base.data."_id" = 'S001'
+SELECT base.data."_id" AS "_id",
+       base.data.tags AS tags,
+
+  (SELECT JSON_ARRAYAGG(val)
+   FROM
+     (SELECT DISTINCT val
+      FROM
+        (SELECT val
+         FROM JSON_TABLE(JSON_QUERY(base.data, '$.tags'), '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
+         UNION SELECT val
+         FROM JSON_TABLE('["new-tag","premium"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))) AS unionResult
+FROM sales base
+WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1607,7 +1794,16 @@ SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(v
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val) FROM (SELECT DISTINCT val FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) INTERSECT SELECT DISTINCT val FROM JSON_TABLE('["premium","discount"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS intersectResult FROM sales base WHERE base.data."_id" = 'S001'
+SELECT base.data."_id" AS "_id",
+       base.data.tags AS tags,
+
+  (SELECT JSON_ARRAYAGG(val)
+   FROM
+     (SELECT DISTINCT val
+      FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) INTERSECT SELECT DISTINCT val
+      FROM JSON_TABLE('["premium","discount"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS intersectResult
+FROM sales base
+WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1657,7 +1853,26 @@ SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(v
 
 **Generated SQL:**
 ```sql
-SELECT CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END AS "_id", SUM(1) AS count, JSON_ARRAYAGG(base.data.name) AS products FROM products base GROUP BY CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END ORDER BY "_id"
+SELECT CASE
+           WHEN base.data.price >= 0
+                AND base.data.price < 25 THEN 0
+           WHEN base.data.price >= 25
+                AND base.data.price < 100 THEN 25
+           WHEN base.data.price >= 100
+                AND base.data.price < 1000 THEN 100
+       END AS "_id",
+       SUM(1) AS COUNT,
+       JSON_ARRAYAGG(base.data.name) AS products
+FROM products base
+GROUP BY CASE
+             WHEN base.data.price >= 0
+                  AND base.data.price < 25 THEN 0
+             WHEN base.data.price >= 25
+                  AND base.data.price < 100 THEN 25
+             WHEN base.data.price >= 100
+                  AND base.data.price < 1000 THEN 100
+         END
+ORDER BY "_id"
 ```
 
 ---
@@ -1705,7 +1920,26 @@ SELECT CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.
 
 **Generated SQL:**
 ```sql
-SELECT CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END AS "_id", SUM(1) AS count, AVG(base.data.bonus) AS avgBonus FROM employees base GROUP BY CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END ORDER BY "_id"
+SELECT CASE
+           WHEN base.data.salary >= 60000
+                AND base.data.salary < 75000 THEN 60000
+           WHEN base.data.salary >= 75000
+                AND base.data.salary < 90000 THEN 75000
+           WHEN base.data.salary >= 90000
+                AND base.data.salary < 110000 THEN 90000
+       END AS "_id",
+       SUM(1) AS COUNT,
+       AVG(base.data.bonus) AS avgBonus
+FROM employees base
+GROUP BY CASE
+             WHEN base.data.salary >= 60000
+                  AND base.data.salary < 75000 THEN 60000
+             WHEN base.data.salary >= 75000
+                  AND base.data.salary < 90000 THEN 75000
+             WHEN base.data.salary >= 90000
+                  AND base.data.salary < 110000 THEN 90000
+         END
+ORDER BY "_id"
 ```
 
 ---
@@ -1750,7 +1984,17 @@ SELECT CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 600
 
 **Generated SQL:**
 ```sql
-SELECT bucket_id, COUNT(*) AS count, AVG(groupby_value) AS avgPrice FROM (SELECT base.data.price AS groupby_value, NTILE(3) OVER (ORDER BY base.data.price) AS bucket_id FROM products base WHERE base.data.active = true) GROUP BY bucket_id ORDER BY bucket_id
+SELECT bucket_id,
+       COUNT(*) AS COUNT,
+       AVG(groupby_value) AS avgPrice
+FROM
+  (SELECT base.data.price AS groupby_value,
+          NTILE(3) OVER (
+                         ORDER BY base.data.price) AS bucket_id
+   FROM products base
+   WHERE base.data.active = TRUE)
+GROUP BY bucket_id
+ORDER BY bucket_id
 ```
 
 ---
@@ -1791,7 +2035,17 @@ SELECT bucket_id, COUNT(*) AS count, AVG(groupby_value) AS avgPrice FROM (SELECT
 
 **Generated SQL:**
 ```sql
-SELECT bucket_id, COUNT(*) AS count, MIN(groupby_value) AS minSalary, MAX(groupby_value) AS maxSalary FROM (SELECT base.data.salary AS groupby_value, NTILE(4) OVER (ORDER BY base.data.salary) AS bucket_id FROM employees base) GROUP BY bucket_id ORDER BY bucket_id
+SELECT bucket_id,
+       COUNT(*) AS COUNT,
+       MIN(groupby_value) AS minSalary,
+       MAX(groupby_value) AS maxSalary
+FROM
+  (SELECT base.data.salary AS groupby_value,
+          NTILE(4) OVER (
+                         ORDER BY base.data.salary) AS bucket_id
+   FROM employees base)
+GROUP BY bucket_id
+ORDER BY bucket_id
 ```
 
 ---
@@ -1829,7 +2083,11 @@ SELECT bucket_id, COUNT(*) AS count, MIN(groupby_value) AS minSalary, MAX(groupb
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE base.data.status = 'completed'
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.status AS status
+FROM sales base
+WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -1866,7 +2124,10 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.amount AS amount FROM sales base WHERE CAST(base.data.amount AS NUMBER) > 200
+SELECT base.data."_id" AS "_id",
+       base.data.amount AS amount
+FROM sales base
+WHERE CAST(base.data.amount AS NUMBER) > 200
 ```
 
 ---
@@ -1904,7 +2165,11 @@ SELECT base.data."_id" AS "_id", base.data.amount AS amount FROM sales base WHER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base WHERE CAST(base.data.salary AS NUMBER) >= 90000
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.salary AS salary
+FROM employees base
+WHERE CAST(base.data.salary AS NUMBER) >= 90000
 ```
 
 ---
@@ -1942,7 +2207,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS sal
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE CAST(base.data.price AS NUMBER) < 50
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.price AS price
+FROM products base
+WHERE CAST(base.data.price AS NUMBER) < 50
 ```
 
 ---
@@ -1980,7 +2249,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS pric
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.yearsOfService AS yearsOfService FROM employees base WHERE CAST(base.data.yearsOfService AS NUMBER) <= 2
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.yearsOfService AS yearsOfService
+FROM employees base
+WHERE CAST(base.data.yearsOfService AS NUMBER) <= 2
 ```
 
 ---
@@ -2017,7 +2290,10 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.yearsOfServic
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE base.data.status <> 'completed'
+SELECT base.data."_id" AS "_id",
+       base.data.status AS status
+FROM sales base
+WHERE base.data.status <> 'completed'
 ```
 
 ---
@@ -2057,7 +2333,11 @@ SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE base.data.status IN ('completed', 'pending')
+SELECT base.data."_id" AS "_id",
+       base.data.status AS status
+FROM sales base
+WHERE base.data.status IN ('completed',
+                           'pending')
 ```
 
 ---
@@ -2097,7 +2377,11 @@ SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.region AS region FROM sales base WHERE base.data.region NOT IN ('north', 'south')
+SELECT base.data."_id" AS "_id",
+       base.data.region AS region
+FROM sales base
+WHERE base.data.region NOT IN ('north',
+                               'south')
 ```
 
 ---
@@ -2134,7 +2418,10 @@ SELECT base.data."_id" AS "_id", base.data.region AS region FROM sales base WHER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WHERE JSON_EXISTS(base.data, '$.metadata')
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId
+FROM sales base
+WHERE JSON_EXISTS(base.data, '$.metadata')
 ```
 
 ---
@@ -2171,7 +2458,10 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WH
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.metadata')
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId
+FROM sales base
+WHERE NOT JSON_EXISTS(base.data, '$.metadata')
 ```
 
 ---
@@ -2223,7 +2513,14 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WH
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalSales, SUM(1) AS orderCount FROM sales base WHERE base.data.status IN ('completed', 'processing') GROUP BY base.data.region ORDER BY totalSales DESC
+SELECT base.data.region AS "_id",
+       SUM(base.data.amount) AS totalSales,
+       SUM(1) AS orderCount
+FROM sales base
+WHERE base.data.status IN ('completed',
+                           'processing')
+GROUP BY base.data.region
+ORDER BY totalSales DESC
 ```
 
 ---
@@ -2273,7 +2570,13 @@ SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalSales, SUM(1) AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (base.data.salary + base.data.bonus) AS totalComp FROM employees base WHERE base.data.active = true ORDER BY base.data.totalComp DESC FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department,
+       (base.data.salary + base.data.bonus) AS totalComp
+FROM employees base
+WHERE base.data.active = TRUE
+ORDER BY base.data.totalComp DESC FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -2331,7 +2634,15 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.category AS category, base.data.amount AS amount FROM sales base WHERE ((base.data.category = 'electronics') OR (base.data.category = 'jewelry')) AND (CAST(base.data.amount AS NUMBER) >= 100) ORDER BY base.data.amount DESC
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.category AS category,
+       base.data.amount AS amount
+FROM sales base
+WHERE ((base.data.category = 'electronics')
+       OR (base.data.category = 'jewelry'))
+  AND (CAST(base.data.amount AS NUMBER) >= 100)
+ORDER BY base.data.amount DESC
 ```
 
 ---
@@ -2387,7 +2698,14 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.categor
 
 **Generated SQL:**
 ```sql
-SELECT customers_1.data.tier AS "_id", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM sales base LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id') WHERE base.data.status = 'completed' GROUP BY customers_1.data.tier ORDER BY "_id"
+SELECT customers_1.data.tier AS "_id",
+       SUM(base.data.amount) AS totalAmount,
+       SUM(1) AS orderCount
+FROM sales base
+LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id')
+WHERE base.data.status = 'completed'
+GROUP BY customers_1.data.tier
+ORDER BY "_id"
 ```
 
 ---
@@ -2434,7 +2752,13 @@ SELECT customers_1.data.tier AS "_id", SUM(base.data.amount) AS totalAmount, SUM
 
 **Generated SQL:**
 ```sql
-SELECT UPPER(base.data.department) AS "_id", AVG(base.data.salary) AS avgSalary, SUM(1) AS headcount, UPPER(base.data.department) AS deptUpper FROM employees base GROUP BY UPPER(base.data.department) ORDER BY "_id"
+SELECT UPPER(base.data.department) AS "_id",
+       AVG(base.data.salary) AS avgSalary,
+       SUM(1) AS headcount,
+       UPPER(base.data.department) AS deptUpper
+FROM employees base
+GROUP BY UPPER(base.data.department)
+ORDER BY "_id"
 ```
 
 ---
@@ -2482,7 +2806,13 @@ SELECT UPPER(base.data.department) AS "_id", AVG(base.data.salary) AS avgSalary,
 
 **Generated SQL:**
 ```sql
-SELECT unwind_1.value.product AS "_id", SUM(unwind_1.value.qty) AS totalQuantity, SUM((unwind_1.value.qty * unwind_1.value.price)) AS totalRevenue FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1 GROUP BY unwind_1.value.product ORDER BY "_id"
+SELECT unwind_1.value.product AS "_id",
+       SUM(unwind_1.value.qty) AS totalQuantity,
+       SUM((unwind_1.value.qty * unwind_1.value.price)) AS totalRevenue
+FROM sales base,
+     JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1
+GROUP BY unwind_1.value.product
+ORDER BY "_id"
 ```
 
 ---
@@ -2525,7 +2855,12 @@ SELECT unwind_1.value.product AS "_id", SUM(unwind_1.value.qty) AS totalQuantity
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM sales base GROUP BY base.data.category ORDER BY totalAmount DESC FETCH FIRST 3 ROWS ONLY
+SELECT base.data.category AS "_id",
+       SUM(base.data.amount) AS totalAmount,
+       SUM(1) AS orderCount
+FROM sales base
+GROUP BY base.data.category
+ORDER BY totalAmount DESC FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -2581,7 +2916,16 @@ SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount, SUM(1)
 
 **Generated SQL:**
 ```sql
-SELECT source AS "_id", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS source, base.data.amount AS amount FROM sales base UNION ALL SELECT 'products' AS source, base.data.price AS amount FROM products base) GROUP BY source
+SELECT SOURCE AS "_id",
+                 SUM(amount) AS totalAmount
+FROM
+  (SELECT 'sales' AS SOURCE,
+          base.data.amount AS amount
+   FROM sales base
+   UNION ALL SELECT 'products' AS SOURCE,
+                    base.data.price AS amount
+   FROM products base)
+GROUP BY SOURCE
 ```
 
 ---
@@ -2630,7 +2974,14 @@ SELECT source AS "_id", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS sourc
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= 100 THEN 'expensive' ELSE 'affordable' END AS priceCategory FROM products base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       CASE
+           WHEN base.data.price >= 100 THEN 'expensive'
+           ELSE 'affordable'
+       END AS priceCategory
+FROM products base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -2671,7 +3022,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.pri
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied FROM sales base ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied
+FROM sales base
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -2729,7 +3084,17 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= 200 THEN 'high' ELSE CASE WHEN base.data.price >= 50 THEN 'medium' ELSE 'low' END END AS priceRange FROM products base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       CASE
+           WHEN base.data.price >= 200 THEN 'high'
+           ELSE CASE
+                    WHEN base.data.price >= 50 THEN 'medium'
+                    ELSE 'low'
+                END
+       END AS priceRange
+FROM products base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -2758,7 +3123,8 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.pri
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('totalEmployees' VALUE COUNT(*)) AS data FROM employees base
+SELECT JSON_OBJECT('totalEmployees' VALUE COUNT(*)) AS DATA
+FROM employees base
 ```
 
 ---
@@ -2790,7 +3156,9 @@ SELECT JSON_OBJECT('totalEmployees' VALUE COUNT(*)) AS data FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS data FROM sales base WHERE base.data.status = 'completed'
+SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS DATA
+FROM sales base
+WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -2831,7 +3199,10 @@ SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS data FROM sales base WHE
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('highEarningActiveEmployees' VALUE COUNT(*)) AS data FROM employees base WHERE (base.data.active = true) AND (CAST(base.data.salary AS NUMBER) >= 80000)
+SELECT JSON_OBJECT('highEarningActiveEmployees' VALUE COUNT(*)) AS DATA
+FROM employees base
+WHERE (base.data.active = TRUE)
+  AND (CAST(base.data.salary AS NUMBER) >= 80000)
 ```
 
 ---
@@ -2871,7 +3242,12 @@ SELECT JSON_OBJECT('highEarningActiveEmployees' VALUE COUNT(*)) AS data FROM emp
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventYear FROM events base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.title AS title,
+       EXTRACT(YEAR
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventYear
+FROM EVENTS base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -2909,7 +3285,12 @@ SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(YEAR FROM TO_
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventMonth FROM events base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.title AS title,
+       EXTRACT(MONTH
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventMonth
+FROM EVENTS base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -2947,7 +3328,12 @@ SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(MONTH FROM TO
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(DAY FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventDay FROM events base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.title AS title,
+       EXTRACT(DAY
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventDay
+FROM EVENTS base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -2985,7 +3371,12 @@ SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(DAY FROM TO_T
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventHour FROM events base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.title AS title,
+       EXTRACT(HOUR
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventHour
+FROM EVENTS base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -3024,7 +3415,13 @@ SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(HOUR FROM TO_
 
 **Generated SQL:**
 ```sql
-SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(1) AS eventCount FROM events base GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) ORDER BY "_id"
+SELECT EXTRACT(MONTH
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id",
+       SUM(1) AS eventCount
+FROM EVENTS base
+GROUP BY EXTRACT(MONTH
+                 FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
+ORDER BY "_id"
 ```
 
 ---
@@ -3057,7 +3454,11 @@ SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(MINUTE FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS minute FROM events base
+SELECT base.data."_id" AS "_id",
+       base.data.eventName AS eventName,
+       EXTRACT(MINUTE
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS MINUTE
+FROM EVENTS base
 ```
 
 ---
@@ -3090,7 +3491,11 @@ SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(MINUT
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(SECOND FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS second FROM events base
+SELECT base.data."_id" AS "_id",
+       base.data.eventName AS eventName,
+       EXTRACT(SECOND
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS SECOND
+FROM EVENTS base
 ```
 
 ---
@@ -3123,7 +3528,10 @@ SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(SECON
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'D')) AS dayOfWeek FROM events base
+SELECT base.data."_id" AS "_id",
+       base.data.eventName AS eventName,
+       TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'D')) AS dayOfWeek
+FROM EVENTS base
 ```
 
 ---
@@ -3156,7 +3564,10 @@ SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'DDD')) AS dayOfYear FROM events base
+SELECT base.data."_id" AS "_id",
+       base.data.eventName AS eventName,
+       TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'DDD')) AS dayOfYear
+FROM EVENTS base
 ```
 
 ---
@@ -3189,7 +3600,10 @@ SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'IW')) AS week FROM events base
+SELECT base.data."_id" AS "_id",
+       base.data.eventName AS eventName,
+       TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'IW')) AS WEEK
+FROM EVENTS base
 ```
 
 ---
@@ -3228,7 +3642,13 @@ SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_
 
 **Generated SQL:**
 ```sql
-SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(1) AS eventCount FROM events base GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) ORDER BY "_id"
+SELECT EXTRACT(MONTH
+               FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id",
+       SUM(1) AS eventCount
+FROM EVENTS base
+GROUP BY EXTRACT(MONTH
+                 FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
+ORDER BY "_id"
 ```
 
 ---
@@ -3267,7 +3687,9 @@ SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YY
 
 **Generated SQL:**
 ```sql
-SELECT SUM(base.data.amount) AS totalAmount FROM sales base WHERE CAST(base.data.quantity AS NUMBER) = 0
+SELECT SUM(base.data.amount) AS totalAmount
+FROM sales base
+WHERE CAST(base.data.quantity AS NUMBER) = 0
 ```
 
 ---
@@ -3306,7 +3728,9 @@ SELECT SUM(base.data.amount) AS totalAmount FROM sales base WHERE CAST(base.data
 
 **Generated SQL:**
 ```sql
-SELECT SUM(base.data.amount) AS totalRefunds FROM sales base WHERE CAST(base.data.amount AS NUMBER) < 0
+SELECT SUM(base.data.amount) AS totalRefunds
+FROM sales base
+WHERE CAST(base.data.amount AS NUMBER) < 0
 ```
 
 ---
@@ -3340,7 +3764,9 @@ SELECT SUM(base.data.amount) AS totalRefunds FROM sales base WHERE CAST(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id" FROM sales base WHERE base.data.status = 'nonexistent_status'
+SELECT base.data."_id" AS "_id"
+FROM sales base
+WHERE base.data.status = 'nonexistent_status'
 ```
 
 ---
@@ -3407,7 +3833,16 @@ SELECT base.data."_id" AS "_id" FROM sales base WHERE base.data.status = 'nonexi
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, CASE WHEN base.data.salary < 60000 THEN 'Junior' WHEN base.data.salary < 90000 THEN 'Mid' WHEN base.data.salary >= 90000 THEN 'Senior' ELSE 'Unknown' END AS salaryBand FROM employees base
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.salary AS salary,
+       CASE
+           WHEN base.data.salary < 60000 THEN 'Junior'
+           WHEN base.data.salary < 90000 THEN 'Mid'
+           WHEN base.data.salary >= 90000 THEN 'Senior'
+           ELSE 'Unknown'
+       END AS salaryBand
+FROM employees base
 ```
 
 ---
@@ -3461,7 +3896,17 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS sal
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status, CASE WHEN base.data.status = 'completed' THEN 'low' ELSE CASE WHEN base.data.status = 'pending' THEN 'high' ELSE 'medium' END END AS priority FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.status AS status,
+       CASE
+           WHEN base.data.status = 'completed' THEN 'low'
+           ELSE CASE
+                    WHEN base.data.status = 'pending' THEN 'high'
+                    ELSE 'medium'
+                END
+       END AS priority
+FROM sales base
 ```
 
 ---
@@ -3521,7 +3966,20 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status 
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('byStatus' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count) ORDER BY "_id") FROM (SELECT base.data.status AS "_id", SUM(1) AS count FROM sales base GROUP BY base.data.status)), 'byRegion' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'totalAmount' VALUE totalAmount) ORDER BY "_id") FROM (SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalAmount FROM sales base GROUP BY base.data.region))) AS data FROM DUAL
+SELECT JSON_OBJECT('byStatus' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE COUNT)
+                                           ORDER BY "_id")
+                      FROM
+                        (SELECT base.data.status AS "_id", SUM(1) AS COUNT
+                         FROM sales base
+                         GROUP BY base.data.status)), 'byRegion' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'totalAmount' VALUE totalAmount)
+                                           ORDER BY "_id")
+                      FROM
+                        (SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalAmount
+                         FROM sales base
+                         GROUP BY base.data.region))) AS DATA
+FROM DUAL
 ```
 
 ---
@@ -3588,7 +4046,20 @@ SELECT JSON_OBJECT('byStatus' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALU
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('categorySummary' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count, 'avgPrice' VALUE avgPrice) ORDER BY "_id") FROM (SELECT base.data.category AS "_id", SUM(1) AS count, AVG(base.data.price) AS avgPrice FROM products base WHERE base.data.active = true GROUP BY base.data.category)), 'priceStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'minPrice' VALUE minPrice, 'maxPrice' VALUE maxPrice, 'avgPrice' VALUE avgPrice)) FROM (SELECT MIN(base.data.price) AS minPrice, MAX(base.data.price) AS maxPrice, AVG(base.data.price) AS avgPrice FROM products base WHERE base.data.active = true))) AS data FROM DUAL
+SELECT JSON_OBJECT('categorySummary' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE COUNT, 'avgPrice' VALUE avgPrice)
+                                           ORDER BY "_id")
+                      FROM
+                        (SELECT base.data.category AS "_id", SUM(1) AS COUNT, AVG(base.data.price) AS avgPrice
+                         FROM products base
+                         WHERE base.data.active = TRUE
+                         GROUP BY base.data.category)), 'priceStats' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'minPrice' VALUE minPrice, 'maxPrice' VALUE maxPrice, 'avgPrice' VALUE avgPrice))
+                      FROM
+                        (SELECT MIN(base.data.price) AS minPrice, MAX(base.data.price) AS maxPrice, AVG(base.data.price) AS avgPrice
+                         FROM products base
+                         WHERE base.data.active = TRUE))) AS DATA
+FROM DUAL
 ```
 
 ---
@@ -3664,7 +4135,24 @@ SELECT JSON_OBJECT('categorySummary' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_i
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('departmentCounts' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count) ORDER BY count DESC) FROM (SELECT base.data.department AS "_id", SUM(1) AS count FROM employees base GROUP BY base.data.department)), 'topEarners' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'name' VALUE name, 'salary' VALUE salary) ORDER BY salary DESC) FROM (SELECT id AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base ORDER BY base.data.salary DESC FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE totalEmployees, 'avgSalary' VALUE avgSalary, 'totalPayroll' VALUE totalPayroll)) FROM (SELECT SUM(1) AS totalEmployees, AVG(base.data.salary) AS avgSalary, SUM(base.data.salary) AS totalPayroll FROM employees base))) AS data FROM DUAL
+SELECT JSON_OBJECT('departmentCounts' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE COUNT)
+                                           ORDER BY COUNT DESC)
+                      FROM
+                        (SELECT base.data.department AS "_id", SUM(1) AS COUNT
+                         FROM employees base
+                         GROUP BY base.data.department)), 'topEarners' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'name' VALUE name, 'salary' VALUE salary)
+                                           ORDER BY salary DESC)
+                      FROM
+                        (SELECT id AS "_id", base.data.name AS name, base.data.salary AS salary
+                         FROM employees base
+                         ORDER BY base.data.salary DESC FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE
+                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE totalEmployees, 'avgSalary' VALUE avgSalary, 'totalPayroll' VALUE totalPayroll))
+                      FROM
+                        (SELECT SUM(1) AS totalEmployees, AVG(base.data.salary) AS avgSalary, SUM(base.data.salary) AS totalPayroll
+                         FROM employees base))) AS DATA
+FROM DUAL
 ```
 
 ---
@@ -3717,7 +4205,17 @@ SELECT JSON_OBJECT('departmentCounts' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.colleagues.size()') AS colleagueCount, colleagues_cte.colleagues AS colleagues FROM employees base LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS colleagues FROM employees g WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department') AND JSON_VALUE(g.data, '$.active') = true) colleagues_cte ON 1=1 WHERE CAST(base.data."_id" AS NUMBER) = 1
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       JSON_VALUE(base.data, '$.colleagues.size()') AS colleagueCount,
+       colleagues_cte.colleagues AS colleagues
+FROM employees base
+LEFT OUTER JOIN LATERAL
+  (SELECT JSON_ARRAYAGG(g.data) AS colleagues
+   FROM employees g
+   WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department')
+     AND JSON_VALUE(g.data, '$.active') = TRUE) colleagues_cte ON 1=1
+WHERE CAST(base.data."_id" AS NUMBER) = 1
 ```
 
 ---
@@ -3762,7 +4260,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status, base.data.category AS category FROM sales base WHERE (base.data.status = 'completed') AND (base.data.category = 'electronics')
+SELECT base.data."_id" AS "_id",
+       base.data.status AS status,
+       base.data.category AS category
+FROM sales base
+WHERE (base.data.status = 'completed')
+  AND (base.data.category = 'electronics')
 ```
 
 ---
@@ -3811,7 +4314,14 @@ SELECT base.data."_id" AS "_id", base.data.status AS status, base.data.category 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary FROM employees base WHERE (base.data.department = 'Engineering') AND (base.data.active = true) AND (CAST(base.data.salary AS NUMBER) >= 90000)
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department,
+       base.data.salary AS salary
+FROM employees base
+WHERE (base.data.department = 'Engineering')
+  AND (base.data.active = TRUE)
+  AND (CAST(base.data.salary AS NUMBER) >= 90000)
 ```
 
 ---
@@ -3853,7 +4363,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE (base.data.status = 'cancelled') OR (base.data.status = 'refunded')
+SELECT base.data."_id" AS "_id",
+       base.data.status AS status
+FROM sales base
+WHERE (base.data.status = 'cancelled')
+  OR (base.data.status = 'refunded')
 ```
 
 ---
@@ -3903,7 +4417,13 @@ SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department FROM employees base WHERE (base.data.department = 'Engineering') OR ((base.data.department = 'Sales') AND (base.data.active = true))
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department
+FROM employees base
+WHERE (base.data.department = 'Engineering')
+  OR ((base.data.department = 'Sales')
+      AND (base.data.active = TRUE))
 ```
 
 ---
@@ -3943,7 +4463,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE NOT (CAST(base.data.price AS NUMBER) > 100)
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.price AS price
+FROM products base
+WHERE NOT (CAST(base.data.price AS NUMBER) > 100)
 ```
 
 ---
@@ -3986,7 +4510,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS pric
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE NOT ((base.data.status = 'completed') OR (base.data.status = 'pending'))
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.status AS status
+FROM sales base
+WHERE NOT ((base.data.status = 'completed')
+           OR (base.data.status = 'pending'))
 ```
 
 ---
@@ -4042,7 +4571,13 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.customerInfo.tier[0]') AS customerTier FROM sales base LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id') WHERE base.data.status = 'completed' ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       JSON_VALUE(base.data, '$.customerInfo.tier[0]') AS customerTier
+FROM sales base
+LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id')
+WHERE base.data.status = 'completed'
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -4093,7 +4628,15 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.d
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$._id')) AS warehouseCount FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+
+  (SELECT COUNT(*)
+   FROM inventory
+   WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$._id')) AS warehouseCount
+FROM products base
+WHERE base.data.active = TRUE
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -4140,7 +4683,15 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, (SELECT COUNT(*) FROM i
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (SELECT COUNT(*) FROM employees WHERE JSON_VALUE(employees.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount FROM employees base WHERE CAST(base.data."_id" AS NUMBER) = 1
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department,
+
+  (SELECT COUNT(*)
+   FROM employees
+   WHERE JSON_VALUE(employees.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount
+FROM employees base
+WHERE CAST(base.data."_id" AS NUMBER) = 1
 ```
 
 ---
@@ -4202,7 +4753,18 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT COUNT(*) FROM customers WHERE JSON_VALUE(customers.data, '$.customerId') = JSON_VALUE(base.data, '$.customerId')) > 0 AS hasCustomer, (SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$.orderId')) AS inventoryCount FROM sales base WHERE base.data."_id" = 'S001'
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+
+  (SELECT COUNT(*)
+   FROM customers
+   WHERE JSON_VALUE(customers.data, '$.customerId') = JSON_VALUE(base.data, '$.customerId')) > 0 AS hasCustomer,
+
+  (SELECT COUNT(*)
+   FROM inventory
+   WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$.orderId')) AS inventoryCount
+FROM sales base
+WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -4240,7 +4802,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT COUNT(*) 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.discount AS discount FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.discount AS discount
+FROM sales base
+WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
 ```
 
 ---
@@ -4276,7 +4842,10 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.discoun
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied FROM sales base
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied
+FROM sales base
 ```
 
 ---
@@ -4312,7 +4881,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.metadata.campaign AS campaign FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.metadata.campaign AS campaign
+FROM sales base
+WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
 ```
 
 ---
@@ -4349,7 +4922,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.metadat
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", SUM(base.data.discount) AS totalDiscount FROM sales base GROUP BY base.data.region ORDER BY "_id"
+SELECT base.data.region AS "_id",
+       SUM(base.data.discount) AS totalDiscount
+FROM sales base
+GROUP BY base.data.region
+ORDER BY "_id"
 ```
 
 ---
@@ -4386,7 +4963,11 @@ SELECT base.data.region AS "_id", SUM(base.data.discount) AS totalDiscount FROM 
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", AVG(base.data.discount) AS avgDiscount FROM sales base GROUP BY base.data.category ORDER BY "_id"
+SELECT base.data.category AS "_id",
+       AVG(base.data.discount) AS avgDiscount
+FROM sales base
+GROUP BY base.data.category
+ORDER BY "_id"
 ```
 
 ---
@@ -4430,7 +5011,10 @@ SELECT base.data.category AS "_id", AVG(base.data.discount) AS avgDiscount FROM 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", JSON_MERGEPATCH(JSON_OBJECT('orderId' VALUE base.data.orderId), JSON_QUERY(base.data, '$.metadata')) AS merged FROM sales base WHERE base.data."_id" = 'S001'
+SELECT base.data."_id" AS "_id",
+       JSON_MERGEPATCH(JSON_OBJECT('orderId' VALUE base.data.orderId), JSON_QUERY(base.data, '$.metadata')) AS merged
+FROM sales base
+WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -4482,7 +5066,15 @@ SELECT base.data."_id" AS "_id", JSON_MERGEPATCH(JSON_OBJECT('orderId' VALUE bas
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base WHERE CASE WHEN base.data.salary >= 80000 THEN '$$KEEP' ELSE '$$PRUNE' END <> '$$PRUNE' ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.salary AS salary
+FROM employees base
+WHERE CASE
+          WHEN base.data.salary >= 80000 THEN '$$KEEP'
+          ELSE '$$PRUNE'
+      END <> '$$PRUNE'
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -4532,7 +5124,15 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS sal
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE CASE WHEN base.data.status = 'completed' THEN '$$DESCEND' ELSE '$$PRUNE' END <> '$$PRUNE' ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.status AS status
+FROM sales base
+WHERE CASE
+          WHEN base.data.status = 'completed' THEN '$$DESCEND'
+          ELSE '$$PRUNE'
+      END <> '$$PRUNE'
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -4574,7 +5174,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status 
 
 **Generated SQL:**
 ```sql
-SELECT base.data.orderId AS orderId, base.data.metadata.source AS source, base.data.metadata.campaign AS campaign FROM sales base WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
+SELECT base.data.orderId AS orderId,
+       base.data.metadata.source AS SOURCE,
+       base.data.metadata.campaign AS campaign
+FROM sales base
+WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
 ```
 
 ---
@@ -4611,7 +5215,10 @@ SELECT base.data.orderId AS orderId, base.data.metadata.source AS source, base.d
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name FROM products base ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name
+FROM products base
+ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -4647,7 +5254,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name FROM products base ORDER
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department FROM employees base ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department
+FROM employees base
+ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -4705,7 +5316,19 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.salary') AS salary, salaryRank AS salaryRank FROM (SELECT id, data, RANK() OVER (PARTITION BY JSON_VALUE(base.data, '$.department') ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS salaryRank FROM employees base) WHERE salaryRank = 1 ORDER BY JSON_VALUE(data, '$.department')
+SELECT id AS "_id",
+       JSON_VALUE(DATA, '$.name') AS name,
+       JSON_VALUE(DATA, '$.department') AS department,
+       JSON_VALUE(DATA, '$.salary') AS salary,
+       salaryRank AS salaryRank
+FROM
+  (SELECT id,
+          DATA,
+          RANK() OVER (PARTITION BY base.data.department
+                       ORDER BY base.data.salary DESC) AS salaryRank
+   FROM employees base)
+WHERE salaryRank = 1
+ORDER BY JSON_VALUE(DATA, '$.department')
 ```
 
 ---
@@ -4760,7 +5383,13 @@ SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.depa
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales base WHERE base.data.status = 'completed'
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       SUM(base.data.amount) OVER (
+                                   ORDER BY base.data.orderDate ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal
+FROM sales base
+WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -4815,7 +5444,18 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.category') AS category, JSON_VALUE(data, '$.price') AS price FROM (SELECT id, data, ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(base.data, '$.category') ORDER BY JSON_VALUE(base.data, '$.price') DESC) AS priceRankInCategory FROM products base WHERE base.data.active = true) WHERE priceRankInCategory = 1
+SELECT id AS "_id",
+       JSON_VALUE(DATA, '$.name') AS name,
+       JSON_VALUE(DATA, '$.category') AS category,
+       JSON_VALUE(DATA, '$.price') AS price
+FROM
+  (SELECT id,
+          DATA,
+          ROW_NUMBER() OVER (PARTITION BY base.data.category
+                             ORDER BY base.data.price DESC) AS priceRankInCategory
+   FROM products base
+   WHERE base.data.active = TRUE)
+WHERE priceRankInCategory = 1
 ```
 
 ---
@@ -4871,7 +5511,18 @@ SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.cate
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary') AS salary, denseRank AS denseRank FROM (SELECT id, data, DENSE_RANK() OVER (ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS denseRank FROM employees base) WHERE denseRank <= 3 ORDER BY denseRank
+SELECT id AS "_id",
+       JSON_VALUE(DATA, '$.name') AS name,
+       JSON_VALUE(DATA, '$.salary') AS salary,
+       denseRank AS denseRank
+FROM
+  (SELECT id,
+          DATA,
+          DENSE_RANK() OVER (
+                             ORDER BY base.data.salary DESC) AS denseRank
+   FROM employees base)
+WHERE denseRank <= 3
+ORDER BY denseRank
 ```
 
 ---
@@ -4911,7 +5562,10 @@ SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.sala
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base ORDER BY base.data.orderId FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId
+FROM sales base
+ORDER BY base.data.orderId FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -4949,7 +5603,11 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base OR
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name FROM employees base ORDER BY base.data.name OFFSET 5 ROWS
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name
+FROM employees base
+ORDER BY base.data.name
+OFFSET 5 ROWS
 ```
 
 ---
@@ -4991,7 +5649,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name FROM employees base ORDE
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base ORDER BY base.data.price DESC OFFSET 2 ROWS FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.price AS price
+FROM products base
+ORDER BY base.data.price DESC
+OFFSET 2 ROWS FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -5027,7 +5690,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS pric
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base ORDER BY base.data.salary
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.salary AS salary
+FROM employees base
+ORDER BY base.data.salary
 ```
 
 ---
@@ -5068,7 +5735,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS sal
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE base.data.active = true ORDER BY base.data.price DESC
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.price AS price
+FROM products base
+WHERE base.data.active = TRUE
+ORDER BY base.data.price DESC
 ```
 
 ---
@@ -5106,7 +5778,13 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS pric
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary FROM employees base ORDER BY base.data.department, base.data.salary DESC
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department,
+       base.data.salary AS salary
+FROM employees base
+ORDER BY base.data.department,
+         base.data.salary DESC
 ```
 
 ---
@@ -5148,7 +5826,12 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data.orderId AS orderId, base.data.amount AS amount, base.data.tax AS tax FROM sales base WHERE base.data.status = 'completed' ORDER BY base.data.orderId
+SELECT base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       base.data.tax AS tax
+FROM sales base
+WHERE base.data.status = 'completed'
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -5191,7 +5874,10 @@ SELECT base.data.orderId AS orderId, base.data.amount AS amount, base.data.tax A
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", (base.data.name || ' - ' || base.data.department) AS fullInfo FROM employees base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       (base.data.name || ' - ' || base.data.department) AS fullInfo
+FROM employees base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5228,7 +5914,10 @@ SELECT base.data."_id" AS "_id", (base.data.name || ' - ' || base.data.departmen
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", LOWER(base.data.department) AS deptLower FROM employees base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       LOWER(base.data.department) AS deptLower
+FROM employees base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5265,7 +5954,10 @@ SELECT base.data."_id" AS "_id", LOWER(base.data.department) AS deptLower FROM e
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", UPPER(base.data.name) AS nameUpper FROM products base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       UPPER(base.data.name) AS nameUpper
+FROM products base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5306,7 +5998,10 @@ SELECT base.data."_id" AS "_id", UPPER(base.data.name) AS nameUpper FROM product
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", SUBSTR(base.data.name, 1, 4) AS namePrefix FROM customers base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       SUBSTR(base.data.name, 1, 4) AS namePrefix
+FROM customers base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5344,7 +6039,11 @@ SELECT base.data."_id" AS "_id", SUBSTR(base.data.name, 1, 4) AS namePrefix FROM
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, LENGTH(base.data.name) AS nameLength FROM products base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       LENGTH(base.data.name) AS nameLength
+FROM products base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5383,7 +6082,10 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, LENGTH(base.data.name) 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", TRIM(base.data.name) AS trimmedName FROM employees base ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id",
+       TRIM(base.data.name) AS trimmedName
+FROM employees base
+ORDER BY base.data."_id"
 ```
 
 ---
@@ -5442,7 +6144,14 @@ SELECT base.data."_id" AS "_id", TRIM(base.data.name) AS trimmedName FROM employ
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_SUBSTR(base.data.name, '[^'||' '||']+', 1, 1) AS firstName, (SELECT JSON_ARRAYAGG(REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL)) FROM DUAL CONNECT BY REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL) IS NOT NULL) AS nameParts FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       REGEXP_SUBSTR(base.data.name, '[^'||' '||']+', 1, 1) AS firstName,
+
+  (SELECT JSON_ARRAYAGG(REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL))
+   FROM DUAL CONNECT BY REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL) IS NOT NULL) AS nameParts
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5486,7 +6195,14 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_SUBSTR(base.data
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN INSTR(base.data.name, 'a') = 0 THEN -1 ELSE INSTR(base.data.name, 'a') - 1 END AS aPosition FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       CASE
+           WHEN INSTR(base.data.name, 'a') = 0 THEN -1
+           ELSE INSTR(base.data.name, 'a') - 1
+       END AS aPosition
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5530,7 +6246,14 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN INSTR(base.da
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN REGEXP_LIKE(base.data.name, '^[AEIOUaeiou]') THEN 1 ELSE 0 END AS hasVowelStart FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       CASE
+           WHEN REGEXP_LIKE(base.data.name, '^[AEIOUaeiou]') THEN 1
+           ELSE 0
+       END AS hasVowelStart
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5575,7 +6298,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN REGEXP_LIKE(b
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.department, 'Engineering', 'Tech', 1, 1) AS modifiedDept FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       REGEXP_REPLACE(base.data.department, 'Engineering', 'Tech', 1, 1) AS modifiedDept
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5620,7 +6347,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.name, ' ', '_') AS nameNoSpaces FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       REGEXP_REPLACE(base.data.name, ' ', '_') AS nameNoSpaces
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5655,7 +6386,10 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName FROM employees base
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       TRIM(base.data.name) AS trimmedName
+FROM employees base
 ```
 
 ---
@@ -5690,7 +6424,10 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName FROM employees base
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       TRIM(base.data.name) AS trimmedName
+FROM employees base
 ```
 
 ---
@@ -5727,7 +6464,15 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, CASE WHEN UPPER(base.data.department) < UPPER('ENGINEERING') THEN -1 WHEN UPPER(base.data.department) > UPPER('ENGINEERING') THEN 1 ELSE 0 END AS compareResult FROM employees base
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.department AS department,
+       CASE
+           WHEN UPPER(base.data.department) < UPPER('ENGINEERING') THEN -1
+           WHEN UPPER(base.data.department) > UPPER('ENGINEERING') THEN 1
+           ELSE 0
+       END AS compareResult
+FROM employees base
 ```
 
 ---
@@ -5772,7 +6517,25 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", CASE WHEN base.data.status IS NULL THEN 'null' WHEN base.data.status IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS statusType, CASE WHEN base.data.amount IS NULL THEN 'null' WHEN base.data.amount IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS amountType FROM sales base ORDER BY base.data."_id" FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       CASE
+           WHEN base.data.status IS NULL THEN 'null'
+           WHEN base.data.status IN ('true',
+                                     'false') THEN 'bool'
+           WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+$') THEN 'int'
+           WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+\.[0-9]+$') THEN 'double'
+           ELSE 'string'
+       END AS statusType,
+       CASE
+           WHEN base.data.amount IS NULL THEN 'null'
+           WHEN base.data.amount IN ('true',
+                                     'false') THEN 'bool'
+           WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+$') THEN 'int'
+           WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+\.[0-9]+$') THEN 'double'
+           ELSE 'string'
+       END AS amountType
+FROM sales base
+ORDER BY base.data."_id" FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -5813,7 +6576,11 @@ SELECT base.data."_id" AS "_id", CASE WHEN base.data.status IS NULL THEN 'null' 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRUNC(TO_NUMBER(base.data.price)) AS priceInt FROM products base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       TRUNC(TO_NUMBER(base.data.price)) AS priceInt
+FROM products base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5854,7 +6621,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, TRUNC(TO_NUMBER(base.da
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TO_CHAR(base.data.salary) AS salaryStr FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       TO_CHAR(base.data.salary) AS salaryStr
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5895,7 +6666,11 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, TO_CHAR(base.data.salar
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TO_BINARY_DOUBLE(base.data.price) AS priceDouble FROM products base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       TO_BINARY_DOUBLE(base.data.price) AS priceDouble
+FROM products base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5936,7 +6711,16 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, TO_BINARY_DOUBLE(base.d
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.active IS NULL OR TO_CHAR(base.data.active) IN ('0', 'false') THEN 'false' ELSE 'true' END AS isActive FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       CASE
+           WHEN base.data.active IS NULL
+                OR TO_CHAR(base.data.active) IN ('0',
+                                                 'false') THEN 'false'
+           ELSE 'true'
+       END AS isActive
+FROM employees base
+ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5996,7 +6780,16 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.act
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, 'employee' AS source FROM employees base UNION ALL SELECT base.data."_id" AS "_id", base.data.name AS name, 'customer' AS source FROM customers base ORDER BY source ASC, name ASC FETCH FIRST 10 ROWS ONLY
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       'employee' AS SOURCE
+FROM employees base
+UNION ALL
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       'customer' AS SOURCE
+FROM customers base
+ORDER BY SOURCE ASC, name ASC FETCH FIRST 10 ROWS ONLY
 ```
 
 ---
@@ -6056,7 +6849,18 @@ SELECT base.data."_id" AS "_id", base.data.name AS name, 'employee' AS source FR
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'completed' UNION ALL SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'pending' ORDER BY "_id" ASC
+SELECT base.data."_id" AS "_id",
+       base.data.amount AS amount,
+       base.data.category AS category
+FROM sales base
+WHERE base.data.status = 'completed'
+UNION ALL
+SELECT base.data."_id" AS "_id",
+       base.data.amount AS amount,
+       base.data.category AS category
+FROM sales base
+WHERE base.data.status = 'pending'
+ORDER BY "_id" ASC
 ```
 
 ---
@@ -6120,7 +6924,17 @@ SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category 
 
 **Generated SQL:**
 ```sql
-SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT base.data."_id" AS "_id", base.data.price AS price FROM products base WHERE base.data.category = 'electronics' UNION ALL SELECT base.data."_id" AS "_id", base.data.price AS price FROM products base WHERE base.data.category = 'tools')
+SELECT COUNT(*) AS totalProducts,
+       AVG(price) AS avgPrice
+FROM
+  (SELECT base.data."_id" AS "_id",
+          base.data.price AS price
+   FROM products base
+   WHERE base.data.category = 'electronics'
+   UNION ALL SELECT base.data."_id" AS "_id",
+                    base.data.price AS price
+   FROM products base
+   WHERE base.data.category = 'tools')
 ```
 
 ---
@@ -6162,7 +6976,13 @@ SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT base.data.
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value.product AS product, unwind_1.value.qty AS qty FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1 WHERE CAST(base.data.orderId AS NUMBER) = 1001
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       unwind_1.value.product AS product,
+       unwind_1.value.qty AS qty
+FROM sales base,
+     JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1
+WHERE CAST(base.data.orderId AS NUMBER) = 1001
 ```
 
 ---
@@ -6214,7 +7034,14 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value.pr
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value AS tag FROM sales base LEFT OUTER JOIN JSON_TABLE(base.data, '$.tags[*]' COLUMNS (value JSON PATH '$')) unwind_1 ON 1=1 WHERE CAST(base.data.orderId AS NUMBER) IN (1001, 1007) ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       unwind_1.value AS tag
+FROM sales base
+LEFT OUTER JOIN JSON_TABLE(base.data, '$.tags[*]' COLUMNS (value JSON PATH '$')) unwind_1 ON 1=1
+WHERE CAST(base.data.orderId AS NUMBER) IN (1001,
+                                            1007)
+ORDER BY base.data.orderId
 ```
 
 ---
@@ -6271,7 +7098,13 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value AS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales base WHERE base.data.status = 'completed'
+SELECT base.data."_id" AS "_id",
+       base.data.orderId AS orderId,
+       base.data.amount AS amount,
+       SUM(base.data.amount) OVER (
+                                   ORDER BY base.data.orderDate ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal
+FROM sales base
+WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -6321,7 +7154,12 @@ SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount 
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, AVG(JSON_VALUE(base.data, '$.salary' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.salary') ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary FROM employees base
+SELECT base.data."_id" AS "_id",
+       base.data.name AS name,
+       base.data.salary AS salary,
+       AVG(base.data.salary) OVER (
+                                   ORDER BY base.data.salary ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary
+FROM employees base
 ```
 
 ---

@@ -14,6 +14,12 @@ import os
 from datetime import datetime
 from collections import defaultdict
 
+try:
+    import sqlparse
+    HAS_SQLPARSE = True
+except ImportError:
+    HAS_SQLPARSE = False
+
 # Paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 QUERY_TESTS_DIR = os.path.dirname(SCRIPT_DIR)
@@ -24,6 +30,22 @@ OUTPUT_FILE = os.path.join(PROJECT_ROOT, "docs", "test-catalog.md")
 
 # Cache for generated SQL to avoid regenerating
 sql_cache = {}
+
+
+def format_sql(sql: str) -> str:
+    """Format SQL for readability using sqlparse if available."""
+    if not HAS_SQLPARSE or not sql or sql.startswith("--"):
+        return sql
+    try:
+        formatted = sqlparse.format(
+            sql,
+            reindent=True,
+            keyword_case='upper',
+            indent_width=2
+        )
+        return formatted
+    except Exception:
+        return sql
 
 
 def generate_sql(collection: str, pipeline: list) -> str:
@@ -216,7 +238,7 @@ def main():
 
             output.append("**Generated SQL:**")
             output.append("```sql")
-            output.append(sql)
+            output.append(format_sql(sql))
             output.append("```")
             output.append("")
             output.append("---")
