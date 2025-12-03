@@ -309,7 +309,7 @@ class SetWindowFieldsStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).contains("$.quantity");
+    assertThat(context.toSql()).contains("data.quantity");
   }
 
   @Test
@@ -319,7 +319,7 @@ class SetWindowFieldsStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).contains("$.state");
+    assertThat(context.toSql()).contains("data.state");
   }
 
   @Test
@@ -420,7 +420,7 @@ class SetWindowFieldsStageTest {
     stage.render(context);
 
     String sql = context.toSql();
-    assertThat(sql).contains("$.order.items.quantity");
+    assertThat(sql).contains("data.order.items.quantity");
   }
 
   @Test
