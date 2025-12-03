@@ -49,32 +49,58 @@ dependencies {
     spotbugsPlugins("com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0")
 }
 
-// Task to translate a pipeline from command line
-tasks.register<JavaExec>("translatePipeline") {
-    group = "application"
-    description = "Translate a MongoDB pipeline to Oracle SQL"
-    mainClass.set("com.oracle.mongodb.translator.cli.TranslateCli")
-    classpath = sourceSets["main"].runtimeClasspath
+// CLI main class configuration
+val cliMainClass = "com.oracle.mongodb.translator.cli.TranslatorCli"
 
+// Fat JAR for standalone CLI usage
+tasks.register<Jar>("fatJar") {
+    group = "build"
+    description = "Creates a fat JAR with all dependencies for CLI usage"
+    archiveClassifier.set("all")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    manifest {
+        attributes["Main-Class"] = cliMainClass
+    }
+
+    from(sourceSets.main.get().output)
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get()
+            .filter { it.name.endsWith("jar") }
+            .map { zipTree(it) }
+    })
+}
+
+// Task to run the CLI from Gradle
+tasks.register<JavaExec>("translate") {
+    group = "application"
+    description = "Translate MongoDB aggregation pipelines to Oracle SQL"
+    mainClass.set(cliMainClass)
+    classpath = sourceSets["main"].runtimeClasspath
+    standardInput = System.`in`
+
+    // Pass all project properties as arguments
     doFirst {
         val argsList = mutableListOf<String>()
-        val collectionName = project.findProperty("collectionName")?.toString() ?: ""
-        val pipelineFile = project.findProperty("pipelineFile")?.toString() ?: ""
-        val pipelineJson = project.findProperty("pipelineJson")?.toString() ?: ""
-        val inlineValues = project.findProperty("inline")?.toString()?.toBoolean() ?: false
 
-        if (collectionName.isNotEmpty()) {
-            argsList.add(collectionName)
+        // Support both old and new argument styles
+        project.findProperty("file")?.toString()?.let { argsList.add(it) }
+        project.findProperty("collection")?.toString()?.let {
+            argsList.add("--collection")
+            argsList.add(it)
         }
-        if (pipelineFile.isNotEmpty()) {
-            argsList.add("--file")
-            argsList.add(pipelineFile)
-        } else if (pipelineJson.isNotEmpty()) {
-            argsList.add(pipelineJson)
-        }
-        if (inlineValues) {
+        if (project.findProperty("inline")?.toString()?.toBoolean() == true) {
             argsList.add("--inline")
         }
+        if (project.findProperty("pretty")?.toString()?.toBoolean() == true) {
+            argsList.add("--pretty")
+        }
+        project.findProperty("output")?.toString()?.let {
+            argsList.add("--output")
+            argsList.add(it)
+        }
+
         args = argsList
     }
 }

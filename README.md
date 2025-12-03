@@ -96,7 +96,62 @@ cd MongoPLSQL-Bridge
 
 The built JAR will be at `core/build/libs/core.jar`.
 
-### Basic Usage
+### Command-Line Interface
+
+The translator includes a CLI for quick pipeline translation:
+
+```bash
+# Build the CLI (creates standalone JAR)
+./gradlew :core:fatJar
+
+# Translate a pipeline file
+./mongo2sql pipeline.json
+
+# With options
+./mongo2sql --collection orders --pretty --inline pipeline.json
+```
+
+**CLI Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--collection <name>` | `-c` | Collection/table name (overrides file setting) |
+| `--inline` | `-i` | Inline bind variables into SQL |
+| `--pretty` | `-p` | Pretty-print the SQL output |
+| `--no-hints` | | Disable Oracle optimizer hints |
+| `--strict` | | Fail on unsupported operators |
+| `--data-column <name>` | | JSON data column name (default: data) |
+| `--output <file>` | `-o` | Write output to file instead of stdout |
+| `--version` | `-v` | Show version information |
+| `--help` | `-h` | Show help message |
+
+**Input File Formats:**
+
+1. **Raw pipeline array:**
+   ```json
+   [{"$match": {"status": "active"}}, {"$limit": 10}]
+   ```
+
+2. **Single pipeline with metadata:**
+   ```json
+   {
+     "name": "Active Orders",
+     "collection": "orders",
+     "pipeline": [{"$match": {"status": "active"}}]
+   }
+   ```
+
+3. **Multiple pipelines:**
+   ```json
+   {
+     "pipelines": [
+       {"name": "Pipeline 1", "collection": "orders", "pipeline": [...]},
+       {"name": "Pipeline 2", "collection": "products", "pipeline": [...]}
+     ]
+   }
+   ```
+
+### Java API Usage
 
 ```java
 import com.oracle.mongodb.translator.api.AggregationTranslator;
@@ -201,7 +256,7 @@ var translator = AggregationTranslator.create(config, options);
 mongo-oracle-translator/
 ├── core/                    # Main translation library
 │   └── src/
-│       ├── main/java/       # API, AST, parser, optimizer, generator
+│       ├── main/java/       # API, AST, parser, optimizer, generator, CLI
 │       └── test/java/       # Unit tests (1,408)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
@@ -213,6 +268,7 @@ mongo-oracle-translator/
 │   ├── test-catalog.md      # Complete test catalog with SQL
 │   └── IMPL-*.md            # Implementation notes
 ├── scripts/                 # Environment management
+├── mongo2sql                # CLI wrapper script
 └── docker-compose.yml       # MongoDB + Oracle setup
 ```
 

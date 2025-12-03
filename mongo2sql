@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# MongoDB to Oracle SQL Translator CLI
+#
+# Usage: ./mongo2sql [options] <input-file>
+#
+# This script wraps the Java CLI for translating MongoDB aggregation
+# pipelines to Oracle SQL/JSON statements.
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JAR_FILE="$SCRIPT_DIR/core/build/libs/core-1.0.0-SNAPSHOT-all.jar"
+REGULAR_JAR="$SCRIPT_DIR/core/build/libs/core.jar"
+
+# Check if fat JAR exists, if not try to build it
+if [ ! -f "$JAR_FILE" ]; then
+    if [ ! -f "$REGULAR_JAR" ]; then
+        echo "Building translator JAR..."
+        "$SCRIPT_DIR/gradlew" :core:fatJar -q
+    else
+        # Use regular JAR with classpath
+        echo "Fat JAR not found. Building..."
+        "$SCRIPT_DIR/gradlew" :core:fatJar -q
+    fi
+fi
+
+if [ ! -f "$JAR_FILE" ]; then
+    echo "Error: Could not build JAR file."
+    echo "Try running: ./gradlew :core:fatJar"
+    exit 1
+fi
+
+# Run the CLI
+java -jar "$JAR_FILE" "$@"
