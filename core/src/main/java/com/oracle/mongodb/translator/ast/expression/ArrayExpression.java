@@ -943,7 +943,7 @@ public final class ArrayExpression implements Expression {
         ctx.sql("'), '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
       } else {
         ctx.sql("SELECT val FROM JSON_TABLE(");
-        ctx.visit(arr);
+        renderArrayExpression(ctx, arr);
         ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
       }
       first = false;
@@ -975,12 +975,28 @@ public final class ArrayExpression implements Expression {
         ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
       } else {
         ctx.sql("SELECT DISTINCT val FROM JSON_TABLE(");
-        ctx.visit(arr);
+        renderArrayExpression(ctx, arr);
         ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
       }
       first = false;
     }
     ctx.sql("))");
+  }
+
+  /**
+   * Renders an array expression for use in JSON_TABLE. Handles LiteralExpression with List values
+   * by rendering them as proper JSON array strings.
+   */
+  @SuppressWarnings("unchecked")
+  private void renderArrayExpression(SqlGenerationContext ctx, Expression arr) {
+    if (arr instanceof LiteralExpression literal && literal.getValue() instanceof List) {
+      // Render the list as a proper JSON array string
+      ctx.sql("'");
+      ctx.sql(toJsonArray((List<?>) literal.getValue()));
+      ctx.sql("'");
+    } else {
+      ctx.visit(arr);
+    }
   }
 
   /**
