@@ -16,6 +16,7 @@ import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.InlineObjectExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
@@ -32,6 +33,7 @@ import com.oracle.mongodb.translator.ast.stage.MatchStage;
 import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.RedactStage;
+import com.oracle.mongodb.translator.ast.stage.ReplaceRootStage;
 import com.oracle.mongodb.translator.ast.stage.SampleStage;
 import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.SkipStage;
@@ -97,6 +99,16 @@ public final class PipelineRenderer {
         // This allows field paths like "$customer.tier" to resolve during SELECT rendering
         String alias = ctx.generateTableAlias(lookup.getFrom());
         ctx.registerLookupTableAlias(lookup.getAs(), alias);
+      }
+    }
+
+    // Pre-register unwind paths so field paths can resolve correctly
+    // After $unwind: "$items", references like "$items.product" should access the JSON_TABLE column
+    for (UnwindStage unwind : components.unwindStages) {
+      // Skip unwinds on lookup fields - they don't produce separate JSON_TABLE joins
+      if (!isUnwindOnLookupField(unwind.getPath(), components)) {
+        String alias = ctx.generateTableAlias("unwind");
+        ctx.registerUnwoundPath(unwind.getPath(), alias);
       }
     }
 
@@ -924,6 +936,8 @@ public final class PipelineRenderer {
         components.sampleStage = sample;
       } else if (stage instanceof RedactStage redact) {
         components.redactStages.add(redact);
+      } else if (stage instanceof ReplaceRootStage replaceRoot) {
+        components.replaceRootStage = replaceRoot;
       }
       // For unknown stages, we skip them (they won't be rendered)
     }
@@ -945,6 +959,10 @@ public final class PipelineRenderer {
       // $facet creates a JSON object with multiple subquery results
       renderFacetSelectClause(components, ctx);
       return; // $facet replaces the entire query
+    } else if (components.replaceRootStage != null) {
+      // $replaceRoot restructures the document
+      renderReplaceRootSelectClause(components.replaceRootStage, ctx);
+      return; // $replaceRoot replaces the entire SELECT
     } else if (components.groupStage != null) {
       // $group determines the SELECT clause
       renderGroupSelectClause(components.groupStage, ctx);
@@ -1064,6 +1082,52 @@ public final class PipelineRenderer {
 
     if (first) {
       ctx.sql("NULL AS dummy");
+    }
+  }
+
+  /**
+   * Renders $replaceRoot SELECT clause. When newRoot is an InlineObjectExpression (document with
+   * field-to-expression mappings), each field becomes a separate column. When it's a
+   * FieldPathExpression (subdocument promotion), the subdocument becomes the data column.
+   */
+  private void renderReplaceRootSelectClause(
+      ReplaceRootStage replaceRoot, SqlGenerationContext ctx) {
+    Expression newRoot = replaceRoot.getNewRoot();
+
+    if (newRoot instanceof InlineObjectExpression inlineObj) {
+      // Document with explicit field mappings: {field1: "$expr1", field2: "$expr2"}
+      // Render as: expr1 AS field1, expr2 AS field2
+      boolean first = true;
+      for (Map.Entry<String, Expression> entry : inlineObj.getFields().entrySet()) {
+        if (!first) {
+          ctx.sql(", ");
+        }
+        ctx.visit(entry.getValue());
+        ctx.sql(" AS ");
+        ctx.identifier(entry.getKey());
+        first = false;
+      }
+      if (first) {
+        ctx.sql("NULL AS dummy");
+      }
+    } else if (newRoot instanceof FieldPathExpression fieldPath) {
+      // Subdocument promotion: {newRoot: "$subdocument"}
+      // Render as: JSON_QUERY(data, '$.subdocument') AS data
+      ctx.sql("JSON_QUERY(");
+      String alias = ctx.getBaseTableAlias();
+      if (alias != null && !alias.isEmpty()) {
+        ctx.sql(alias);
+        ctx.sql(".");
+      }
+      ctx.sql("data, '$.");
+      ctx.sql(fieldPath.getPath());
+      ctx.sql("') AS ");
+      ctx.sql(config.dataColumnName());
+    } else {
+      // Other expressions (e.g., $mergeObjects) - render as data column
+      ctx.visit(newRoot);
+      ctx.sql(" AS ");
+      ctx.sql(config.dataColumnName());
     }
   }
 
@@ -1701,6 +1765,7 @@ public final class PipelineRenderer {
     LimitStage limitStage;
     CountStage countStage;
     SampleStage sampleStage;
+    ReplaceRootStage replaceRootStage;
     boolean hasPostGroupAddFields = false; // Track if $addFields comes after $group
     boolean hasPostWindowMatch = false; // Track if $match comes after $setWindowFields
     boolean hasPostUnionSortOrLimit = false; // Track if $sort/$limit come after $unionWith

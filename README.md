@@ -12,12 +12,12 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 103 passing cross-database validation tests.
+**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 142 passing cross-database validation tests.
 
 ### Implemented Operators
 
 **Stage Operators:**
-- `$match` - WHERE clause with JSON_VALUE/JSON_EXISTS
+- `$match` - WHERE clause with Oracle dot notation (e.g., `base.data.field`)
 - `$group` - GROUP BY with aggregate functions
 - `$project` - SELECT with field selection/computation
 - `$sort` - ORDER BY clause (with Top-N optimization)
@@ -47,9 +47,9 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ### Validation Status
 
-All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
+All 142 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See [query-tests/](query-tests/) for details.
 
-**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (5), Conditional (3), String (11), Date (5), Array (10), Type Conversion (5), $lookup/$unwind (4), $addFields (2), Complex (5), Edge cases (3), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (4), $redact (2), $sample (2), $count (3), $graphLookup (1)
+**Test Categories:** Comparison (8), Logical (5), Accumulator (8), Stage (7), Arithmetic (10), Conditional (3), String (11), Date (12), Array (10), Type Conversion (5), $lookup/$unwind (6), $addFields (2), Complex (8), Edge cases (3), Null handling (5), $unionWith (3), $bucket (2), $bucketAuto (2), $facet (3), $setWindowFields (6), $redact (2), $sample (2), $count (3), $graphLookup (1), $replaceRoot (1), $mergeObjects (1), Expression (2), Window (2)
 
 ### Test Coverage
 
@@ -86,7 +86,7 @@ All 103 cross-database validation tests pass (MongoDB 8.0 ↔ Oracle 23.6). See 
 
 | Operator | Status | Oracle Translation |
 |----------|--------|-------------------|
-| `$match` | ✅ Implemented | WHERE clause with JSON_VALUE/JSON_EXISTS |
+| `$match` | ✅ Implemented | WHERE clause with dot notation (e.g., `base.data.field`) |
 | `$group` | ✅ Implemented | GROUP BY with aggregate functions |
 | `$project` | ✅ Implemented | SELECT with field selection/computation |
 | `$sort` | ✅ Implemented | ORDER BY clause (with Top-N optimization) |
@@ -166,7 +166,7 @@ cd MongoPLSQL-Bridge
 ./gradlew build
 ```
 
-This runs all unit tests (1031 tests) and produces the library JAR.
+This runs all unit tests (1,272 tests) and produces the library JAR.
 
 ### Setting Up the Test Environment
 
@@ -208,7 +208,40 @@ docker compose logs -f oracle
 ./gradlew :core:test
 ```
 
-Runs 1103 unit tests covering all operators and parsers.
+Runs 1,272 unit tests covering all operators, parsers, and pipeline scenarios.
+
+**Test Categories:**
+
+| Package | Test Count | Description |
+|---------|------------|-------------|
+| `api` | 46 | Public API tests |
+| `ast.expression` | 329 | Expression operators (comparison, logical, arithmetic, etc.) |
+| `ast.stage` | 281 | Pipeline stage tests ($match, $group, $lookup, etc.) |
+| `generator` | 154 | SQL generation and rendering tests |
+| `optimizer` | 39 | Pipeline optimization tests |
+| `parser` | 398 | BSON to AST parsing tests |
+| `exception` | 7 | Error handling tests |
+| `util` | 16 | Utility function tests |
+| **Total** | **1,272** | |
+
+**Run specific test categories:**
+
+```bash
+# Run only parser tests
+./gradlew :core:test --tests "*ParserTest"
+
+# Run only stage tests
+./gradlew :core:test --tests "*StageTest"
+
+# Run only expression tests
+./gradlew :core:test --tests "*ExpressionTest"
+
+# Run a specific test class
+./gradlew :core:test --tests "PipelineRendererTest"
+
+# Run tests matching a pattern
+./gradlew :core:test --tests "*Lookup*"
+```
 
 #### Integration Tests (Requires Docker)
 
@@ -239,12 +272,12 @@ docker compose up -d
 
 **Expected Output:**
 ```
-Running 103 cross-database validation tests...
+Running 142 cross-database validation tests...
 ✅ PASS: CMP001 - Basic equality match
 ✅ PASS: CMP002 - Greater than comparison
 ...
 ============================================
-Results: 103 passed, 0 failed, 0 errors
+Results: 142 passed, 0 failed, 0 errors
 ============================================
 ```
 
@@ -463,10 +496,10 @@ var result = translator.translate(pipeline);
 
 System.out.println(result.sql());
 // Output:
-// SELECT JSON_VALUE(data, '$.category') AS "_id", SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS "total"
-// FROM orders
-// WHERE JSON_VALUE(data, '$.status') = :1
-// GROUP BY JSON_VALUE(data, '$.category')
+// SELECT base.data.category AS "_id", SUM(CAST(base.data.amount AS NUMBER)) AS "total"
+// FROM orders base
+// WHERE base.data.status = :1
+// GROUP BY base.data.category
 // ORDER BY "total" DESC
 // FETCH FIRST 10 ROWS ONLY
 

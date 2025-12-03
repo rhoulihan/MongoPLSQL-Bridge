@@ -105,6 +105,11 @@ public final class TypeConversionExpression implements Expression {
     return new TypeConversionExpression(TypeConversionOp.IS_NUMBER, argument);
   }
 
+  /** Creates an $isString expression. */
+  public static TypeConversionExpression isString(Expression argument) {
+    return new TypeConversionExpression(TypeConversionOp.IS_STRING, argument);
+  }
+
   /** Creates a $convert expression. */
   public static TypeConversionExpression convert(
       Expression argument, Expression onError, Expression onNull) {
@@ -161,6 +166,9 @@ public final class TypeConversionExpression implements Expression {
         break;
       case IS_NUMBER:
         renderIsNumber(ctx);
+        break;
+      case IS_STRING:
+        renderIsString(ctx);
         break;
       case CONVERT:
         renderConvert(ctx);
@@ -243,6 +251,18 @@ public final class TypeConversionExpression implements Expression {
     ctx.sql("CASE WHEN REGEXP_LIKE(TO_CHAR(");
     ctx.visit(argument);
     ctx.sql("), '^-?[0-9]+(\\.[0-9]+)?$') THEN 1 ELSE 0 END");
+  }
+
+  private void renderIsString(SqlGenerationContext ctx) {
+    // Check if expression is a string (not a number, boolean, null, array, or object)
+    // A value is a string if it's not null and doesn't match number or boolean patterns
+    ctx.sql("CASE WHEN ");
+    ctx.visit(argument);
+    ctx.sql(" IS NOT NULL AND NOT REGEXP_LIKE(TO_CHAR(");
+    ctx.visit(argument);
+    ctx.sql("), '^-?[0-9]+(\\.[0-9]+)?$') AND TO_CHAR(");
+    ctx.visit(argument);
+    ctx.sql(") NOT IN ('true', 'false') THEN 1 ELSE 0 END");
   }
 
   private void renderConvert(SqlGenerationContext ctx) {

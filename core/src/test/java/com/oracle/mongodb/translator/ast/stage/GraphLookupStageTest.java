@@ -485,4 +485,127 @@ class GraphLookupStageTest {
     // Empty document should not add any additional conditions
     assertThat(sql).doesNotContain("WHERE 1=1");
   }
+
+  // ==================== Additional Recursive Query Tests ====================
+
+  @Test
+  void shouldRenderDeepHierarchyTraversal() {
+    // Test organizational hierarchy traversal (manager -> reports)
+    var stage =
+        new GraphLookupStage(
+            "employees", "$managerId", "managerId", "_id", "reportingChain", 10, "depth");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WITH graph_reportingChain");
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("graph_depth < 10");
+    assertThat(sql).contains("AS depth");
+  }
+
+  @Test
+  void shouldRenderCategoryTreeTraversal() {
+    // Test category/taxonomy tree traversal
+    var stage =
+        new GraphLookupStage("categories", "$parentId", "parentId", "_id", "ancestors", 5, null);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("categories");
+    assertThat(sql).contains("parentId");
+  }
+
+  @Test
+  void shouldRenderGraphTraversalWithComplexFilter() {
+    // Social network friends-of-friends with status filter
+    var restrictMatch = Document.parse("{\"status\": {\"$in\": [\"active\", \"verified\"]}}");
+    var stage =
+        new GraphLookupStage(
+            "users", "$friends", "friends", "_id", "network", 3, "distance", restrictMatch);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("IN (");
+    assertThat(sql).contains("'active'");
+    assertThat(sql).contains("'verified'");
+    assertThat(sql).contains("graph_depth < 3");
+    assertThat(sql).contains("AS distance");
+  }
+
+  @Test
+  void shouldRenderBillOfMaterialsTraversal() {
+    // Product components / bill of materials traversal
+    var stage =
+        new GraphLookupStage(
+            "components", "$componentIds", "componentIds", "_id", "allParts", null, "level");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("components");
+    assertThat(sql).contains("componentIds");
+    // Note: depth field is rendered with quotes: AS "level"
+    assertThat(sql).contains("\"level\"");
+  }
+
+  @Test
+  void shouldRenderGraphWithMultipleConditions() {
+    // Graph with multiple filter conditions
+    var restrictMatch =
+        Document.parse("{\"active\": true, \"type\": {\"$ne\": \"archived\"}, \"priority\": {\"$gt\": 0}}");
+    var stage =
+        new GraphLookupStage(
+            "tasks", "$dependencies", "dependencies", "_id", "taskChain", 5, null, restrictMatch);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("'true'"); // active: true
+    assertThat(sql).contains("!="); // $ne
+    assertThat(sql).contains(">"); // $gt
+  }
+
+  @Test
+  void shouldRenderGraphWithNestedFieldPath() {
+    // Graph lookup using nested field paths
+    var stage =
+        new GraphLookupStage(
+            "orders", "$customer.referralId", "referredBy", "customerId", "referralChain", 5, null);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("customer.referralId");
+  }
+
+  @Test
+  void shouldRenderGraphWithMaxDepthOne() {
+    // Single level graph lookup (maxDepth=1 - only immediate connections)
+    var stage =
+        new GraphLookupStage(
+            "employees", "$directReports", "directReports", "_id", "team", 1, null);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("graph_depth < 1");
+  }
+
+  @Test
+  void shouldRenderGraphWithNumericFilter() {
+    // Graph with numeric range filter
+    var restrictMatch = Document.parse("{\"salary\": {\"$gte\": 50000, \"$lte\": 150000}}");
+    var stage =
+        new GraphLookupStage(
+            "employees", "$reportsTo", "reportsTo", "name", "hierarchy", null, null, restrictMatch);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains(">=");
+    assertThat(sql).contains("<=");
+  }
 }

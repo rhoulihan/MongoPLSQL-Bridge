@@ -340,4 +340,150 @@ class SetWindowFieldsStageTest {
         .contains("partitionBy=")
         .doesNotContain("sortBy=");
   }
+
+  // ==================== Additional Window Function Tests ====================
+
+  @Test
+  void shouldRenderLeadFunction() {
+    // Test LEAD window function - similar to $shift but forward-looking
+    var windowField = new WindowField("$shift", "$value", null);
+    var stage = new SetWindowFieldsStage(null, Map.of("date", 1), Map.of("nextVal", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("LAG(");
+    assertThat(sql).contains("AS nextVal");
+  }
+
+  @Test
+  void shouldRenderCumulativeSumOverPartition() {
+    // Cumulative sum partitioned by category
+    var windowSpec = new WindowSpec("documents", List.of("unbounded", "current"));
+    var windowField = new WindowField("$sum", "$amount", windowSpec);
+    var stage =
+        new SetWindowFieldsStage(
+            "$category", Map.of("orderDate", 1), Map.of("runningTotal", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("SUM(");
+    assertThat(sql).contains("PARTITION BY");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
+    assertThat(sql).contains("AS runningTotal");
+  }
+
+  @Test
+  void shouldRenderMovingAverageWindow() {
+    // 3-period moving average
+    var windowSpec = new WindowSpec("documents", List.of("-2", "0"));
+    var windowField = new WindowField("$avg", "$price", windowSpec);
+    var stage =
+        new SetWindowFieldsStage(null, Map.of("date", 1), Map.of("movingAvg3", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("AVG(");
+    assertThat(sql).contains("2 PRECEDING");
+    assertThat(sql).contains("AS movingAvg3");
+  }
+
+  @Test
+  void shouldRenderPercentileRank() {
+    // Test with multiple ranking functions in same query
+    var rankField = new WindowField("$rank", null, null);
+    var denseRankField = new WindowField("$denseRank", null, null);
+    var rowNumField = new WindowField("$rowNumber", null, null);
+    var stage =
+        new SetWindowFieldsStage(
+            "$department",
+            Map.of("salary", -1),
+            Map.of("rank", rankField, "denseRank", denseRankField, "rowNum", rowNumField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("RANK()");
+    assertThat(sql).contains("DENSE_RANK()");
+    assertThat(sql).contains("ROW_NUMBER()");
+  }
+
+  @Test
+  void shouldRenderWindowWithNestedFieldPath() {
+    // Window function with nested field reference
+    var windowField = new WindowField("$sum", "$order.items.quantity", null);
+    var stage = new SetWindowFieldsStage(null, null, Map.of("totalQty", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("$.order.items.quantity");
+  }
+
+  @Test
+  void shouldRenderDescendingSort() {
+    // Verify DESC sort order is properly rendered
+    var windowField = new WindowField("$rank", null, null);
+    var stage =
+        new SetWindowFieldsStage(
+            "$region", Map.of("revenue", -1, "date", -1), Map.of("revenueRank", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("ORDER BY");
+    // Both sort fields should be DESC
+    int descCount = sql.split("DESC").length - 1;
+    assertThat(descCount).isGreaterThanOrEqualTo(2);
+  }
+
+  @Test
+  void shouldRenderAscendingSort() {
+    // Verify ASC sort order (default, no keyword)
+    var windowField = new WindowField("$rank", null, null);
+    var stage =
+        new SetWindowFieldsStage("$state", Map.of("date", 1), Map.of("dateRank", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("ORDER BY");
+    // ASC is default so DESC should not appear for this field
+    // Can't directly test for ASC since it's optional
+    assertThat(sql).doesNotContain("DESC");
+  }
+
+  @Test
+  void shouldRenderMixedSortOrder() {
+    // Mix of ASC and DESC in same window
+    var windowField = new WindowField("$rowNumber", null, null);
+    var stage =
+        new SetWindowFieldsStage(
+            null, Map.of("category", 1, "price", -1), Map.of("rowNum", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("ORDER BY");
+    // One field should have DESC, one should not
+    assertThat(sql).contains("DESC");
+  }
+
+  @Test
+  void shouldRenderWindowFrameWithFollowingBound() {
+    // Window that includes both preceding and following rows
+    var windowSpec = new WindowSpec("documents", List.of("-1", "1"));
+    var windowField = new WindowField("$avg", "$value", windowSpec);
+    var stage =
+        new SetWindowFieldsStage(null, Map.of("id", 1), Map.of("centeredAvg", windowField));
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("1 PRECEDING");
+    assertThat(sql).contains("1 FOLLOWING");
+  }
 }

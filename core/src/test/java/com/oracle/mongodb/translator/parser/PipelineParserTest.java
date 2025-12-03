@@ -93,4 +93,87 @@ class PipelineParserTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("exactly one key");
   }
+
+  @Test
+  void shouldRejectEmptyStageDocument() {
+    var pipeline = List.of(Document.parse("{}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("exactly one key");
+  }
+
+  @Test
+  void shouldRejectNullStageInPipeline() {
+    List<Document> pipeline = new java.util.ArrayList<>();
+    pipeline.add(null);
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void shouldRejectNegativeLimit() {
+    var pipeline = List.of(Document.parse("{\"$limit\": -1}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("positive");
+  }
+
+  @Test
+  void shouldRejectNegativeSkip() {
+    var pipeline = List.of(Document.parse("{\"$skip\": -5}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("negative");
+  }
+
+  @Test
+  void shouldRejectZeroLimit() {
+    var pipeline = List.of(Document.parse("{\"$limit\": 0}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("positive");
+  }
+
+  @Test
+  void shouldHandleLargeLimit() {
+    var pipeline = List.of(Document.parse("{\"$limit\": 1000000}"));
+
+    var result = parser.parse("orders", pipeline);
+
+    assertThat(result.getStages()).hasSize(1);
+    assertThat(((LimitStage) result.getStages().get(0)).getLimit()).isEqualTo(1000000);
+  }
+
+  @Test
+  void shouldHandleLargeSkip() {
+    var pipeline = List.of(Document.parse("{\"$skip\": 999999}"));
+
+    var result = parser.parse("orders", pipeline);
+
+    assertThat(result.getStages()).hasSize(1);
+    assertThat(((SkipStage) result.getStages().get(0)).getSkip()).isEqualTo(999999);
+  }
+
+  @Test
+  void shouldRejectNonNumericLimit() {
+    var pipeline = List.of(Document.parse("{\"$limit\": \"ten\"}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("numeric");
+  }
+
+  @Test
+  void shouldRejectNonNumericSkip() {
+    var pipeline = List.of(Document.parse("{\"$skip\": true}"));
+
+    assertThatThrownBy(() -> parser.parse("orders", pipeline))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("numeric");
+  }
 }

@@ -153,4 +153,24 @@ public interface SqlGenerationContext {
    * @return the table alias if registered, null otherwise
    */
   String getLookupTableAliasByAs(String asField);
+
+  /**
+   * Registers an unwound field path. When a subsequent stage references a path that starts with the
+   * unwound path, it should access the JSON_TABLE column instead of base.data.
+   *
+   * @param path the unwound array field path (e.g., "items")
+   * @param tableAlias the JSON_TABLE alias (e.g., "unwind_1")
+   */
+  void registerUnwoundPath(String path, String tableAlias);
+
+  /**
+   * Gets the JSON_TABLE alias for an unwound path. Returns null if the field is not from an unwind.
+   *
+   * @param fieldPath the field path to check (e.g., "items.product")
+   * @return the unwind info (table alias and remaining path), or null if not unwound
+   */
+  UnwindInfo getUnwindInfo(String fieldPath);
+
+  /** Information about an unwound field path. */
+  record UnwindInfo(String tableAlias, String remainingPath) {}
 }

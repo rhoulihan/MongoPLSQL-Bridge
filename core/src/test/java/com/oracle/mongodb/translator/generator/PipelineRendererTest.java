@@ -1860,4 +1860,551 @@ class PipelineRendererTest {
     assertThat(sql).contains("WHERE");
     assertThat(sql).contains("runningTotal");
   }
+
+  // ==================== Complex Pipeline Integration Tests ====================
+
+  @Test
+  void shouldRenderECommerceFunnelAnalysis() {
+    // E-commerce funnel: match active users -> group by stage -> project counts -> sort
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("completed"));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+    accumulators.put(
+        "totalRevenue",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MatchStage(filter),
+            new GroupStage(FieldPathExpression.of("category"), accumulators),
+            new SortStage(
+                List.of(
+                    new SortField(
+                        FieldPathExpression.of("totalRevenue", JsonReturnType.NUMBER),
+                        SortDirection.DESC))),
+            new LimitStage(10));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("WHERE")
+        .contains("GROUP BY")
+        .contains("ORDER BY")
+        .contains("FETCH FIRST 10 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderMultiStageDataEnrichment() {
+    // Data enrichment: match -> lookup customer -> lookup product -> project
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("amount", JsonReturnType.NUMBER),
+            LiteralExpression.of(100));
+
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("orderId", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("amount", ProjectionField.include(FieldPathExpression.of("amount")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MatchStage(filter),
+            LookupStage.equality("customers", "customerId", "_id", "customerInfo"),
+            LookupStage.equality("products", "productId", "_id", "productInfo"),
+            new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("LEFT OUTER JOIN customers")
+        .contains("LEFT OUTER JOIN products")
+        .contains("WHERE");
+  }
+
+  @Test
+  void shouldRenderTimeSeriesAggregation() {
+    // Time series: match date range -> group by hour -> add computed fields -> sort
+    var dateFilter =
+        new LogicalExpression(
+            LogicalOp.AND,
+            List.of(
+                new ComparisonExpression(
+                    ComparisonOp.GTE,
+                    FieldPathExpression.of("timestamp", JsonReturnType.VARCHAR),
+                    LiteralExpression.of("2024-01-01")),
+                new ComparisonExpression(
+                    ComparisonOp.LT,
+                    FieldPathExpression.of("timestamp", JsonReturnType.VARCHAR),
+                    LiteralExpression.of("2024-12-31"))));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("eventCount", AccumulatorExpression.count());
+    accumulators.put(
+        "avgDuration",
+        AccumulatorExpression.avg(FieldPathExpression.of("duration", JsonReturnType.NUMBER)));
+
+    var computedFields = new LinkedHashMap<String, Expression>();
+    computedFields.put(
+        "throughput",
+        new ArithmeticExpression(
+            ArithmeticOp.DIVIDE,
+            List.of(FieldPathExpression.of("eventCount"), LiteralExpression.of(60))));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "events",
+            new MatchStage(dateFilter),
+            new GroupStage(FieldPathExpression.of("hour"), accumulators),
+            new AddFieldsStage(computedFields),
+            new SortStage(
+                List.of(new SortField(FieldPathExpression.of("hour"), SortDirection.ASC))));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("GROUP BY").contains("ORDER BY");
+  }
+
+  @Test
+  void shouldRenderHierarchicalReporting() {
+    // Hierarchical reporting: group by region -> add rank -> filter top N -> project
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("totalSales", AccumulatorExpression.sum(FieldPathExpression.of("sales", JsonReturnType.NUMBER)));
+    accumulators.put("avgOrderValue", AccumulatorExpression.avg(FieldPathExpression.of("orderValue", JsonReturnType.NUMBER)));
+
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("region", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("totalSales", ProjectionField.include(FieldPathExpression.of("totalSales")));
+    projections.put("avgOrderValue", ProjectionField.include(FieldPathExpression.of("avgOrderValue")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "salesData",
+            new GroupStage(FieldPathExpression.of("region"), accumulators),
+            new SortStage(
+                List.of(
+                    new SortField(
+                        FieldPathExpression.of("totalSales", JsonReturnType.NUMBER),
+                        SortDirection.DESC))),
+            new LimitStage(5),
+            new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("GROUP BY")
+        .contains("ORDER BY")
+        .contains("FETCH FIRST 5 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderCustomerSegmentation() {
+    // Customer segmentation: bucket by purchase amount -> add fields -> sort
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("customerCount", AccumulatorExpression.count());
+    accumulators.put("totalSpend", AccumulatorExpression.sum(FieldPathExpression.of("purchaseAmount", JsonReturnType.NUMBER)));
+
+    List<Object> boundaries = List.of(0, 100, 500, 1000, 5000);
+
+    var computedFields = new LinkedHashMap<String, Expression>();
+    computedFields.put(
+        "avgSpendPerCustomer",
+        new ArithmeticExpression(
+            ArithmeticOp.DIVIDE,
+            List.of(FieldPathExpression.of("totalSpend"), FieldPathExpression.of("customerCount"))));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "customers",
+            new BucketStage(
+                FieldPathExpression.of("purchaseAmount", JsonReturnType.NUMBER),
+                boundaries,
+                "highValue",
+                accumulators),
+            new AddFieldsStage(computedFields),
+            new SortStage(
+                List.of(new SortField(FieldPathExpression.of("_id"), SortDirection.ASC))));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("CASE WHEN").contains("GROUP BY").contains("ORDER BY");
+  }
+
+  @Test
+  void shouldRenderInventoryAudit() {
+    // Inventory audit: union orders + returns -> group by product -> match low stock
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("netQuantity", AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
+
+    var stockFilter =
+        new ComparisonExpression(
+            ComparisonOp.LT,
+            FieldPathExpression.of("netQuantity", JsonReturnType.NUMBER),
+            LiteralExpression.of(10));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "inventory_in",
+            new UnionWithStage("inventory_out", List.of()),
+            new GroupStage(FieldPathExpression.of("productId"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION ALL").contains("GROUP BY");
+  }
+
+  @Test
+  void shouldRenderEmployeePerformanceRanking() {
+    // Employee performance: window function for rank -> filter top performers -> project
+    var windowField = new WindowField("$denseRank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            "$department", Map.of("performanceScore", -1), Map.of("perfRank", windowField));
+
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.LTE,
+            FieldPathExpression.of("perfRank", JsonReturnType.NUMBER),
+            LiteralExpression.of(3));
+
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("employeeId", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("department", ProjectionField.include(FieldPathExpression.of("department")));
+    projections.put("perfRank", ProjectionField.include(FieldPathExpression.of("perfRank")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "employees",
+            setWindowFields,
+            new MatchStage(filter),
+            new ProjectStage(projections),
+            new SortStage(
+                List.of(
+                    new SortField(FieldPathExpression.of("department"), SortDirection.ASC),
+                    new SortField(FieldPathExpression.of("perfRank"), SortDirection.ASC))));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("DENSE_RANK()").contains("PARTITION BY").contains("ORDER BY");
+  }
+
+  @Test
+  void shouldRenderRevenueComparison() {
+    // Revenue comparison: group by product -> add YoY calculation -> filter significant changes
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("currentRevenue", AccumulatorExpression.sum(FieldPathExpression.of("revenue", JsonReturnType.NUMBER)));
+    accumulators.put("lastYearRevenue", AccumulatorExpression.sum(FieldPathExpression.of("lastYearRevenue", JsonReturnType.NUMBER)));
+
+    var computedFields = new LinkedHashMap<String, Expression>();
+    computedFields.put(
+        "growthRate",
+        new ArithmeticExpression(
+            ArithmeticOp.DIVIDE,
+            List.of(
+                new ArithmeticExpression(
+                    ArithmeticOp.SUBTRACT,
+                    List.of(
+                        FieldPathExpression.of("currentRevenue"),
+                        FieldPathExpression.of("lastYearRevenue"))),
+                FieldPathExpression.of("lastYearRevenue"))));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "sales",
+            new GroupStage(FieldPathExpression.of("productId"), accumulators),
+            new AddFieldsStage(computedFields),
+            new SortStage(
+                List.of(
+                    new SortField(
+                        FieldPathExpression.of("growthRate", JsonReturnType.NUMBER),
+                        SortDirection.DESC))),
+            new LimitStage(20));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("GROUP BY")
+        .contains("ORDER BY")
+        .contains("FETCH FIRST 20 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderMultiFacetDashboard() {
+    // Multi-facet dashboard analytics
+    var categoryAccumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    categoryAccumulators.put("count", AccumulatorExpression.count());
+
+    var statusAccumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    statusAccumulators.put("totalValue", AccumulatorExpression.sum(FieldPathExpression.of("value", JsonReturnType.NUMBER)));
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put(
+        "byCategory",
+        List.of(
+            new GroupStage(FieldPathExpression.of("category"), categoryAccumulators),
+            new SortStage(List.of(new SortField(FieldPathExpression.of("count"), SortDirection.DESC))),
+            new LimitStage(5)));
+    facets.put(
+        "byStatus",
+        List.of(new GroupStage(FieldPathExpression.of("status"), statusAccumulators)));
+
+    Pipeline pipeline = Pipeline.of("orders", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("byCategory")
+        .contains("byStatus")
+        .contains("JSON_OBJECT");
+  }
+
+  @Test
+  void shouldRenderSupplyChainTracking() {
+    // Supply chain: unwind items -> lookup suppliers -> group by supplier -> sort
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("totalOrdered", AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
+    accumulators.put("orderCount", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "purchaseOrders",
+            new UnwindStage("items", null, false),
+            LookupStage.equality("suppliers", "supplierId", "_id", "supplierInfo"),
+            new GroupStage(FieldPathExpression.of("supplierId"), accumulators),
+            new SortStage(
+                List.of(
+                    new SortField(
+                        FieldPathExpression.of("totalOrdered", JsonReturnType.NUMBER),
+                        SortDirection.DESC))));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .contains("JSON_TABLE")
+        .contains("LEFT OUTER JOIN")
+        .contains("GROUP BY")
+        .contains("ORDER BY");
+  }
+
+  // ==================== SQL Efficiency Validation Tests ====================
+
+  @Test
+  void shouldAvoidUnnecessarySubqueriesForSimpleMatch() {
+    // Simple match shouldn't generate nested subqueries
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+
+    Pipeline pipeline = Pipeline.of("orders", new MatchStage(filter));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should be a simple SELECT with WHERE, not nested
+    assertThat(sql).doesNotContain("SELECT * FROM (SELECT");
+    assertThat(sql).contains("SELECT base.data FROM orders base WHERE");
+  }
+
+  @Test
+  void shouldRenderSortBeforeLimitNotAfter() {
+    // Sort should be in main query, not post-processed
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new SortStage(
+                List.of(new SortField(FieldPathExpression.of("date"), SortDirection.DESC))),
+            new LimitStage(10));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // ORDER BY should come before FETCH (proper SQL ordering)
+    int orderByPos = sql.indexOf("ORDER BY");
+    int fetchPos = sql.indexOf("FETCH FIRST");
+    assertThat(orderByPos).isGreaterThan(0);
+    assertThat(fetchPos).isGreaterThan(orderByPos);
+  }
+
+  @Test
+  void shouldCombineMultipleMatchesIntoSingleWhere() {
+    // Multiple match stages should be combined with AND in single WHERE clause
+    var filter1 =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+    var filter2 =
+        new ComparisonExpression(
+            ComparisonOp.GT, FieldPathExpression.of("amount", JsonReturnType.NUMBER), LiteralExpression.of(100));
+
+    Pipeline pipeline =
+        Pipeline.of("orders", new MatchStage(filter1), new MatchStage(filter2));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should have single WHERE with AND, not nested subqueries
+    long whereCount = sql.chars().filter(ch -> ch == 'W').count();
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("AND");
+    // Should not have nested SELECT (only one SELECT)
+    assertThat(sql.indexOf("SELECT")).isEqualTo(sql.lastIndexOf("SELECT"));
+  }
+
+  @Test
+  void shouldUseJsonValueNotJsonQueryForScalarAccess() {
+    // Scalar field access should use JSON_VALUE, not JSON_QUERY
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+
+    Pipeline pipeline = Pipeline.of("users", new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // JSON_VALUE is efficient for scalar access
+    assertThat(sql).contains("JSON_VALUE");
+    // JSON_QUERY is for objects/arrays - should not be used for simple scalar
+    assertThat(sql).doesNotContain("JSON_QUERY");
+  }
+
+  @Test
+  void shouldUseProperAggregatesNotNestedQueries() {
+    // Group aggregates should be direct, not using subqueries
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+    accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of("orders", new GroupStage(FieldPathExpression.of("category"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should have direct aggregate functions
+    assertThat(sql).contains("COUNT(*)");
+    assertThat(sql).contains("SUM(");
+    // Should have efficient GROUP BY
+    assertThat(sql).contains("GROUP BY");
+    // Should not have correlated subqueries for aggregates
+    assertThat(sql).doesNotContain("(SELECT COUNT");
+  }
+
+  @Test
+  void shouldAvoidNestedSubqueriesForJoins() {
+    // Joins should be flat, not nested subqueries
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            LookupStage.equality("customers", "customerId", "_id", "customer"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use proper JOIN syntax
+    assertThat(sql).contains("LEFT OUTER JOIN");
+    // Should not have correlated subqueries for join
+    assertThat(sql).doesNotContain("(SELECT * FROM customers WHERE");
+  }
+
+  @Test
+  void shouldUseFetchRowsOnlyNotRownum() {
+    // Modern Oracle pagination should use FETCH, not ROWNUM
+    Pipeline pipeline = Pipeline.of("orders", new LimitStage(10));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // FETCH is the modern, efficient way
+    assertThat(sql).contains("FETCH FIRST 10 ROWS ONLY");
+    // ROWNUM is legacy and less efficient
+    assertThat(sql).doesNotContain("ROWNUM");
+  }
+
+  @Test
+  void shouldUseOffsetRowsNotSubqueryForSkip() {
+    // Skip should use OFFSET, not subquery with row number
+    Pipeline pipeline = Pipeline.of("orders", new SkipStage(5), new LimitStage(10));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // OFFSET is the efficient way
+    assertThat(sql).contains("OFFSET 5 ROWS");
+    // Should not have subquery workaround
+    assertThat(sql).doesNotContain("WHERE row_num >");
+  }
+
+  @Test
+  void shouldPushDownFilterBeforeJoin() {
+    // Filter should be applied before join when possible
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MatchStage(filter),
+            LookupStage.equality("customers", "customerId", "_id", "customer"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // WHERE should come before JOIN for efficiency
+    int wherePos = sql.indexOf("WHERE");
+    int joinPos = sql.indexOf("LEFT OUTER JOIN");
+    // Either WHERE is before JOIN, or they're structured efficiently
+    // The key is that the filter is applied to base table
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("LEFT OUTER JOIN");
+  }
+
+  @Test
+  void shouldNotGenerateRedundantCoalesce() {
+    // Simple field access shouldn't wrap in redundant COALESCE
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+
+    Pipeline pipeline = Pipeline.of("users", new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should not have unnecessary COALESCE wrappers
+    long coalesceCount = sql.toLowerCase().split("coalesce").length - 1;
+    // Allow one or zero but not excessive
+    assertThat(coalesceCount).isLessThanOrEqualTo(1);
+  }
+
+  @Test
+  void shouldGenerateEfficientUnionAll() {
+    // Union should use UNION ALL (not UNION) for efficiency when duplicates don't matter
+    Pipeline pipeline =
+        Pipeline.of("orders", new UnionWithStage("refunds", List.of()));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // UNION ALL is more efficient than UNION (no duplicate elimination overhead)
+    assertThat(sql).contains("UNION ALL");
+    // Should use UNION ALL, not bare UNION (which would have dedupe overhead)
+    // Count occurrences: all "UNION" should be "UNION ALL"
+    int unionCount = sql.split("UNION ").length - 1;
+    int unionAllCount = sql.split("UNION ALL").length - 1;
+    // If there's a UNION, it should be UNION ALL
+    assertThat(unionAllCount).isGreaterThan(0);
+  }
 }

@@ -22,6 +22,9 @@ public final class LiteralExpression implements Expression {
 
   /** Creates a literal expression with the given value. */
   public static LiteralExpression of(Object value) {
+    if (value == null) {
+      return ofNull();
+    }
     return new LiteralExpression(value, false);
   }
 

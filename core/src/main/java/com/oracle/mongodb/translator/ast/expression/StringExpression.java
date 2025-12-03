@@ -177,6 +177,16 @@ public final class StringExpression implements Expression {
     return new StringExpression(StringOp.REPLACE_ALL, List.of(input, find, replacement));
   }
 
+  /**
+   * Creates a $strcasecmp expression.
+   *
+   * @param string1 the first string
+   * @param string2 the second string
+   */
+  public static StringExpression strcasecmp(Expression string1, Expression string2) {
+    return new StringExpression(StringOp.STRCASECMP, List.of(string1, string2));
+  }
+
   /** Returns the string operator. */
   public StringOp getOp() {
     return op;
@@ -201,6 +211,7 @@ public final class StringExpression implements Expression {
       case REGEX_FIND -> renderRegexFind(ctx);
       case REPLACE_ONE -> renderReplaceOne(ctx);
       case REPLACE_ALL -> renderReplaceAll(ctx);
+      case STRCASECMP -> renderStrcasecmp(ctx);
       default -> renderSimpleFunction(ctx);
     }
   }
@@ -384,6 +395,21 @@ public final class StringExpression implements Expression {
     ctx.sql(", ");
     ctx.visit(arguments.get(2)); // replacement
     ctx.sql(")");
+  }
+
+  private void renderStrcasecmp(SqlGenerationContext ctx) {
+    // MongoDB: {$strcasecmp: ["string1", "string2"]}
+    // Returns: -1 if string1 < string2, 0 if equal, 1 if string1 > string2 (case-insensitive)
+    // Oracle: Use CASE with UPPER comparison
+    ctx.sql("CASE WHEN UPPER(");
+    ctx.visit(arguments.get(0));
+    ctx.sql(") < UPPER(");
+    ctx.visit(arguments.get(1));
+    ctx.sql(") THEN -1 WHEN UPPER(");
+    ctx.visit(arguments.get(0));
+    ctx.sql(") > UPPER(");
+    ctx.visit(arguments.get(1));
+    ctx.sql(") THEN 1 ELSE 0 END");
   }
 
   @Override

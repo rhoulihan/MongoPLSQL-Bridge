@@ -492,4 +492,245 @@ class ArrayExpressionTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("literal numbers");
   }
+
+  // Tests for new array operators: $reverseArray, $sortArray, $in, $isArray, $indexOfArray
+
+  @Test
+  void shouldRenderReverseArray() {
+    // MongoDB: {$reverseArray: "$items"}
+    // Oracle: Uses JSON_QUERY with array reversal via subquery
+    var expr = ArrayExpression.reverseArray(FieldPathExpression.of("items"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("DESC");
+  }
+
+  @Test
+  void shouldRenderSortArrayAscending() {
+    // MongoDB: {$sortArray: {input: "$scores", sortBy: 1}}
+    var expr = ArrayExpression.sortArray(FieldPathExpression.of("scores"), true);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).containsIgnoringCase("ASC");
+  }
+
+  @Test
+  void shouldRenderSortArrayDescending() {
+    // MongoDB: {$sortArray: {input: "$scores", sortBy: -1}}
+    var expr = ArrayExpression.sortArray(FieldPathExpression.of("scores"), false);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).containsIgnoringCase("DESC");
+  }
+
+  @Test
+  void shouldRenderInOperator() {
+    // MongoDB: {$in: ["apple", "$fruits"]} - checks if "apple" is in the fruits array
+    var expr = ArrayExpression.in(LiteralExpression.of("apple"), FieldPathExpression.of("fruits"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should produce a check for element existence in JSON array
+    assertThat(sql).contains("JSON_EXISTS");
+  }
+
+  @Test
+  void shouldRenderInOperatorWithFieldValue() {
+    // MongoDB: {$in: ["$item", "$validItems"]} - checks if field value is in array
+    var expr = ArrayExpression.in(FieldPathExpression.of("item"), FieldPathExpression.of("validItems"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_EXISTS");
+  }
+
+  @Test
+  void shouldRenderIsArray() {
+    // MongoDB: {$isArray: "$items"}
+    var expr = ArrayExpression.isArray(FieldPathExpression.of("items"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Oracle: JSON_VALUE with type check or JSON_EXISTS
+    assertThat(sql).containsAnyOf("JSON_VALUE", "JSON_EXISTS", "JSON_QUERY");
+  }
+
+  @Test
+  void shouldRenderIndexOfArray() {
+    // MongoDB: {$indexOfArray: ["$items", "needle"]}
+    var expr =
+        ArrayExpression.indexOfArray(
+            FieldPathExpression.of("items"), LiteralExpression.of("needle"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should search for element position in array
+    assertThat(sql).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldRenderIndexOfArrayWithStartEnd() {
+    // MongoDB: {$indexOfArray: ["$items", "needle", 2, 5]} - search from index 2 to 5
+    var expr =
+        ArrayExpression.indexOfArrayWithRange(
+            FieldPathExpression.of("items"),
+            LiteralExpression.of("needle"),
+            LiteralExpression.of(2),
+            LiteralExpression.of(5));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldReturnReverseArrayOp() {
+    var expr = ArrayExpression.reverseArray(FieldPathExpression.of("x"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.REVERSE_ARRAY);
+  }
+
+  @Test
+  void shouldReturnSortArrayOp() {
+    var expr = ArrayExpression.sortArray(FieldPathExpression.of("x"), true);
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SORT_ARRAY);
+  }
+
+  @Test
+  void shouldReturnInOp() {
+    var expr = ArrayExpression.in(LiteralExpression.of("x"), FieldPathExpression.of("arr"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.IN);
+  }
+
+  @Test
+  void shouldReturnIsArrayOp() {
+    var expr = ArrayExpression.isArray(FieldPathExpression.of("x"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.IS_ARRAY);
+  }
+
+  @Test
+  void shouldReturnIndexOfArrayOp() {
+    var expr = ArrayExpression.indexOfArray(FieldPathExpression.of("x"), LiteralExpression.of("a"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.INDEX_OF_ARRAY);
+  }
+
+  // Tests for set operators: $setUnion, $setIntersection, $setDifference, $setEquals, $setIsSubset
+
+  @Test
+  void shouldRenderSetUnion() {
+    // MongoDB: {$setUnion: ["$arr1", "$arr2"]}
+    var expr =
+        ArrayExpression.setUnion(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("UNION");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderSetIntersection() {
+    // MongoDB: {$setIntersection: ["$arr1", "$arr2"]}
+    var expr =
+        ArrayExpression.setIntersection(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("INTERSECT");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderSetDifference() {
+    // MongoDB: {$setDifference: ["$arr1", "$arr2"]}
+    var expr =
+        ArrayExpression.setDifference(
+            FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).containsAnyOf("MINUS", "EXCEPT");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderSetEquals() {
+    // MongoDB: {$setEquals: ["$arr1", "$arr2"]}
+    var expr =
+        ArrayExpression.setEquals(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Check for symmetric difference = 0 or equivalent logic
+    assertThat(sql).containsAnyOf("=", "CASE");
+  }
+
+  @Test
+  void shouldRenderSetIsSubset() {
+    // MongoDB: {$setIsSubset: ["$arr1", "$arr2"]}
+    var expr =
+        ArrayExpression.setIsSubset(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).containsAnyOf("MINUS", "EXCEPT", "NOT EXISTS", "COUNT");
+  }
+
+  @Test
+  void shouldReturnSetUnionOp() {
+    var expr = ArrayExpression.setUnion(List.of(FieldPathExpression.of("x")));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_UNION);
+  }
+
+  @Test
+  void shouldReturnSetIntersectionOp() {
+    var expr = ArrayExpression.setIntersection(List.of(FieldPathExpression.of("x")));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_INTERSECTION);
+  }
+
+  @Test
+  void shouldReturnSetDifferenceOp() {
+    var expr =
+        ArrayExpression.setDifference(FieldPathExpression.of("x"), FieldPathExpression.of("y"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_DIFFERENCE);
+  }
+
+  @Test
+  void shouldReturnSetEqualsOp() {
+    var expr =
+        ArrayExpression.setEquals(
+            List.of(FieldPathExpression.of("x"), FieldPathExpression.of("y")));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_EQUALS);
+  }
+
+  @Test
+  void shouldReturnSetIsSubsetOp() {
+    var expr =
+        ArrayExpression.setIsSubset(FieldPathExpression.of("x"), FieldPathExpression.of("y"));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_IS_SUBSET);
+  }
 }

@@ -19,6 +19,7 @@ import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
 import java.util.List;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 class ExpressionParserTest {
@@ -958,5 +959,569 @@ class ExpressionParserTest {
     expr.render(context);
     assertThat(context.toSql()).isEqualTo(":1");
     assertThat(context.getBindVariables()).containsExactly("$notAFieldPath");
+  }
+
+  // $switch expression tests
+
+  @Test
+  void shouldParseSwitchExpression() {
+    var doc =
+        Document.parse(
+            "{\"$switch\": {"
+                + "\"branches\": ["
+                + "  {\"case\": {\"$eq\": [\"$status\", \"A\"]}, \"then\": \"Active\"},"
+                + "  {\"case\": {\"$eq\": [\"$status\", \"B\"]}, \"then\": \"Blocked\"}"
+                + "],"
+                + "\"default\": \"Unknown\""
+                + "}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr)
+        .isInstanceOf(com.oracle.mongodb.translator.ast.expression.SwitchExpression.class);
+    expr.render(context);
+    assertThat(context.toSql())
+        .contains("CASE")
+        .contains("WHEN")
+        .contains("THEN")
+        .contains("ELSE")
+        .contains("END");
+  }
+
+  @Test
+  void shouldParseSwitchWithoutDefault() {
+    var doc =
+        Document.parse(
+            "{\"$switch\": {"
+                + "\"branches\": ["
+                + "  {\"case\": {\"$gt\": [\"$score\", 90]}, \"then\": \"A\"}"
+                + "]"
+                + "}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr)
+        .isInstanceOf(com.oracle.mongodb.translator.ast.expression.SwitchExpression.class);
+    expr.render(context);
+    assertThat(context.toSql()).contains("CASE").contains("WHEN").contains("THEN").contains("END");
+    assertThat(context.toSql()).doesNotContain("ELSE");
+  }
+
+  @Test
+  void shouldThrowForSwitchWithoutBranches() {
+    var doc = Document.parse("{\"$switch\": {\"default\": \"Unknown\"}}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("branches");
+  }
+
+  // New array operator tests: $reverseArray, $sortArray, $in, $isArray, $indexOfArray
+
+  @Test
+  void shouldParseReverseArrayExpression() {
+    var doc = Document.parse("{\"$reverseArray\": \"$items\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_ARRAYAGG").contains("ORDER BY").contains("DESC");
+  }
+
+  @Test
+  void shouldParseSortArrayExpression() {
+    var doc = Document.parse("{\"$sortArray\": {\"input\": \"$scores\", \"sortBy\": 1}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_ARRAYAGG").contains("ORDER BY");
+  }
+
+  @Test
+  void shouldParseSortArrayDescendingExpression() {
+    var doc = Document.parse("{\"$sortArray\": {\"input\": \"$scores\", \"sortBy\": -1}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_ARRAYAGG").contains("ORDER BY").contains("DESC");
+  }
+
+  @Test
+  void shouldParseInArrayExpression() {
+    var doc = Document.parse("{\"$in\": [\"apple\", \"$fruits\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_EXISTS");
+  }
+
+  @Test
+  void shouldParseIsArrayExpression() {
+    var doc = Document.parse("{\"$isArray\": \"$items\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("CASE WHEN").contains("JSON_EXISTS");
+  }
+
+  @Test
+  void shouldParseIndexOfArrayExpression() {
+    var doc = Document.parse("{\"$indexOfArray\": [\"$items\", \"needle\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldParseIndexOfArrayWithRangeExpression() {
+    var doc = Document.parse("{\"$indexOfArray\": [\"$items\", \"needle\", 2, 5]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldThrowForInvalidSortArrayDocument() {
+    var doc = Document.parse("{\"$sortArray\": {\"input\": \"$scores\"}}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("sortBy");
+  }
+
+  @Test
+  void shouldThrowForInvalidInArrayArgs() {
+    var doc = Document.parse("{\"$in\": [\"apple\"]}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("2 arguments");
+  }
+
+  @Test
+  void shouldThrowForInvalidIndexOfArrayArgs() {
+    var doc = Document.parse("{\"$indexOfArray\": [\"$items\"]}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("2");
+  }
+
+  // Set operator tests: $setUnion, $setIntersection, $setDifference, $setEquals, $setIsSubset
+
+  @Test
+  void shouldParseSetUnionExpression() {
+    var doc = Document.parse("{\"$setUnion\": [\"$arr1\", \"$arr2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("UNION").contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldParseSetIntersectionExpression() {
+    var doc = Document.parse("{\"$setIntersection\": [\"$arr1\", \"$arr2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("INTERSECT").contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldParseSetDifferenceExpression() {
+    var doc = Document.parse("{\"$setDifference\": [\"$arr1\", \"$arr2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("MINUS").contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldParseSetEqualsExpression() {
+    var doc = Document.parse("{\"$setEquals\": [\"$arr1\", \"$arr2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("CASE");
+  }
+
+  @Test
+  void shouldParseSetIsSubsetExpression() {
+    var doc = Document.parse("{\"$setIsSubset\": [\"$arr1\", \"$arr2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("CASE").contains("MINUS");
+  }
+
+  @Test
+  void shouldThrowForInvalidSetDifferenceArgs() {
+    var doc = Document.parse("{\"$setDifference\": [\"$arr1\"]}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("2 arguments");
+  }
+
+  @Test
+  void shouldThrowForInvalidSetIsSubsetArgs() {
+    var doc = Document.parse("{\"$setIsSubset\": [\"$arr1\"]}");
+    assertThatThrownBy(() -> parser.parseValue(doc))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("2 arguments");
+  }
+
+  // Object operator tests: $mergeObjects, $objectToArray, $arrayToObject
+
+  @Test
+  void shouldParseMergeObjectsExpression() {
+    var doc = Document.parse("{\"$mergeObjects\": [\"$obj1\", \"$obj2\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_MERGEPATCH");
+  }
+
+  @Test
+  void shouldParseMergeObjectsSingleObject() {
+    var doc = Document.parse("{\"$mergeObjects\": \"$obj\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_QUERY");
+  }
+
+  @Test
+  void shouldParseObjectToArrayExpression() {
+    var doc = Document.parse("{\"$objectToArray\": \"$obj\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldParseArrayToObjectExpression() {
+    var doc = Document.parse("{\"$arrayToObject\": \"$arr\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("JSON_OBJECTAGG");
+  }
+
+  // $isString tests
+
+  @Test
+  void shouldParseIsStringExpression() {
+    var doc = Document.parse("{\"$isString\": \"$name\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    // Should generate CASE WHEN with type check
+    assertThat(context.toSql()).contains("CASE");
+  }
+
+  @Test
+  void shouldParseIsStringWithNestedField() {
+    var doc = Document.parse("{\"$isString\": \"$user.name\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("user.name");
+  }
+
+  // NULL and Edge Case Handling Tests
+
+  @Test
+  void shouldHandleNullInComparison() {
+    var doc = Document.parse("{\"status\": null}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    // NULL comparison should use IS NULL
+    assertThat(context.toSql()).contains("IS NULL");
+  }
+
+  @Test
+  void shouldHandleNotEqualNull() {
+    var doc = Document.parse("{\"status\": {\"$ne\": null}}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    // Not equal to NULL should use IS NOT NULL
+    assertThat(context.toSql()).contains("IS NOT NULL");
+  }
+
+  @Test
+  void shouldHandleIfNullExpression() {
+    var doc = Document.parse("{\"$ifNull\": [\"$name\", \"Unknown\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    assertThat(context.toSql()).containsAnyOf("COALESCE", "NVL");
+  }
+
+  @Test
+  void shouldHandleEmptyArrayLiteral() {
+    Expression expr = parser.parseValue(List.of());
+    assertThat(expr).isInstanceOf(LiteralExpression.class);
+    expr.render(context);
+    // Empty array should render properly
+    assertThat(context.toSql()).isNotEmpty();
+  }
+
+  @Test
+  void shouldHandleEmptyStringLiteral() {
+    Expression expr = parser.parseValue("");
+    assertThat(expr).isInstanceOf(LiteralExpression.class);
+    expr.render(context);
+    assertThat(context.toSql()).contains(":1");
+    assertThat(context.getBindVariables()).contains("");
+  }
+
+  @Test
+  void shouldHandleZeroValue() {
+    var doc = Document.parse("{\"count\": 0}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains(":1");
+    assertThat(context.getBindVariables()).contains(0);
+  }
+
+  @Test
+  void shouldHandleNegativeNumber() {
+    var doc = Document.parse("{\"balance\": {\"$lt\": -100}}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    assertThat(context.toSql()).contains("<");
+    assertThat(context.getBindVariables()).contains(-100);
+  }
+
+  @Test
+  void shouldHandleDecimalNumber() {
+    var doc = Document.parse("{\"price\": 19.99}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    assertThat(context.getBindVariables()).contains(19.99);
+  }
+
+  @Test
+  void shouldHandleBooleanTrue() {
+    var doc = Document.parse("{\"active\": true}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    assertThat(context.getBindVariables()).contains(true);
+  }
+
+  @Test
+  void shouldHandleBooleanFalse() {
+    var doc = Document.parse("{\"deleted\": false}");
+    var expr = parser.parse(doc);
+    expr.render(context);
+    assertThat(context.getBindVariables()).contains(false);
+  }
+
+  @Test
+  void shouldHandleFieldPathWithRootPrefix() {
+    // MongoDB uses $$ROOT for root document reference
+    // The $$ROOT prefix should be handled - either stripped or preserved
+    var doc = Document.parse("{\"$eq\": [\"$$ROOT.status\", \"active\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    // Should either contain ROOT or just the field status
+    assertThat(context.toSql()).containsAnyOf("ROOT", "status");
+  }
+
+  @Test
+  void shouldHandleNestedArrayAccess() {
+    var doc = Document.parse("{\"$arrayElemAt\": [\"$items\", 0]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    // Should access first element of array
+    assertThat(context.toSql()).containsAnyOf("$[0]", "[0]", "ARRAY");
+  }
+
+  @Test
+  void shouldHandleNegativeArrayIndex() {
+    var doc = Document.parse("{\"$arrayElemAt\": [\"$items\", -1]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    // Negative index means from end
+    assertThat(context.toSql()).isNotEmpty();
+  }
+
+  // ==================== Newly Added Operators Tests ====================
+
+  @Test
+  void shouldRenderSwitchWithNestedConditions() {
+    // Nested $switch: outer switch contains inner switch in then clause
+    var doc =
+        Document.parse(
+            "{\"$switch\": {"
+                + "\"branches\": ["
+                + "  {\"case\": {\"$gt\": [\"$score\", 90]}, "
+                + "   \"then\": {\"$switch\": {"
+                + "     \"branches\": [{\"case\": {\"$eq\": [\"$bonus\", true]}, \"then\": \"A+\"}],"
+                + "     \"default\": \"A\""
+                + "   }}},"
+                + "  {\"case\": {\"$gt\": [\"$score\", 80]}, \"then\": \"B\"}"
+                + "],"
+                + "\"default\": \"C\""
+                + "}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should have nested CASE statements
+    assertThat(sql).contains("CASE");
+    // Count occurrences of CASE - should be at least 2
+    int caseCount = sql.split("CASE").length - 1;
+    assertThat(caseCount).isGreaterThanOrEqualTo(2);
+  }
+
+  @Test
+  void shouldRenderReverseArrayComplex() {
+    // $reverseArray on a computed array from $concatArrays
+    var doc =
+        Document.parse(
+            "{\"$reverseArray\": {\"$concatArrays\": [\"$arr1\", \"$arr2\"]}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should produce array reversal SQL
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).containsIgnoringCase("DESC");
+  }
+
+  @Test
+  void shouldRenderSortArrayMultipleFields() {
+    // $sortArray with object containing multiple sort fields
+    var doc =
+        Document.parse(
+            "{\"$sortArray\": {\"input\": \"$employees\", \"sortBy\": {\"department\": 1, \"salary\": -1}}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should have ORDER BY with multiple fields
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderInWithLargeArray() {
+    // $in with a large literal array (100+ elements)
+    StringBuilder arrayBuilder = new StringBuilder("[");
+    for (int i = 0; i < 100; i++) {
+      if (i > 0) arrayBuilder.append(",");
+      arrayBuilder.append(i);
+    }
+    arrayBuilder.append("]");
+    var doc =
+        Document.parse(
+            "{\"$in\": [\"$status\", " + arrayBuilder.toString() + "]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should check if value is in array
+    assertThat(sql).containsAnyOf("IN", "JSON_EXISTS", "OR");
+  }
+
+  @Test
+  void shouldRenderSetUnionMultiple() {
+    // $setUnion with 3+ arrays
+    var doc =
+        Document.parse(
+            "{\"$setUnion\": [\"$tags1\", \"$tags2\", \"$tags3\", \"$tags4\"]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should use UNION for set operations
+    assertThat(sql).contains("UNION");
+    // Should reference all arrays
+    assertThat(sql).contains("tags1");
+    assertThat(sql).contains("tags4");
+  }
+
+  @Test
+  void shouldRenderSetOperationsNested() {
+    // Nested set operations: $setDifference of $setUnion and $setIntersection
+    var doc =
+        Document.parse(
+            "{\"$setDifference\": ["
+                + "{\"$setUnion\": [\"$a\", \"$b\"]},"
+                + "{\"$setIntersection\": [\"$c\", \"$d\"]}"
+                + "]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should have nested set operations
+    assertThat(sql).containsAnyOf("UNION", "INTERSECT", "MINUS", "EXCEPT");
+  }
+
+  @Test
+  void shouldRenderMergeObjectsDeep() {
+    // $mergeObjects with nested object fields
+    var doc =
+        Document.parse(
+            "{\"$mergeObjects\": ["
+                + "\"$profile\","
+                + "\"$settings\","
+                + "{\"lastUpdated\": \"$$NOW\"}"
+                + "]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should use JSON merge functionality
+    assertThat(sql).containsAnyOf("JSON_MERGEPATCH", "JSON_OBJECT");
+  }
+
+  @Test
+  void shouldRenderObjectToArrayNested() {
+    // $objectToArray on a nested field path
+    var doc = Document.parse("{\"$objectToArray\": \"$user.preferences.display\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should access nested path and convert to array
+    assertThat(sql).contains("user");
+    assertThat(sql).contains("preferences");
+  }
+
+  @Test
+  void shouldRenderIsStringWithExpressions() {
+    // $isString with computed expression input
+    var doc =
+        Document.parse(
+            "{\"$isString\": {\"$concat\": [\"$firstName\", \" \", \"$lastName\"]}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should check if result is string - always true for $concat result
+    assertThat(sql).isNotEmpty();
+  }
+
+  @Test
+  void shouldRenderTypeWithAllTypes() {
+    // $type returns type name as string
+    var doc = Document.parse("{\"$type\": \"$value\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should use CASE to determine type
+    assertThat(sql).contains("CASE");
+    // Should check for multiple types
+    assertThat(sql).containsAnyOf("'string'", "'int'", "'null'", "'object'");
+  }
+
+  @Test
+  void shouldRenderArrayToObjectFromPairs() {
+    // $arrayToObject from array of [key, value] pairs
+    var doc = Document.parse("{\"$arrayToObject\": \"$keyValuePairs\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should convert array to object
+    assertThat(sql).containsAnyOf("JSON_OBJECT", "JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderIndexOfArrayWithRange() {
+    // $indexOfArray with start and end indices
+    var doc =
+        Document.parse(
+            "{\"$indexOfArray\": [\"$items\", \"target\", 2, 10]}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should search within range
+    assertThat(sql).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldCombineNewOperatorsInPipeline() {
+    // Test parsing multiple new operators together in expressions
+    var doc =
+        Document.parse(
+            "{\"$cond\": {"
+                + "\"if\": {\"$isNumber\": \"$value\"},"
+                + "\"then\": {\"$type\": \"$value\"},"
+                + "\"else\": {\"$toString\": \"$value\"}"
+                + "}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    // Should combine conditional with type operations
+    assertThat(sql).contains("CASE");
+    assertThat(sql).isNotEmpty();
   }
 }

@@ -214,4 +214,126 @@ class LookupStageTest {
 
     assertThat(stage.getPipeline()).containsExactly(matchStage);
   }
+
+  // ==================== Complex Join Tests ====================
+
+  @Test
+  void shouldRenderMultipleLookups() {
+    // Test that multiple $lookup stages can render in sequence
+    var lookup1 = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
+    var lookup2 = LookupStage.equality("customers", "customerId", "_id", "customer_info");
+    var lookup3 = LookupStage.equality("categories", "categoryId", "id", "category_data");
+
+    // Each lookup should render independently
+    lookup1.render(context);
+    String sql1 = context.toSql();
+    assertThat(sql1).contains("LEFT OUTER JOIN").contains("inventory");
+
+    var context2 = new DefaultSqlGenerationContext();
+    lookup2.render(context2);
+    String sql2 = context2.toSql();
+    assertThat(sql2).contains("LEFT OUTER JOIN").contains("customers");
+
+    var context3 = new DefaultSqlGenerationContext();
+    lookup3.render(context3);
+    String sql3 = context3.toSql();
+    assertThat(sql3).contains("LEFT OUTER JOIN").contains("categories");
+  }
+
+  @Test
+  void shouldRenderSelfLookup() {
+    // Self-join: lookup on the same collection (e.g., employees -> managers)
+    var stage = LookupStage.equality("employees", "managerId", "_id", "manager");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("LEFT OUTER JOIN");
+    assertThat(sql).contains("employees");
+    assertThat(sql).contains("$.managerId");
+    assertThat(sql).contains("$._id");
+  }
+
+  @Test
+  void shouldHandleArrayFieldLookup() {
+    // Lookup where the local field might be an array
+    var stage = LookupStage.equality("tags", "tagIds", "_id", "tag_details");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("LEFT OUTER JOIN");
+    assertThat(sql).contains("$.tagIds");
+  }
+
+  @Test
+  void shouldHandleDeeplyNestedFieldLookup() {
+    // Lookup with deeply nested field paths
+    var stage = LookupStage.equality("products", "order.items.productId", "inventory.product.id", "product_data");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("$.order.items.productId");
+    assertThat(sql).contains("$.inventory.product.id");
+  }
+
+  @Test
+  void shouldHandleIdFieldLookup() {
+    // Lookup using the _id field (common pattern)
+    var stage = LookupStage.equality("users", "userId", "_id", "user");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("$._id");
+    assertThat(sql).contains("$.userId");
+  }
+
+  @Test
+  void shouldHandleNullableJoinField() {
+    // Join condition should handle nullable fields
+    var stage = LookupStage.equality("departments", "departmentId", "id", "dept");
+
+    stage.render(context);
+
+    // LEFT OUTER JOIN handles NULL foreign keys automatically
+    String sql = context.toSql();
+    assertThat(sql).contains("LEFT OUTER JOIN");
+  }
+
+  @Test
+  void shouldHandleCompoundKeyLookup() {
+    // Though MongoDB $lookup doesn't directly support compound keys,
+    // test the basic pattern with a composite field path
+    var stage = LookupStage.equality("regions", "location.regionCode", "code", "region_info");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("$.location.regionCode");
+  }
+
+  @Test
+  void shouldCreateLookupWithEmptyPipeline() {
+    // Pipeline form with no inner pipeline stages
+    var stage = LookupStage.withPipeline("related", Map.of("parentId", "id"), List.of(), "related_docs");
+
+    assertThat(stage.isPipelineForm()).isTrue();
+    assertThat(stage.getPipeline()).isEmpty();
+    assertThat(stage.getAs()).isEqualTo("related_docs");
+  }
+
+  @Test
+  void shouldPreserveJoinOrder() {
+    // Verify that the join preserves the expected order (LEFT JOIN semantics)
+    var stage = LookupStage.equality("orders", "customerId", "_id", "customer_orders");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    // Should be LEFT OUTER JOIN, not INNER JOIN
+    assertThat(sql).contains("LEFT OUTER JOIN");
+    assertThat(sql).doesNotContain("INNER JOIN");
+  }
 }

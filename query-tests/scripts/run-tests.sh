@@ -149,12 +149,22 @@ EOSQL" 2>/dev/null | grep -v "^$" | head -1 | tr -d ' \t'
 generate_oracle_sql() {
     local collection="$1"
     local pipeline="$2"
+    local result
+    local exit_code
 
-    cd "$PROJECT_ROOT" && ./gradlew :core:translatePipeline \
+    result=$(cd "$PROJECT_ROOT" && timeout --kill-after=5 30 ./gradlew :core:translatePipeline \
         -PcollectionName="$collection" \
         -PpipelineJson="$pipeline" \
         -Pinline=true \
-        --quiet 2>/dev/null
+        --quiet 2>/dev/null)
+    exit_code=$?
+
+    # If timeout killed the process, wait a moment for cleanup
+    if [ $exit_code -eq 124 ] || [ $exit_code -eq 137 ]; then
+        sleep 1
+    fi
+
+    echo "$result"
 }
 
 # Function to normalize and compare results
@@ -204,6 +214,10 @@ fi
 
 TEST_COUNT=$(echo "$TEST_IDS" | wc -l)
 echo -e "  Found ${TEST_COUNT} test(s) to run"
+
+# Pre-warm Gradle daemon by running a simple task
+echo -e "  ${YELLOW}Warming up Gradle daemon...${NC}"
+cd "$PROJECT_ROOT" && ./gradlew --quiet :core:classes >/dev/null 2>&1 || true
 echo ""
 
 # Run each test
@@ -324,6 +338,9 @@ PYTHON
             echo "    Oracle result: $ORACLE_RESULT"
         fi
     fi
+
+    # Small delay between tests to ensure proper resource release
+    sleep 0.1
 done
 
 # Close JSON report

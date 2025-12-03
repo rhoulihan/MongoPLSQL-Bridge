@@ -107,6 +107,15 @@ public final class StageParserRegistry {
     // $count stage - count documents
     CountStageParser countParser = new CountStageParser();
     register("$count", countParser::parse);
+
+    // $replaceRoot stage - promote subdocument to root
+    ReplaceRootStageParser replaceRootParser = new ReplaceRootStageParser();
+    register("$replaceRoot", replaceRootParser::parse);
+    register("$replaceWith", replaceRootParser::parse); // Alias for $replaceRoot
+
+    // $unset stage - remove fields from documents
+    UnsetStageParser unsetParser = new UnsetStageParser();
+    register("$unset", unsetParser::parse);
   }
 
   private SortStage parseSortStage(Object value) {

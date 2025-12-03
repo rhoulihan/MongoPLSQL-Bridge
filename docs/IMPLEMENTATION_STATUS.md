@@ -292,12 +292,26 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1103 test methods across 76 test files
+**Unit Tests:** 1,272 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
 **Cross-Database Validation:** 103 tests (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
 All tests passing: ✅ Yes
+
+### Unit Test Breakdown by Package
+
+| Package | Test Count | Description |
+|---------|------------|-------------|
+| `api` | 46 | Public API tests |
+| `ast.expression` | 329 | Expression operators (comparison, logical, arithmetic, etc.) |
+| `ast.stage` | 281 | Pipeline stage tests ($match, $group, $lookup, etc.) |
+| `generator` | 154 | SQL generation and rendering tests |
+| `optimizer` | 39 | Pipeline optimization tests |
+| `parser` | 398 | BSON to AST parsing tests |
+| `exception` | 7 | Error handling tests |
+| `util` | 16 | Utility function tests |
+| **Total** | **1,272** | |
 
 ### Code Coverage (JaCoCo)
 

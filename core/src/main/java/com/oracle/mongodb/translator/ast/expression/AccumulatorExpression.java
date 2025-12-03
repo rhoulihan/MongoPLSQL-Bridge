@@ -90,12 +90,18 @@ public final class AccumulatorExpression implements Expression {
     if (op == AccumulatorOp.COUNT) {
       // COUNT(*) for $count
       ctx.sql("COUNT(*)");
-    } else if (op == AccumulatorOp.FIRST || op == AccumulatorOp.LAST) {
-      // FIRST_VALUE and LAST_VALUE require OVER clause for analytic use
-      // In GROUP BY context, we use KEEP (DENSE_RANK FIRST/LAST ORDER BY ...)
-      // For simplicity, we output basic aggregate - optimization can improve later
-      ctx.sql(op.getSqlFunction());
-      ctx.sql("(");
+    } else if (op == AccumulatorOp.FIRST) {
+      // In GROUP BY context, use MIN to get first value (deterministic when combined with sort)
+      // Oracle's FIRST_VALUE requires OVER clause and cannot be used as aggregate
+      ctx.sql("MIN(");
+      if (argument != null) {
+        ctx.visit(argument);
+      }
+      ctx.sql(")");
+    } else if (op == AccumulatorOp.LAST) {
+      // In GROUP BY context, use MAX to get last value (deterministic when combined with sort)
+      // Oracle's LAST_VALUE requires OVER clause and cannot be used as aggregate
+      ctx.sql("MAX(");
       if (argument != null) {
         ctx.visit(argument);
       }

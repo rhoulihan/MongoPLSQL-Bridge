@@ -103,10 +103,26 @@ public final class DateExpression implements Expression {
     StringBuilder timestampExpr = new StringBuilder();
     timestampExpr.append("TO_TIMESTAMP(");
 
-    // Capture the inner expression
-    var innerCtx = ctx.createNestedContext();
-    innerCtx.visit(argument);
-    timestampExpr.append(innerCtx.toSql());
+    // For FieldPathExpression, use JSON_VALUE instead of dot notation.
+    // This is required because dot notation doesn't work in GROUP BY contexts -
+    // Oracle treats base.data as a separate column reference that needs to be in GROUP BY.
+    // JSON_VALUE works correctly in all contexts including GROUP BY.
+    if (argument instanceof FieldPathExpression) {
+      FieldPathExpression fieldPath = (FieldPathExpression) argument;
+      String baseAlias = ctx.getBaseTableAlias();
+      String tablePrefix = (baseAlias != null && !baseAlias.isEmpty()) ? baseAlias + "." : "";
+      timestampExpr.append("JSON_VALUE(");
+      timestampExpr.append(tablePrefix);
+      timestampExpr.append(fieldPath.getDataColumn());
+      timestampExpr.append(", '");
+      timestampExpr.append(fieldPath.getJsonPath());
+      timestampExpr.append("')");
+    } else {
+      // For other expressions, render normally
+      var innerCtx = ctx.createNestedContext();
+      innerCtx.visit(argument);
+      timestampExpr.append(innerCtx.toSql());
+    }
 
     timestampExpr.append(", '");
     timestampExpr.append(ISO_FORMAT);

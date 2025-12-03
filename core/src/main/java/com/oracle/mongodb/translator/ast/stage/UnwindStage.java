@@ -101,7 +101,16 @@ public final class UnwindStage implements Stage {
     }
 
     ctx.sql(")) ");
-    ctx.sql(ctx.generateTableAlias("unwind"));
+    // Use the pre-registered unwind alias (registered by PipelineRenderer)
+    // or generate a new one if not pre-registered
+    SqlGenerationContext.UnwindInfo info = ctx.getUnwindInfo(path);
+    if (info != null) {
+      ctx.sql(info.tableAlias());
+    } else {
+      String alias = ctx.generateTableAlias("unwind");
+      ctx.sql(alias);
+      ctx.registerUnwoundPath(path, alias);
+    }
   }
 
   @Override

@@ -26,6 +26,7 @@ class TypeConversionOpTest {
     assertThat(TypeConversionOp.TYPE.getMongoOperator()).isEqualTo("$type");
     assertThat(TypeConversionOp.CONVERT.getMongoOperator()).isEqualTo("$convert");
     assertThat(TypeConversionOp.IS_NUMBER.getMongoOperator()).isEqualTo("$isNumber");
+    assertThat(TypeConversionOp.IS_STRING.getMongoOperator()).isEqualTo("$isString");
   }
 
   @Test
@@ -46,6 +47,8 @@ class TypeConversionOpTest {
     assertThat(TypeConversionOp.fromMongoOperator("$convert")).isEqualTo(TypeConversionOp.CONVERT);
     assertThat(TypeConversionOp.fromMongoOperator("$isNumber"))
         .isEqualTo(TypeConversionOp.IS_NUMBER);
+    assertThat(TypeConversionOp.fromMongoOperator("$isString"))
+        .isEqualTo(TypeConversionOp.IS_STRING);
   }
 
   @Test
@@ -57,6 +60,6 @@ class TypeConversionOpTest {
 
   @Test
   void shouldHaveAllEnumValues() {
-    assertThat(TypeConversionOp.values()).hasSize(11);
+    assertThat(TypeConversionOp.values()).hasSize(12);
   }
 }

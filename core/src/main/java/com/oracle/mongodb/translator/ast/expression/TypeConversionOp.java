@@ -53,7 +53,12 @@ public enum TypeConversionOp {
   /**
    * $isNumber - Checks if expression is a number. Oracle: JSON_VALUE with NUMBER return type check
    */
-  IS_NUMBER("$isNumber");
+  IS_NUMBER("$isNumber"),
+
+  /**
+   * $isString - Checks if expression is a string. Oracle: JSON_VALUE with type() check for string
+   */
+  IS_STRING("$isString");
 
   private final String mongoOperator;
 

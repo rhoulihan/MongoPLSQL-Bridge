@@ -148,6 +148,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final Map<String, LookupFieldInfo> lookupFields = new HashMap<>();
   private final Set<String> lookupsConsumedBySize = new HashSet<>();
   private final Map<String, String> lookupTableAliases = new HashMap<>();
+  private final Map<String, String> unwoundPaths = new HashMap<>();
   private final boolean inlineValues;
   private final OracleDialect dialect;
   private final String baseTableAlias;
@@ -260,11 +261,13 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   public SqlGenerationContext createNestedContext() {
     DefaultSqlGenerationContext nested =
         new DefaultSqlGenerationContext(inlineValues, dialect, baseTableAlias);
-    // Copy virtual fields, lookup fields, consumed lookups, and table aliases to nested context
+    // Copy virtual fields, lookup fields, consumed lookups, table aliases, and unwound paths to
+    // nested context
     nested.virtualFields.putAll(this.virtualFields);
     nested.lookupFields.putAll(this.lookupFields);
     nested.lookupsConsumedBySize.addAll(this.lookupsConsumedBySize);
     nested.lookupTableAliases.putAll(this.lookupTableAliases);
+    nested.unwoundPaths.putAll(this.unwoundPaths);
     return nested;
   }
 
@@ -321,6 +324,30 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public String getLookupTableAliasByAs(String asField) {
     return lookupTableAliases.get(asField);
+  }
+
+  @Override
+  public void registerUnwoundPath(String path, String tableAlias) {
+    unwoundPaths.put(path, tableAlias);
+  }
+
+  @Override
+  public UnwindInfo getUnwindInfo(String fieldPath) {
+    // Check if fieldPath starts with an unwound path
+    // e.g., "items.product" matches unwound path "items"
+    for (var entry : unwoundPaths.entrySet()) {
+      String unwoundPath = entry.getKey();
+      String tableAlias = entry.getValue();
+      if (fieldPath.equals(unwoundPath)) {
+        // Direct reference to the unwound array element itself
+        return new UnwindInfo(tableAlias, "");
+      } else if (fieldPath.startsWith(unwoundPath + ".")) {
+        // Reference to a field within the unwound element
+        String remainingPath = fieldPath.substring(unwoundPath.length() + 1);
+        return new UnwindInfo(tableAlias, remainingPath);
+      }
+    }
+    return null;
   }
 
   private String formatInlineValue(Object value) {

@@ -3483,6 +3483,1171 @@
       "oracle_sql": "SELECT JSON_VALUE(base.data, '$._id') AS \"_id\", JSON_VALUE(base.data, '$.name') AS name, JSON_VALUE(data, '$.colleagues.size()') AS colleagueCount, colleagues_cte.colleagues AS colleagues FROM employees base LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS colleagues FROM employees g WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department') AND JSON_VALUE(g.data, '$.active') = true) colleagues_cte ON 1=1 WHERE JSON_VALUE(base.data, '$._id' RETURNING NUMBER) = :1",
       "expected_count": 1,
       "sort_by": null
+    },
+    {
+      "id": "NULL001",
+      "name": "Null equality comparison",
+      "category": "null_handling",
+      "operator": "$eq",
+      "description": "Tests matching documents where field equals null explicitly",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "discount": null
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "discount": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.discount' RETURNING NUMBER) AS discount FROM sales WHERE JSON_VALUE(data, '$.discount') IS NULL ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "NULL002",
+      "name": "IfNull default value",
+      "category": "null_handling",
+      "operator": "$ifNull",
+      "description": "Tests $ifNull operator to replace null with default value",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "discountApplied": {
+              "$ifNull": [
+                "$discount",
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, NVL(JSON_VALUE(data, '$.discount' RETURNING NUMBER), 0) AS discountApplied FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "NULL003",
+      "name": "Null campaign field handling",
+      "category": "null_handling",
+      "operator": "$eq",
+      "description": "Tests matching nested field with null value in metadata.campaign",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "metadata.campaign": null
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "campaign": "$metadata.campaign"
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.metadata.campaign') AS campaign FROM sales WHERE JSON_VALUE(data, '$.metadata.campaign') IS NULL ORDER BY id",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "NULL004",
+      "name": "Null in accumulator - sum",
+      "category": "null_handling",
+      "operator": "$sum",
+      "description": "Tests $sum accumulator behavior with null values in group",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$group": {
+            "_id": "$region",
+            "totalDiscount": {
+              "$sum": "$discount"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(data, '$.region') AS \"_id\", SUM(JSON_VALUE(data, '$.discount' RETURNING NUMBER)) AS totalDiscount FROM sales GROUP BY JSON_VALUE(data, '$.region') ORDER BY JSON_VALUE(data, '$.region')",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "NULL005",
+      "name": "Null in accumulator - avg",
+      "category": "null_handling",
+      "operator": "$avg",
+      "description": "Tests $avg accumulator behavior with null values - nulls are ignored",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$group": {
+            "_id": "$category",
+            "avgDiscount": {
+              "$avg": "$discount"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(data, '$.category') AS \"_id\", AVG(JSON_VALUE(data, '$.discount' RETURNING NUMBER)) AS avgDiscount FROM sales GROUP BY JSON_VALUE(data, '$.category') ORDER BY JSON_VALUE(data, '$.category')",
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE006",
+      "name": "Extract minute from date",
+      "category": "date",
+      "operator": "$minute",
+      "description": "Tests $minute operator to extract minute component from date",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "eventName": 1,
+            "minute": {
+              "$minute": "$eventDate"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.eventName') AS eventName, EXTRACT(MINUTE FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS')) AS minute FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE007",
+      "name": "Extract second from date",
+      "category": "date",
+      "operator": "$second",
+      "description": "Tests $second operator to extract second component from date",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "eventName": 1,
+            "second": {
+              "$second": "$eventDate"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.eventName') AS eventName, EXTRACT(SECOND FROM TO_TIMESTAMP(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD\"T\"HH24:MI:SS')) AS second FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE008",
+      "name": "Day of week",
+      "category": "date",
+      "operator": "$dayOfWeek",
+      "description": "Tests $dayOfWeek operator - returns 1 (Sunday) to 7 (Saturday)",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "eventName": 1,
+            "dayOfWeek": {
+              "$dayOfWeek": "$eventDate"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.eventName') AS eventName, TO_NUMBER(TO_CHAR(TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD'), 'D')) AS dayOfWeek FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE009",
+      "name": "Day of year",
+      "category": "date",
+      "operator": "$dayOfYear",
+      "description": "Tests $dayOfYear operator - returns day of year (1-366)",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "eventName": 1,
+            "dayOfYear": {
+              "$dayOfYear": "$eventDate"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.eventName') AS eventName, TO_NUMBER(TO_CHAR(TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD'), 'DDD')) AS dayOfYear FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE010",
+      "name": "Week of year",
+      "category": "date",
+      "operator": "$week",
+      "description": "Tests $week operator - returns ISO week number",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "eventName": 1,
+            "week": {
+              "$week": "$eventDate"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.eventName') AS eventName, TO_NUMBER(TO_CHAR(TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD'), 'IW')) AS week FROM events ORDER BY id",
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "DATE012",
+      "name": "Group by month from date",
+      "category": "date",
+      "operator": "$month",
+      "description": "Tests grouping by month extracted from date field",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {
+          "$group": {
+            "_id": {
+              "$month": "$eventDate"
+            },
+            "eventCount": {
+              "$sum": 1
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT EXTRACT(MONTH FROM TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD')) AS \"_id\", COUNT(*) AS eventCount FROM events GROUP BY EXTRACT(MONTH FROM TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD')) ORDER BY EXTRACT(MONTH FROM TO_DATE(JSON_VALUE(data, '$.eventDate'), 'YYYY-MM-DD'))",
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARITH006",
+      "name": "Absolute value",
+      "category": "arithmetic",
+      "operator": "$abs",
+      "description": "Tests $abs operator to get absolute value of negative numbers",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "amount": 1,
+            "absoluteAmount": {
+              "$abs": "$amount"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, ABS(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS absoluteAmount FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARITH007",
+      "name": "Ceiling function",
+      "category": "arithmetic",
+      "operator": "$ceil",
+      "description": "Tests $ceil operator to round up to nearest integer",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "tax": 1,
+            "taxCeiled": {
+              "$ceil": "$tax"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.tax' RETURNING NUMBER) AS tax, CEIL(JSON_VALUE(data, '$.tax' RETURNING NUMBER)) AS taxCeiled FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARITH008",
+      "name": "Floor function",
+      "category": "arithmetic",
+      "operator": "$floor",
+      "description": "Tests $floor operator to round down to nearest integer",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "amount": 1,
+            "amountFloored": {
+              "$floor": "$amount"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, FLOOR(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS amountFloored FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARITH009",
+      "name": "Round function",
+      "category": "arithmetic",
+      "operator": "$round",
+      "description": "Tests $round operator to round to specified decimal places",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "amount": 1,
+            "amountRounded": {
+              "$round": [
+                "$amount",
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, ROUND(JSON_VALUE(data, '$.amount' RETURNING NUMBER), 0) AS amountRounded FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARITH010",
+      "name": "Truncate function",
+      "category": "arithmetic",
+      "operator": "$trunc",
+      "description": "Tests $trunc operator to truncate decimal places",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "amount": 1,
+            "amountTruncated": {
+              "$trunc": [
+                "$amount",
+                1
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, TRUNC(JSON_VALUE(data, '$.amount' RETURNING NUMBER), 1) AS amountTruncated FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR012",
+      "name": "Left trim",
+      "category": "string",
+      "operator": "$ltrim",
+      "description": "Tests $ltrim operator to remove leading whitespace",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "trimmedName": {
+              "$ltrim": {
+                "input": "$name"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, LTRIM(JSON_VALUE(data, '$.name')) AS trimmedName FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR013",
+      "name": "Right trim",
+      "category": "string",
+      "operator": "$rtrim",
+      "description": "Tests $rtrim operator to remove trailing whitespace",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "trimmedName": {
+              "$rtrim": {
+                "input": "$name"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, RTRIM(JSON_VALUE(data, '$.name')) AS trimmedName FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "STR014",
+      "name": "String case comparison",
+      "category": "string",
+      "operator": "$strcasecmp",
+      "description": "Tests $strcasecmp operator for case-insensitive string comparison",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "department": 1,
+            "compareResult": {
+              "$strcasecmp": [
+                "$department",
+                "ENGINEERING"
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.department') AS department, CASE WHEN UPPER(JSON_VALUE(data, '$.department')) = 'ENGINEERING' THEN 0 WHEN UPPER(JSON_VALUE(data, '$.department')) < 'ENGINEERING' THEN -1 ELSE 1 END AS compareResult FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR011",
+      "name": "Reverse array",
+      "category": "array",
+      "operator": "$reverseArray",
+      "description": "Tests $reverseArray operator to reverse array element order",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "tags": 1,
+            "reversedTags": {
+              "$reverseArray": "$tags"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_QUERY(data, '$.tags') AS tags, JSON_QUERY(data, '$.tags') AS reversedTags FROM sales WHERE JSON_VALUE(data, '$._id') = 'S001' ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR012",
+      "name": "Is array check",
+      "category": "array",
+      "operator": "$isArray",
+      "description": "Tests $isArray operator to check if field is an array",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "isTagsArray": {
+              "$isArray": "$tags"
+            },
+            "isAmountArray": {
+              "$isArray": "$amount"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, CASE WHEN JSON_QUERY(data, '$.tags') IS NOT NULL AND JSON_VALUE(data, '$.tags[0]' ERROR ON ERROR) IS NOT NULL THEN 1 ELSE 0 END AS isTagsArray, 0 AS isAmountArray FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR013",
+      "name": "Set union",
+      "category": "array",
+      "operator": "$setUnion",
+      "description": "Tests $setUnion operator for union of two arrays",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "tags": 1,
+            "unionResult": {
+              "$setUnion": [
+                "$tags",
+                [
+                  "new-tag",
+                  "premium"
+                ]
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_QUERY(data, '$.tags') AS tags, JSON_QUERY(data, '$.tags') AS unionResult FROM sales WHERE JSON_VALUE(data, '$._id') = 'S001' ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR014",
+      "name": "Set intersection",
+      "category": "array",
+      "operator": "$setIntersection",
+      "description": "Tests $setIntersection operator for intersection of arrays",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "tags": 1,
+            "intersectResult": {
+              "$setIntersection": [
+                "$tags",
+                [
+                  "premium",
+                  "discount"
+                ]
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_QUERY(data, '$.tags') AS tags, JSON_QUERY(data, '$.tags') AS intersectResult FROM sales WHERE JSON_VALUE(data, '$._id') = 'S001' ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "CMP009",
+      "name": "Field exists - true",
+      "category": "comparison",
+      "operator": "$exists",
+      "description": "Tests $exists operator to match documents where field exists",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "metadata": {
+              "$exists": true
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId FROM sales WHERE JSON_QUERY(data, '$.metadata') IS NOT NULL ORDER BY id",
+      "expected_count": 9,
+      "sort_by": "_id"
+    },
+    {
+      "id": "CMP010",
+      "name": "Field exists - false",
+      "category": "comparison",
+      "operator": "$exists",
+      "description": "Tests $exists operator to match documents where field does not exist",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "metadata": {
+              "$exists": false
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId FROM sales WHERE JSON_QUERY(data, '$.metadata') IS NULL ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "LOG006",
+      "name": "Nor condition",
+      "category": "logical",
+      "operator": "$nor",
+      "description": "Tests $nor operator - none of the conditions match",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "$nor": [
+              {
+                "status": "completed"
+              },
+              {
+                "status": "pending"
+              }
+            ]
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "status": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.status') AS status FROM sales WHERE NOT (JSON_VALUE(data, '$.status') = 'completed' OR JSON_VALUE(data, '$.status') = 'pending') ORDER BY id",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "AGG009",
+      "name": "First in group",
+      "category": "accumulator",
+      "operator": "$first",
+      "description": "Tests $first accumulator to get first value in each group",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$sort": {
+            "salary": -1
+          }
+        },
+        {
+          "$group": {
+            "_id": "$department",
+            "highestPaidEmployee": {
+              "$first": "$name"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT department AS \"_id\", MAX(name) KEEP (DENSE_RANK FIRST ORDER BY salary DESC) AS highestPaidEmployee FROM (SELECT JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary FROM employees) GROUP BY department ORDER BY department",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "AGG010",
+      "name": "Last in group",
+      "category": "accumulator",
+      "operator": "$last",
+      "description": "Tests $last accumulator to get last value in each group",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$sort": {
+            "salary": -1
+          }
+        },
+        {
+          "$group": {
+            "_id": "$department",
+            "lowestPaidEmployee": {
+              "$last": "$name"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT department AS \"_id\", MAX(name) KEEP (DENSE_RANK LAST ORDER BY salary DESC) AS lowestPaidEmployee FROM (SELECT JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary FROM employees) GROUP BY department ORDER BY department",
+      "expected_count": 4,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX006",
+      "name": "Unwind then group",
+      "category": "complex",
+      "operator": "$unwind+$group",
+      "description": "Tests flattening array with $unwind then aggregating with $group",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$unwind": "$items"
+        },
+        {
+          "$group": {
+            "_id": "$items.product",
+            "totalQuantity": {
+              "$sum": "$items.qty"
+            },
+            "totalRevenue": {
+              "$sum": {
+                "$multiply": [
+                  "$items.qty",
+                  "$items.price"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT item.product AS \"_id\", SUM(item.qty) AS totalQuantity, SUM(item.qty * item.price) AS totalRevenue FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (product VARCHAR2(100) PATH '$.product', qty NUMBER PATH '$.qty', price NUMBER PATH '$.price')) item GROUP BY item.product ORDER BY item.product",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX007",
+      "name": "Group sort limit - Top N",
+      "category": "complex",
+      "operator": "$group+$sort+$limit",
+      "description": "Tests Top N pattern - aggregate, sort, and limit",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$group": {
+            "_id": "$category",
+            "totalAmount": {
+              "$sum": "$amount"
+            },
+            "orderCount": {
+              "$sum": 1
+            }
+          }
+        },
+        {
+          "$sort": {
+            "totalAmount": -1
+          }
+        },
+        {
+          "$limit": 3
+        }
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(data, '$.category') AS \"_id\", SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS totalAmount, COUNT(*) AS orderCount FROM sales GROUP BY JSON_VALUE(data, '$.category') ORDER BY SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) DESC FETCH FIRST 3 ROWS ONLY",
+      "expected_count": 3,
+      "sort_by": null
+    },
+    {
+      "id": "COMPLEX008",
+      "name": "Union then aggregate",
+      "category": "complex",
+      "operator": "$unionWith+$group",
+      "description": "Tests combining collections with $unionWith then aggregating",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "source": "sales",
+            "amount": 1
+          }
+        },
+        {
+          "$unionWith": {
+            "coll": "products",
+            "pipeline": [
+              {
+                "$project": {
+                  "source": "products",
+                  "amount": "$price"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "$group": {
+            "_id": "$source",
+            "totalAmount": {
+              "$sum": "$amount"
+            }
+          }
+        },
+        {
+          "$sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT source AS \"_id\", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS source, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount FROM sales UNION ALL SELECT 'products' AS source, JSON_VALUE(data, '$.price' RETURNING NUMBER) AS amount FROM products) GROUP BY source ORDER BY source",
+      "expected_count": 2,
+      "sort_by": "_id"
+    },
+    {
+      "id": "EXPR001",
+      "name": "Switch expression",
+      "category": "expression",
+      "operator": "$switch",
+      "description": "Tests $switch operator for multi-branch conditional logic",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "salary": 1,
+            "salaryBand": {
+              "$switch": {
+                "branches": [
+                  {
+                    "case": {
+                      "$lt": [
+                        "$salary",
+                        60000
+                      ]
+                    },
+                    "then": "Junior"
+                  },
+                  {
+                    "case": {
+                      "$lt": [
+                        "$salary",
+                        90000
+                      ]
+                    },
+                    "then": "Mid"
+                  },
+                  {
+                    "case": {
+                      "$gte": [
+                        "$salary",
+                        90000
+                      ]
+                    },
+                    "then": "Senior"
+                  }
+                ],
+                "default": "Unknown"
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, CASE WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 60000 THEN 'Junior' WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) < 90000 THEN 'Mid' WHEN JSON_VALUE(data, '$.salary' RETURNING NUMBER) >= 90000 THEN 'Senior' ELSE 'Unknown' END AS salaryBand FROM employees ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "EXPR002",
+      "name": "Nested conditional",
+      "category": "expression",
+      "operator": "$cond",
+      "description": "Tests deeply nested $cond expressions",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "status": 1,
+            "priority": {
+              "$cond": {
+                "if": {
+                  "$eq": [
+                    "$status",
+                    "completed"
+                  ]
+                },
+                "then": "low",
+                "else": {
+                  "$cond": {
+                    "if": {
+                      "$eq": [
+                        "$status",
+                        "pending"
+                      ]
+                    },
+                    "then": "high",
+                    "else": "medium"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.status') AS status, CASE WHEN JSON_VALUE(data, '$.status') = 'completed' THEN 'low' WHEN JSON_VALUE(data, '$.status') = 'pending' THEN 'high' ELSE 'medium' END AS priority FROM sales ORDER BY id",
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "REPLACEROOT001",
+      "name": "Replace root with nested object",
+      "category": "replaceRoot",
+      "operator": "$replaceRoot",
+      "description": "Tests $replaceRoot to promote nested object to root",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "metadata": {
+              "$ne": null
+            }
+          }
+        },
+        {
+          "$replaceRoot": {
+            "newRoot": {
+              "orderId": "$orderId",
+              "source": "$metadata.source",
+              "campaign": "$metadata.campaign"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.metadata.source') AS source, JSON_VALUE(data, '$.metadata.campaign') AS campaign FROM sales WHERE JSON_QUERY(data, '$.metadata') IS NOT NULL ORDER BY JSON_VALUE(data, '$.orderId' RETURNING NUMBER)",
+      "expected_count": 9,
+      "sort_by": null
+    },
+    {
+      "id": "OBJ001",
+      "name": "Merge objects in projection",
+      "category": "object",
+      "operator": "$mergeObjects",
+      "description": "Tests $mergeObjects operator to combine objects in projection",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "merged": {
+              "$mergeObjects": [
+                {
+                  "orderId": "$orderId"
+                },
+                "$metadata"
+              ]
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_OBJECT('orderId' VALUE JSON_VALUE(data, '$.orderId' RETURNING NUMBER), 'source' VALUE JSON_VALUE(data, '$.metadata.source'), 'campaign' VALUE JSON_VALUE(data, '$.metadata.campaign')) AS merged FROM sales WHERE JSON_VALUE(data, '$._id') = 'S001' ORDER BY id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "LOOKUP003",
+      "name": "Self join lookup",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup self-join on same collection",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": 1
+          }
+        },
+        {
+          "$lookup": {
+            "from": "employees",
+            "localField": "department",
+            "foreignField": "department",
+            "as": "colleagues"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "department": 1,
+            "colleagueCount": {
+              "$size": "$colleagues"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT base.id, JSON_VALUE(base.data, '$.name') AS name, JSON_VALUE(base.data, '$.department') AS department, (SELECT COUNT(*) FROM employees e2 WHERE JSON_VALUE(e2.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount FROM employees base WHERE JSON_VALUE(base.data, '$._id' RETURNING NUMBER) = 1 ORDER BY base.id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "LOOKUP004",
+      "name": "Multiple lookups in pipeline",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests chain of multiple $lookup stages",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "customers",
+            "localField": "customerId",
+            "foreignField": "customerId",
+            "as": "customer"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "inventory",
+            "localField": "orderId",
+            "foreignField": "productId",
+            "as": "inventoryItems"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "hasCustomer": {
+              "$gt": [
+                {
+                  "$size": "$customer"
+                },
+                0
+              ]
+            },
+            "inventoryCount": {
+              "$size": "$inventoryItems"
+            }
+          }
+        }
+      ],
+      "oracle_sql": "SELECT base.id, JSON_VALUE(base.data, '$.orderId' RETURNING NUMBER) AS orderId, CASE WHEN (SELECT COUNT(*) FROM customers c WHERE JSON_VALUE(c.data, '$.customerId') = JSON_VALUE(base.data, '$.customerId')) > 0 THEN 1 ELSE 0 END AS hasCustomer, (SELECT COUNT(*) FROM inventory i WHERE JSON_VALUE(i.data, '$.productId' RETURNING NUMBER) = JSON_VALUE(base.data, '$.orderId' RETURNING NUMBER)) AS inventoryCount FROM sales base WHERE JSON_VALUE(base.data, '$._id') = 'S001' ORDER BY base.id",
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "WINDOW005",
+      "name": "Window running total",
+      "category": "window",
+      "operator": "$setWindowFields",
+      "description": "Tests running total with window function",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "status": "completed"
+          }
+        },
+        {
+          "$setWindowFields": {
+            "sortBy": {
+              "orderDate": 1
+            },
+            "output": {
+              "runningTotal": {
+                "$sum": "$amount",
+                "window": {
+                  "documents": [
+                    "unbounded",
+                    "current"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "amount": 1,
+            "runningTotal": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.orderId' RETURNING NUMBER) AS orderId, JSON_VALUE(data, '$.amount' RETURNING NUMBER) AS amount, SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales WHERE JSON_VALUE(data, '$.status') = 'completed' ORDER BY JSON_VALUE(data, '$.orderDate')",
+      "expected_count": 5,
+      "sort_by": null
+    },
+    {
+      "id": "WINDOW006",
+      "name": "Window moving average",
+      "category": "window",
+      "operator": "$setWindowFields",
+      "description": "Tests moving average with 3-row window",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$setWindowFields": {
+            "sortBy": {
+              "salary": 1
+            },
+            "output": {
+              "movingAvgSalary": {
+                "$avg": "$salary",
+                "window": {
+                  "documents": [
+                    -1,
+                    1
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "salary": 1,
+            "movingAvgSalary": 1
+          }
+        }
+      ],
+      "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary FROM employees ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER)",
+      "expected_count": 10,
+      "sort_by": null
     }
   ]
 }

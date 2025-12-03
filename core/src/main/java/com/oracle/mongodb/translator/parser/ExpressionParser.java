@@ -19,16 +19,21 @@ import com.oracle.mongodb.translator.ast.expression.ExistsExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.InExpression;
+import com.oracle.mongodb.translator.ast.expression.InlineObjectExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
+import com.oracle.mongodb.translator.ast.expression.ObjectExpression;
+import com.oracle.mongodb.translator.ast.expression.ObjectOp;
 import com.oracle.mongodb.translator.ast.expression.StringExpression;
 import com.oracle.mongodb.translator.ast.expression.StringOp;
+import com.oracle.mongodb.translator.ast.expression.SwitchExpression;
 import com.oracle.mongodb.translator.ast.expression.TypeConversionExpression;
 import com.oracle.mongodb.translator.ast.expression.TypeConversionOp;
 import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +67,7 @@ public final class ExpressionParser {
           "$max",
           "$min");
 
-  private static final Set<String> CONDITIONAL_OPS = Set.of("$cond", "$ifNull");
+  private static final Set<String> CONDITIONAL_OPS = Set.of("$cond", "$ifNull", "$switch");
 
   private static final Set<String> TYPE_CONVERSION_OPS =
       Set.of(
@@ -76,7 +81,8 @@ public final class ExpressionParser {
           "$toDate",
           "$toObjectId",
           "$convert",
-          "$isNumber");
+          "$isNumber",
+          "$isString");
 
   /** Parses a filter document into an Expression. */
   public Expression parse(Document filter) {
@@ -303,6 +309,19 @@ public final class ExpressionParser {
         String afterDollarDollar = str.substring(2);
         int dotPos = afterDollarDollar.indexOf('.');
         String varName = dotPos > 0 ? afterDollarDollar.substring(0, dotPos) : afterDollarDollar;
+
+        // Special handling for $$ROOT - it references the root document
+        if (varName.equals("ROOT")) {
+          if (dotPos > 0) {
+            // $$ROOT.fieldName -> treat as field path to fieldName
+            String fieldPath = afterDollarDollar.substring(dotPos + 1);
+            return FieldPathExpression.of(fieldPath);
+          } else {
+            // Just $$ROOT without field access - represents entire document
+            return LiteralExpression.of(str);
+          }
+        }
+
         if (varName.equals(varName.toUpperCase())
             && varName.length() > 0
             && Character.isLetter(varName.charAt(0))) {
@@ -357,6 +376,12 @@ public final class ExpressionParser {
     String op = entry.getKey();
     Object operand = entry.getValue();
 
+    // If the key doesn't start with $, it's an inline object literal (e.g., {name: "value"})
+    // This is used in contexts like $mergeObjects: [{field: expr}, ...]
+    if (!op.startsWith("$")) {
+      return parseInlineObjectLiteral(doc);
+    }
+
     if (ARITHMETIC_OPS.contains(op)) {
       return parseArithmeticExpression(op, operand);
     }
@@ -375,6 +400,10 @@ public final class ExpressionParser {
 
     if (ArrayOp.isArrayOp(op)) {
       return parseArrayExpression(op, operand);
+    }
+
+    if (ObjectOp.isObjectOp(op)) {
+      return parseObjectExpression(op, operand);
     }
 
     if (TYPE_CONVERSION_OPS.contains(op)) {
@@ -396,6 +425,25 @@ public final class ExpressionParser {
 
     // For other operators, throw unsupported
     throw new UnsupportedOperatorException(op);
+  }
+
+  /**
+   * Parses an inline object literal document.
+   *
+   * <p>Handles documents with non-operator field names, like {name: "value", status: "$field"}.
+   * These appear in contexts like $mergeObjects, $cond results, etc.
+   *
+   * @param doc the document containing field-value pairs
+   * @return an InlineObjectExpression
+   */
+  private Expression parseInlineObjectLiteral(Document doc) {
+    Map<String, Expression> fields = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> entry : doc.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      fields.put(key, parseValue(value));
+    }
+    return new InlineObjectExpression(fields);
   }
 
   private Expression parseComparisonExpressionValue(String op, Object operand) {
@@ -562,6 +610,8 @@ public final class ExpressionParser {
       return parseCondExpression(operand);
     } else if ("$ifNull".equals(op)) {
       return parseIfNullExpression(operand);
+    } else if ("$switch".equals(op)) {
+      return parseSwitchExpression(operand);
     }
     throw new UnsupportedOperatorException(op);
   }
@@ -608,6 +658,36 @@ public final class ExpressionParser {
     return ConditionalExpression.ifNull(parseValue(args.get(0)), parseValue(args.get(1)));
   }
 
+  private Expression parseSwitchExpression(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$switch requires a document");
+    }
+
+    Object branchesObj = doc.get("branches");
+    if (!(branchesObj instanceof List)) {
+      throw new IllegalArgumentException("$switch requires 'branches' array");
+    }
+
+    @SuppressWarnings("unchecked")
+    List<Object> branchesList = (List<Object>) branchesObj;
+    List<SwitchExpression.SwitchBranch> branches = new ArrayList<>();
+
+    for (Object branchObj : branchesList) {
+      if (!(branchObj instanceof Document branchDoc)) {
+        throw new IllegalArgumentException("Each branch must be a document");
+      }
+      Object caseExpr = branchDoc.get("case");
+      Object thenExpr = branchDoc.get("then");
+      if (caseExpr == null || thenExpr == null) {
+        throw new IllegalArgumentException("Each branch requires 'case' and 'then' fields");
+      }
+      branches.add(new SwitchExpression.SwitchBranch(parseValue(caseExpr), parseValue(thenExpr)));
+    }
+
+    Expression defaultExpr = doc.containsKey("default") ? parseValue(doc.get("default")) : null;
+    return SwitchExpression.of(branches, defaultExpr);
+  }
+
   private Expression parseDateExpression(String op, Object operand) {
     DateOp dateOp = DateOp.fromMongo(op);
     // Date operators take a single expression argument
@@ -627,6 +707,18 @@ public final class ExpressionParser {
       case FILTER -> parseFilter(operand);
       case MAP -> parseMap(operand);
       case REDUCE -> parseReduce(operand);
+      case REVERSE_ARRAY -> ArrayExpression.reverseArray(parseValue(operand));
+      case SORT_ARRAY -> parseSortArray(operand);
+      case IN -> parseIn(operand);
+      case IS_ARRAY -> ArrayExpression.isArray(parseValue(operand));
+      case INDEX_OF_ARRAY -> parseIndexOfArray(operand);
+      case SET_UNION -> parseSetUnion(operand);
+      case SET_INTERSECTION -> parseSetIntersection(operand);
+      case SET_DIFFERENCE -> parseSetDifference(operand);
+      case SET_EQUALS -> parseSetEquals(operand);
+      case SET_IS_SUBSET -> parseSetIsSubset(operand);
+      case OBJECT_TO_ARRAY -> ObjectExpression.objectToArray(parseValue(operand));
+      case ARRAY_TO_OBJECT -> ObjectExpression.arrayToObject(parseValue(operand));
       default -> throw new UnsupportedOperatorException(op);
     };
   }
@@ -708,6 +800,149 @@ public final class ExpressionParser {
     }
     return ArrayExpression.reduce(
         parseValue(input), parseValue(initialValue), parseValue(inExpr));
+  }
+
+  private Expression parseSortArray(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$sortArray requires a document");
+    }
+    Object input = doc.get("input");
+    Object sortBy = doc.get("sortBy");
+    if (input == null || sortBy == null) {
+      throw new IllegalArgumentException("$sortArray requires 'input' and 'sortBy' fields");
+    }
+    boolean ascending = true;
+    if (sortBy instanceof Number num) {
+      ascending = num.intValue() >= 0;
+    }
+    return ArrayExpression.sortArray(parseValue(input), ascending);
+  }
+
+  private Expression parseIn(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$in requires an array of [value, array]");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() != 2) {
+      throw new IllegalArgumentException("$in requires exactly 2 arguments");
+    }
+    return ArrayExpression.in(parseValue(args.get(0)), parseValue(args.get(1)));
+  }
+
+  private Expression parseIndexOfArray(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$indexOfArray requires an array");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() < 2) {
+      throw new IllegalArgumentException("$indexOfArray requires at least 2 arguments");
+    }
+    Expression array = parseValue(args.get(0));
+    Expression value = parseValue(args.get(1));
+
+    if (args.size() == 2) {
+      return ArrayExpression.indexOfArray(array, value);
+    } else if (args.size() >= 4) {
+      Expression start = parseValue(args.get(2));
+      Expression end = parseValue(args.get(3));
+      return ArrayExpression.indexOfArrayWithRange(array, value, start, end);
+    } else {
+      // 3 arguments - start only
+      Expression start = parseValue(args.get(2));
+      return ArrayExpression.indexOfArrayWithRange(
+          array, value, start, LiteralExpression.of(Integer.MAX_VALUE));
+    }
+  }
+
+  private Expression parseSetUnion(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$setUnion requires an array of arrays");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    List<Expression> arrays = new ArrayList<>();
+    for (Object arg : args) {
+      arrays.add(parseValue(arg));
+    }
+    return ArrayExpression.setUnion(arrays);
+  }
+
+  private Expression parseSetIntersection(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$setIntersection requires an array of arrays");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    List<Expression> arrays = new ArrayList<>();
+    for (Object arg : args) {
+      arrays.add(parseValue(arg));
+    }
+    return ArrayExpression.setIntersection(arrays);
+  }
+
+  private Expression parseSetDifference(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$setDifference requires an array");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() != 2) {
+      throw new IllegalArgumentException("$setDifference requires exactly 2 arguments");
+    }
+    return ArrayExpression.setDifference(parseValue(args.get(0)), parseValue(args.get(1)));
+  }
+
+  private Expression parseSetEquals(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$setEquals requires an array of arrays");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    List<Expression> arrays = new ArrayList<>();
+    for (Object arg : args) {
+      arrays.add(parseValue(arg));
+    }
+    return ArrayExpression.setEquals(arrays);
+  }
+
+  private Expression parseSetIsSubset(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$setIsSubset requires an array");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() != 2) {
+      throw new IllegalArgumentException("$setIsSubset requires exactly 2 arguments");
+    }
+    return ArrayExpression.setIsSubset(parseValue(args.get(0)), parseValue(args.get(1)));
+  }
+
+  private Expression parseObjectExpression(String op, Object operand) {
+    ObjectOp objectOp = ObjectOp.fromMongo(op);
+
+    return switch (objectOp) {
+      case MERGE_OBJECTS -> parseMergeObjects(operand);
+      case OBJECT_TO_ARRAY -> ObjectExpression.objectToArray(parseValue(operand));
+      case ARRAY_TO_OBJECT -> ObjectExpression.arrayToObject(parseValue(operand));
+    };
+  }
+
+  private Expression parseMergeObjects(Object operand) {
+    // $mergeObjects can take a single object or an array of objects
+    if (operand instanceof List) {
+      @SuppressWarnings("unchecked")
+      List<Object> args = (List<Object>) operand;
+      List<Expression> objects = new ArrayList<>();
+      for (Object arg : args) {
+        objects.add(parseValue(arg));
+      }
+      return ObjectExpression.mergeObjects(objects);
+    } else {
+      // Single object
+      return ObjectExpression.mergeObjects(List.of(parseValue(operand)));
+    }
   }
 
   private Expression parseTypeConversionExpression(String op, Object operand) {

@@ -108,7 +108,33 @@ public final class ConditionalExpression implements Expression {
 
   private void renderIfNull(SqlGenerationContext ctx) {
     ctx.sql("NVL(");
-    ctx.visit(thenExpr);
+
+    // With Oracle dot notation, the field returns JSON type which is incompatible with scalar
+    // types in NVL. We need to cast FieldPathExpression to match the type of the replacement.
+    if (thenExpr instanceof FieldPathExpression && elseExpr instanceof LiteralExpression) {
+      LiteralExpression replacement = (LiteralExpression) elseExpr;
+      Object value = replacement.getValue();
+
+      if (value instanceof Number) {
+        ctx.sql("CAST(");
+        ctx.visit(thenExpr);
+        ctx.sql(" AS NUMBER)");
+      } else if (value instanceof String) {
+        ctx.sql("CAST(");
+        ctx.visit(thenExpr);
+        ctx.sql(" AS VARCHAR2(4000))");
+      } else if (value instanceof Boolean) {
+        ctx.sql("CAST(");
+        ctx.visit(thenExpr);
+        ctx.sql(" AS VARCHAR2(5))");
+      } else {
+        // For other types, let Oracle handle it
+        ctx.visit(thenExpr);
+      }
+    } else {
+      ctx.visit(thenExpr);
+    }
+
     ctx.sql(", ");
     ctx.visit(elseExpr);
     ctx.sql(")");

@@ -25,7 +25,8 @@ public enum StringOp {
   REGEX_MATCH("REGEXP_LIKE", "$regexMatch"),
   REGEX_FIND("REGEXP_INSTR", "$regexFind"),
   REPLACE_ONE("REGEXP_REPLACE", "$replaceOne"),
-  REPLACE_ALL("REGEXP_REPLACE", "$replaceAll");
+  REPLACE_ALL("REGEXP_REPLACE", "$replaceAll"),
+  STRCASECMP("STRCASECMP", "$strcasecmp");
 
   private static final Map<String, StringOp> MONGO_LOOKUP;
 
@@ -45,7 +46,8 @@ public enum StringOp {
             Map.entry("$regexMatch", REGEX_MATCH),
             Map.entry("$regexFind", REGEX_FIND),
             Map.entry("$replaceOne", REPLACE_ONE),
-            Map.entry("$replaceAll", REPLACE_ALL));
+            Map.entry("$replaceAll", REPLACE_ALL),
+            Map.entry("$strcasecmp", STRCASECMP));
   }
 
   private final String sqlFunction;

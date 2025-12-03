@@ -52,6 +52,62 @@ public final class FieldPathExpression implements Expression {
     return "$." + normalizedPath;
   }
 
+  /**
+   * Returns the normalized path for dot notation (e.g., "status" or "customer.address.city").
+   * Validates the path to prevent injection attacks. Quotes field names that start with underscore
+   * or contain special characters that Oracle doesn't allow in unquoted identifiers.
+   */
+  public String getDotNotationPath() {
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+    if (normalizedPath.startsWith(".")) {
+      normalizedPath = normalizedPath.substring(1);
+    }
+    // Validate path to prevent injection
+    FieldNameValidator.validateFieldName(normalizedPath);
+
+    // Quote field names that need it for Oracle dot notation
+    String[] segments = normalizedPath.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        result.append(".");
+      }
+      result.append(quoteIfNeeded(segments[i]));
+    }
+    return result.toString();
+  }
+
+  /**
+   * Quotes a field name if it starts with underscore or contains characters that Oracle doesn't
+   * allow in unquoted identifiers. Oracle identifiers must start with a letter and contain only
+   * letters, digits, and underscores.
+   */
+  private static String quoteIfNeeded(String fieldName) {
+    if (fieldName.isEmpty()) {
+      return fieldName;
+    }
+    // Oracle requires quoting if:
+    // 1. Starts with underscore or digit
+    // 2. Contains characters other than letters, digits, underscores
+    char first = fieldName.charAt(0);
+    boolean needsQuoting = !Character.isLetter(first);
+
+    if (!needsQuoting) {
+      for (int i = 1; i < fieldName.length(); i++) {
+        char c = fieldName.charAt(i);
+        if (!Character.isLetterOrDigit(c) && c != '_') {
+          needsQuoting = true;
+          break;
+        }
+      }
+    }
+
+    if (needsQuoting) {
+      return "\"" + fieldName + "\"";
+    }
+    return fieldName;
+  }
+
   public String getPath() {
     return path;
   }
@@ -86,53 +142,92 @@ public final class FieldPathExpression implements Expression {
       return;
     }
 
-    ctx.sql("JSON_VALUE(");
-    // Use table alias qualified column name when there's a base alias
-    String baseAlias = ctx.getBaseTableAlias();
-    if (baseAlias != null && !baseAlias.isEmpty() && "data".equals(dataColumn)) {
-      ctx.sql(baseAlias);
-      ctx.sql(".");
+    // Check if this path references an unwound array element
+    // e.g., "items.product" where "items" has been $unwind'd
+    SqlGenerationContext.UnwindInfo unwindInfo = ctx.getUnwindInfo(normalizedPath);
+    if (unwindInfo != null && "data".equals(dataColumn)) {
+      renderUnwindFieldPath(ctx, unwindInfo);
+      return;
     }
-    ctx.sql(dataColumn);
-    ctx.sql(", '");
-    ctx.sql(getJsonPath());
-    ctx.sql("'");
+
+    // Use Oracle dot notation: alias.data.field instead of JSON_VALUE(alias.data, '$.field')
+    String baseAlias = ctx.getBaseTableAlias();
+    String dotPath = getDotNotationPath();
+
+    // Build the dot notation expression
+    StringBuilder dotExpr = new StringBuilder();
+    if (baseAlias != null && !baseAlias.isEmpty() && "data".equals(dataColumn)) {
+      dotExpr.append(baseAlias).append(".");
+    }
+    dotExpr.append(dataColumn).append(".").append(dotPath);
 
     if (returnType != null) {
-      ctx.sql(" RETURNING ");
+      // Use CAST for type conversion with dot notation
+      ctx.sql("CAST(");
+      ctx.sql(dotExpr.toString());
+      ctx.sql(" AS ");
       ctx.sql(returnType.getOracleSyntax());
+      ctx.sql(")");
+    } else {
+      ctx.sql(dotExpr.toString());
     }
-
-    ctx.sql(")");
   }
 
   /**
    * Renders a field path that references a $lookup result. Redirects to the joined table's data
-   * column with the nested path.
+   * column with the nested path using Oracle dot notation.
    */
   private void renderLookupFieldPath(SqlGenerationContext ctx, String lookupAlias, String path) {
     // path is like "customer.tier", lookupAlias is like "customers_1"
-    // We need: JSON_VALUE(customers_1.data, '$.tier')
+    // We generate: customers_1.data.tier (or CAST(customers_1.data.tier AS NUMBER) for returnType)
     int dotIndex = path.indexOf('.');
     final String remainingPath = dotIndex >= 0 ? path.substring(dotIndex + 1) : "";
 
-    ctx.sql("JSON_VALUE(");
-    ctx.sql(lookupAlias);
-    ctx.sql(".data, '$");
+    // Build dot notation expression
+    StringBuilder dotExpr = new StringBuilder();
+    dotExpr.append(lookupAlias).append(".data");
     if (!remainingPath.isEmpty()) {
-      ctx.sql(".");
       // Validate the remaining path
       FieldNameValidator.validateFieldName(remainingPath);
-      ctx.sql(remainingPath);
+      dotExpr.append(".").append(remainingPath);
     }
-    ctx.sql("'");
 
     if (returnType != null) {
-      ctx.sql(" RETURNING ");
+      ctx.sql("CAST(");
+      ctx.sql(dotExpr.toString());
+      ctx.sql(" AS ");
       ctx.sql(returnType.getOracleSyntax());
+      ctx.sql(")");
+    } else {
+      ctx.sql(dotExpr.toString());
+    }
+  }
+
+  /**
+   * Renders a field path that references an unwound array element. Redirects to the JSON_TABLE's
+   * value column with the remaining path using Oracle dot notation.
+   *
+   * <p>Example: After "$unwind: $items", "$items.product" becomes: unwind_1.value.product
+   */
+  private void renderUnwindFieldPath(SqlGenerationContext ctx, SqlGenerationContext.UnwindInfo info) {
+    // Build dot notation expression
+    StringBuilder dotExpr = new StringBuilder();
+    dotExpr.append(info.tableAlias()).append(".value");
+    if (!info.remainingPath().isEmpty()) {
+      // Validate the remaining path
+      FieldNameValidator.validateFieldName(info.remainingPath());
+      dotExpr.append(".").append(info.remainingPath());
     }
 
-    ctx.sql(")");
+    if (returnType != null) {
+      ctx.sql("CAST(");
+      ctx.sql(dotExpr.toString());
+      ctx.sql(" AS ");
+      ctx.sql(returnType.getOracleSyntax());
+      ctx.sql(")");
+    } else {
+      ctx.sql(dotExpr.toString());
+    }
   }
 
   @Override

@@ -22,18 +22,27 @@ public enum DateOp {
   MINUTE("EXTRACT(MINUTE FROM %s)", "$minute", true),
   SECOND("EXTRACT(SECOND FROM %s)", "$second", true),
   DAY_OF_WEEK("TO_CHAR(%s, 'D')", "$dayOfWeek", false),
-  DAY_OF_YEAR("TO_CHAR(%s, 'DDD')", "$dayOfYear", false);
+  DAY_OF_YEAR("TO_CHAR(%s, 'DDD')", "$dayOfYear", false),
+  WEEK("TO_CHAR(%s, 'IW')", "$week", false),
+  ISO_WEEK("TO_CHAR(%s, 'IW')", "$isoWeek", false),
+  ISO_WEEK_YEAR("TO_CHAR(%s, 'IYYY')", "$isoWeekYear", false);
 
-  private static final Map<String, DateOp> MONGO_LOOKUP =
-      Map.of(
-          "$year", YEAR,
-          "$month", MONTH,
-          "$dayOfMonth", DAY_OF_MONTH,
-          "$hour", HOUR,
-          "$minute", MINUTE,
-          "$second", SECOND,
-          "$dayOfWeek", DAY_OF_WEEK,
-          "$dayOfYear", DAY_OF_YEAR);
+  private static final Map<String, DateOp> MONGO_LOOKUP;
+
+  static {
+    MONGO_LOOKUP = new java.util.HashMap<>();
+    MONGO_LOOKUP.put("$year", YEAR);
+    MONGO_LOOKUP.put("$month", MONTH);
+    MONGO_LOOKUP.put("$dayOfMonth", DAY_OF_MONTH);
+    MONGO_LOOKUP.put("$hour", HOUR);
+    MONGO_LOOKUP.put("$minute", MINUTE);
+    MONGO_LOOKUP.put("$second", SECOND);
+    MONGO_LOOKUP.put("$dayOfWeek", DAY_OF_WEEK);
+    MONGO_LOOKUP.put("$dayOfYear", DAY_OF_YEAR);
+    MONGO_LOOKUP.put("$week", WEEK);
+    MONGO_LOOKUP.put("$isoWeek", ISO_WEEK);
+    MONGO_LOOKUP.put("$isoWeekYear", ISO_WEEK_YEAR);
+  }
 
   private final String sqlTemplate;
   private final String mongoOperator;
