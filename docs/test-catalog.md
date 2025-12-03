@@ -1,8 +1,8 @@
-# MongoPLSQL-Bridge Test Catalog
+# Test Catalog
 
-This document contains a comprehensive catalog of all integration tests, including the MongoDB pipeline used and the Oracle SQL generated.
+*Auto-generated on 2025-12-03 08:04:07. SQL is regenerated fresh each time this catalog is built.*
 
-> **Note:** The Oracle SQL shown below uses dot notation for field access (e.g., `base.data.fieldName`) per IMPL-031. SQL is regenerated fresh each time this catalog is built.
+---
 
 ## Test Suites Overview
 
@@ -12,6 +12,15 @@ This document contains a comprehensive catalog of all integration tests, includi
 | Large-Scale Pipelines | 10 | Complex cross-database validation tests |
 | **Total** | **152** | |
 
+## Test Results Summary
+
+| Status | Count |
+|--------|-------|
+| Passed | 142 |
+| Failed | 0 |
+| Skipped | 0 |
+| **Total** | **142** |
+
 ---
 
 ## Unit Integration Tests by Category
@@ -19,11 +28,11 @@ This document contains a comprehensive catalog of all integration tests, includi
 | Category | Test Count |
 |----------|------------|
 | Accumulator | 10 |
-| AddFields | 2 |
+| Addfields | 2 |
 | Arithmetic | 10 |
 | Array | 14 |
 | Bucket | 2 |
-| BucketAuto | 2 |
+| Bucketauto | 2 |
 | Comparison | 10 |
 | Complex | 8 |
 | Conditional | 3 |
@@ -32,22 +41,21 @@ This document contains a comprehensive catalog of all integration tests, includi
 | Edge | 3 |
 | Expression | 2 |
 | Facet | 3 |
-| GraphLookup | 1 |
+| Graphlookup | 1 |
 | Logical | 6 |
 | Lookup | 4 |
-| Null handling | 5 |
+| Null Handling | 5 |
 | Object | 1 |
 | Redact | 2 |
-| ReplaceRoot | 1 |
+| Replaceroot | 1 |
 | Sample | 2 |
-| SetWindowFields | 4 |
+| Setwindowfields | 4 |
 | Stage | 7 |
 | String | 14 |
-| TypeConversion | 5 |
-| UnionWith | 3 |
+| Typeconversion | 5 |
+| Unionwith | 3 |
 | Unwind | 2 |
 | Window | 2 |
-| **Total** | **142** |
 
 ---
 
@@ -58,6 +66,11 @@ This document contains a comprehensive catalog of all integration tests, includi
 **Description:** Tests $group with $sum: 1 for counting  
 **Collection:** `sales`  
 **Operator:** `$count`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -80,10 +93,7 @@ This document contains a comprehensive catalog of all integration tests, includi
 
 **Generated SQL:**
 ```sql
-SELECT base.data.status AS "_id", SUM(:1) AS count
-FROM sales base
-GROUP BY base.data.status
-ORDER BY "_id"
+SELECT base.data.status AS "_id", SUM(1) AS count FROM sales base GROUP BY base.data.status ORDER BY "_id"
 ```
 
 ---
@@ -93,6 +103,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $sum on numeric field  
 **Collection:** `sales`  
 **Operator:** `$sum`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -120,11 +135,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount
-FROM sales base
-WHERE base.data.status = :1
-GROUP BY base.data.category
-ORDER BY "_id"
+SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount FROM sales base WHERE base.data.status = 'completed' GROUP BY base.data.category ORDER BY "_id"
 ```
 
 ---
@@ -134,6 +145,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $avg on numeric field  
 **Collection:** `employees`  
 **Operator:** `$avg`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -156,10 +172,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", AVG(base.data.salary) AS avgSalary
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", AVG(base.data.salary) AS avgSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
@@ -169,6 +182,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $min on numeric field  
 **Collection:** `products`  
 **Operator:** `$min`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -196,11 +214,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", MIN(base.data.price) AS minPrice
-FROM products base
-WHERE base.data.active = :1
-GROUP BY base.data.category
-ORDER BY "_id"
+SELECT base.data.category AS "_id", MIN(base.data.price) AS minPrice FROM products base WHERE base.data.active = true GROUP BY base.data.category ORDER BY "_id"
 ```
 
 ---
@@ -210,6 +224,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $max on numeric field  
 **Collection:** `employees`  
 **Operator:** `$max`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -232,10 +251,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MAX(base.data.salary) AS maxSalary
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", MAX(base.data.salary) AS maxSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
@@ -245,6 +261,11 @@ ORDER BY "_id"
 **Description:** Tests $group with multiple accumulators  
 **Collection:** `employees`  
 **Operator:** `$sum/$avg/$min/$max`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -279,10 +300,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", SUM(:1) AS count, SUM(base.data.salary) AS totalSalary, AVG(base.data.salary) AS avgSalary, MIN(base.data.salary) AS minSalary, MAX(base.data.salary) AS maxSalary
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", SUM(1) AS count, SUM(base.data.salary) AS totalSalary, AVG(base.data.salary) AS avgSalary, MIN(base.data.salary) AS minSalary, MAX(base.data.salary) AS maxSalary FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
@@ -292,6 +310,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $push to collect values into array  
 **Collection:** `employees`  
 **Operator:** `$push`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -314,10 +337,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", JSON_ARRAYAGG(base.data.name) AS employees
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", JSON_ARRAYAGG(base.data.name) AS employees FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
@@ -327,6 +347,11 @@ ORDER BY "_id"
 **Description:** Tests $group with $addToSet to collect unique values  
 **Collection:** `sales`  
 **Operator:** `$addToSet`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -349,10 +374,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", JSON_QUERY('[' || LISTAGG(DISTINCT '"' || base.data.status || '"', ',') WITHIN GROUP (ORDER BY base.data.status) || ']', '$' RETURNING CLOB) AS statuses
-FROM sales base
-GROUP BY base.data.region
-ORDER BY "_id"
+SELECT base.data.region AS "_id", JSON_QUERY('[' || LISTAGG(DISTINCT '"' || base.data.status || '"', ',') WITHIN GROUP (ORDER BY base.data.status) || ']', '$' RETURNING CLOB) AS statuses FROM sales base GROUP BY base.data.region ORDER BY "_id"
 ```
 
 ---
@@ -362,6 +384,11 @@ ORDER BY "_id"
 **Description:** Tests $first accumulator to get first value in each group  
 **Collection:** `employees`  
 **Operator:** `$first`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -389,10 +416,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MIN(base.data.name) AS highestPaidEmployee
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", MIN(base.data.name) AS highestPaidEmployee FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
@@ -402,6 +426,11 @@ ORDER BY "_id"
 **Description:** Tests $last accumulator to get last value in each group  
 **Collection:** `employees`  
 **Operator:** `$last`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -429,21 +458,23 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.department AS "_id", MAX(base.data.name) AS lowestPaidEmployee
-FROM employees base
-GROUP BY base.data.department
-ORDER BY "_id"
+SELECT base.data.department AS "_id", MAX(base.data.name) AS lowestPaidEmployee FROM employees base GROUP BY base.data.department ORDER BY "_id"
 ```
 
 ---
 
-## AddFields Tests
+## Addfields Tests
 
 ### ADDFIELDS001: Add computed field
 
 **Description:** Tests $addFields stage to add computed column  
 **Collection:** `employees`  
 **Operator:** `$addFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -475,9 +506,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + base.data.bonus) AS totalCompensation, (base.data.salary + base.data.bonus) AS totalCompensation
-FROM employees base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + base.data.bonus) AS totalCompensation FROM employees base ORDER BY base.data."_id"
 ```
 
 ---
@@ -487,6 +516,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $set stage (alias for $addFields)  
 **Collection:** `products`  
 **Operator:** `$set`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -523,10 +557,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profitMargin, (base.data.price - base.data.cost) AS profitMargin
-FROM products base
-WHERE base.data.active = :1
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profitMargin FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
 ```
 
 ---
@@ -538,6 +569,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $add operator in projection  
 **Collection:** `sales`  
 **Operator:** `$add`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -569,10 +605,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (base.data.amount + base.data.tax) AS total
-FROM sales base
-WHERE base.data.status = :1
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (base.data.amount + base.data.tax) AS total FROM sales base WHERE base.data.status = 'completed' ORDER BY base.data.orderId
 ```
 
 ---
@@ -582,6 +615,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $subtract operator in projection  
 **Collection:** `products`  
 **Operator:** `$subtract`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -613,10 +651,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profit
-FROM products base
-WHERE base.data.active = :1
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.price - base.data.cost) AS profit FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
 ```
 
 ---
@@ -626,6 +661,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $multiply operator in projection  
 **Collection:** `employees`  
 **Operator:** `$multiply`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -657,9 +697,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + (base.data.bonus * :1)) AS totalComp
-FROM employees base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, (base.data.salary + (base.data.bonus * 1)) AS totalComp FROM employees base ORDER BY base.data."_id"
 ```
 
 ---
@@ -669,6 +707,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $divide operator in projection  
 **Collection:** `products`  
 **Operator:** `$divide`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -707,10 +750,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, ((base.data.price - base.data.cost) / base.data.cost) AS margin
-FROM products base
-WHERE CAST(base.data.cost AS NUMBER) > :1
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, ((base.data.price - base.data.cost) / base.data.cost) AS margin FROM products base WHERE CAST(base.data.cost AS NUMBER) > 0 ORDER BY base.data."_id"
 ```
 
 ---
@@ -720,6 +760,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $mod operator in projection  
 **Collection:** `sales`  
 **Operator:** `$mod`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -746,9 +791,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, MOD(base.data.orderId, :1) AS orderIdMod3
-FROM sales base
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, MOD(base.data.orderId, 3) AS orderIdMod3 FROM sales base ORDER BY base.data.orderId
 ```
 
 ---
@@ -758,6 +801,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $abs operator to get absolute value of negative numbers  
 **Collection:** `sales`  
 **Operator:** `$abs`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -777,8 +825,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ABS(base.data.amount) AS absoluteAmount
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ABS(base.data.amount) AS absoluteAmount FROM sales base
 ```
 
 ---
@@ -788,6 +835,11 @@ FROM sales base
 **Description:** Tests $ceil operator to round up to nearest integer  
 **Collection:** `sales`  
 **Operator:** `$ceil`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -807,8 +859,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.tax AS tax, CEIL(base.data.tax) AS taxCeiled
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.tax AS tax, CEIL(base.data.tax) AS taxCeiled FROM sales base
 ```
 
 ---
@@ -818,6 +869,11 @@ FROM sales base
 **Description:** Tests $floor operator to round down to nearest integer  
 **Collection:** `sales`  
 **Operator:** `$floor`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -837,8 +893,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, FLOOR(base.data.amount) AS amountFloored
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, FLOOR(base.data.amount) AS amountFloored FROM sales base
 ```
 
 ---
@@ -848,6 +903,11 @@ FROM sales base
 **Description:** Tests $round operator to round to specified decimal places  
 **Collection:** `sales`  
 **Operator:** `$round`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -870,8 +930,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ROUND(base.data.amount, :1) AS amountRounded
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, ROUND(base.data.amount, 0) AS amountRounded FROM sales base
 ```
 
 ---
@@ -881,6 +940,11 @@ FROM sales base
 **Description:** Tests $trunc operator to truncate decimal places  
 **Collection:** `sales`  
 **Operator:** `$trunc`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -903,8 +967,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, TRUNC(base.data.amount, :1) AS amountTruncated
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, TRUNC(base.data.amount, 1) AS amountTruncated FROM sales base
 ```
 
 ---
@@ -916,6 +979,11 @@ FROM sales base
 **Description:** Tests $arrayElemAt to get first element  
 **Collection:** `products`  
 **Operator:** `$arrayElemAt`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -949,10 +1017,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag
-FROM products base
-WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag FROM products base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data."_id"
 ```
 
 ---
@@ -962,6 +1027,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $size operator to get array length  
 **Collection:** `sales`  
 **Operator:** `$size`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -985,9 +1055,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.items.size()') AS itemCount
-FROM sales base
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.items.size()') AS itemCount FROM sales base ORDER BY base.data.orderId
 ```
 
 ---
@@ -997,6 +1065,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $first operator as array accessor  
 **Collection:** `products`  
 **Operator:** `$first`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -1027,10 +1100,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag
-FROM products base
-WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.tags[0]') AS firstTag FROM products base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data."_id"
 ```
 
 ---
@@ -1040,6 +1110,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $last operator as array accessor  
 **Collection:** `sales`  
 **Operator:** `$last`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -1070,10 +1145,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.tags[last]') AS lastTag
-FROM sales base
-WHERE JSON_VALUE(base.data, '$.tags.size()') > 0
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.tags[last]') AS lastTag FROM sales base WHERE JSON_VALUE(base.data, '$.tags.size()') > 0 ORDER BY base.data.orderId
 ```
 
 ---
@@ -1083,6 +1155,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $filter operator to filter array elements by condition  
 **Collection:** `sales`  
 **Operator:** `$filter`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1118,12 +1195,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (
-  SELECT JSON_ARRAYAGG(val) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
-WHERE base.data.item.qty > :1) AS highValueItems
-FROM sales base
-ORDER BY base.data.orderId
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(val) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE base.data.item.qty > 1) AS highValueItems FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1133,6 +1205,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $map operator to transform array elements  
 **Collection:** `sales`  
 **Operator:** `$map`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1163,11 +1240,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (
-  SELECT JSON_ARRAYAGG(base.data.item.product) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))) AS itemProducts
-FROM sales base
-ORDER BY base.data.orderId
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(base.data.item.product) FROM JSON_TABLE(data, '$.items[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))) AS itemProducts FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1177,6 +1250,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $reduce operator to reduce array to single value  
 **Collection:** `sales`  
 **Operator:** `$reduce`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1212,10 +1290,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, /* $reduce not fully supported */ NULL AS totalQty
-FROM sales base
-ORDER BY base.data.orderId
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, /* $reduce not fully supported */ NULL AS totalQty FROM sales base ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1225,6 +1300,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $concatArrays operator to concatenate multiple arrays  
 **Collection:** `sales`  
 **Operator:** `$concatArrays`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1263,15 +1343,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (
-  SELECT JSON_ARRAYAGG(val
-ORDER BY rn) FROM (
-  SELECT val, ROWNUM + 0 AS rn FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
-UNION ALL SELECT val, ROWNUM + 1000 AS rn FROM JSON_TABLE('["extra"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS allLabels
-FROM sales base
-WHERE JSON_EXISTS(base.data, '$.tags')
-ORDER BY base.data.orderId
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT JSON_ARRAYAGG(val ORDER BY rn) FROM (SELECT val, ROWNUM + 0 AS rn FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) UNION ALL SELECT val, ROWNUM + 1000 AS rn FROM JSON_TABLE('["extra"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS allLabels FROM sales base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data.orderId FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1281,6 +1353,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $slice operator to get array subset  
 **Collection:** `products`  
 **Operator:** `$slice`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1317,11 +1394,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[0 to 1]') AS firstTwoTags
-FROM products base
-WHERE JSON_EXISTS(base.data, '$.tags')
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[0 to 1]') AS firstTwoTags FROM products base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1331,6 +1404,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $slice operator to get last N elements  
 **Collection:** `products`  
 **Operator:** `$slice`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1367,11 +1445,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[last-1 to last]') AS lastTwoTags
-FROM products base
-WHERE JSON_EXISTS(base.data, '$.tags')
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_QUERY(base.data, '$.tags[last-1 to last]') AS lastTwoTags FROM products base WHERE JSON_EXISTS(base.data, '$.tags') ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -1381,6 +1455,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $reverseArray operator to reverse array element order  
 **Collection:** `sales`  
 **Operator:** `$reverseArray`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -1404,11 +1483,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (
-  SELECT JSON_ARRAYAGG(val
-ORDER BY rn DESC) FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY))) AS reversedTags
-FROM sales base
-WHERE base.data."_id" = :1
+SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val ORDER BY rn DESC) FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY))) AS reversedTags FROM sales base WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1418,6 +1493,11 @@ WHERE base.data."_id" = :1
 **Description:** Tests $isArray operator to check if field is an array  
 **Collection:** `sales`  
 **Operator:** `$isArray`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -1439,8 +1519,7 @@ WHERE base.data."_id" = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, CASE WHEN JSON_EXISTS(base.data, '$.tags[0]') THEN 1 ELSE 0 END AS isTagsArray, CASE WHEN JSON_EXISTS(base.data, '$.amount[0]') THEN 1 ELSE 0 END AS isAmountArray
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, CASE WHEN JSON_EXISTS(base.data, '$.tags[0]') THEN 1 ELSE 0 END AS isTagsArray, CASE WHEN JSON_EXISTS(base.data, '$.amount[0]') THEN 1 ELSE 0 END AS isAmountArray FROM sales base
 ```
 
 ---
@@ -1450,6 +1529,11 @@ FROM sales base
 **Description:** Tests $setUnion operator for union of two arrays  
 **Collection:** `sales`  
 **Operator:** `$setUnion`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -1479,13 +1563,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (
-  SELECT JSON_ARRAYAGG(val) FROM (
-  SELECT DISTINCT val FROM (
-  SELECT val FROM JSON_TABLE(JSON_QUERY(base.data, '$.tags'), '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
-UNION SELECT val FROM JSON_TABLE(:1, '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))) AS unionResult
-FROM sales base
-WHERE base.data."_id" = :2
+SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val) FROM (SELECT DISTINCT val FROM (SELECT val FROM JSON_TABLE(JSON_QUERY(base.data, '$.tags'), '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) UNION SELECT val FROM JSON_TABLE('["new-tag","premium"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))) AS unionResult FROM sales base WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1495,6 +1573,11 @@ WHERE base.data."_id" = :2
 **Description:** Tests $setIntersection operator for intersection of arrays  
 **Collection:** `sales`  
 **Operator:** `$setIntersection`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -1524,12 +1607,7 @@ WHERE base.data."_id" = :2
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.tags AS tags, (
-  SELECT JSON_ARRAYAGG(val) FROM (
-  SELECT DISTINCT val FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))
-INTERSECT SELECT DISTINCT val FROM JSON_TABLE(:1, '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS intersectResult
-FROM sales base
-WHERE base.data."_id" = :2
+SELECT base.data."_id" AS "_id", base.data.tags AS tags, (SELECT JSON_ARRAYAGG(val) FROM (SELECT DISTINCT val FROM JSON_TABLE(base.data, '$.tags[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) INTERSECT SELECT DISTINCT val FROM JSON_TABLE('["premium","discount"]', '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))) AS intersectResult FROM sales base WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -1541,6 +1619,11 @@ WHERE base.data."_id" = :2
 **Description:** Tests $bucket to group products by price ranges (no default needed - all values covered)  
 **Collection:** `products`  
 **Operator:** `$bucket`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -1574,10 +1657,7 @@ WHERE base.data."_id" = :2
 
 **Generated SQL:**
 ```sql
-SELECT CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END AS "_id", SUM(:1) AS count, JSON_ARRAYAGG(base.data.name) AS products
-FROM products base
-GROUP BY CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END
-ORDER BY "_id"
+SELECT CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END AS "_id", SUM(1) AS count, JSON_ARRAYAGG(base.data.name) AS products FROM products base GROUP BY CASE WHEN base.data.price >= 0 AND base.data.price < 25 THEN 0 WHEN base.data.price >= 25 AND base.data.price < 100 THEN 25 WHEN base.data.price >= 100 AND base.data.price < 1000 THEN 100 END ORDER BY "_id"
 ```
 
 ---
@@ -1587,6 +1667,11 @@ ORDER BY "_id"
 **Description:** Tests $bucket to group employees by salary bands (all values covered)  
 **Collection:** `employees`  
 **Operator:** `$bucket`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -1620,21 +1705,23 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END AS "_id", SUM(:1) AS count, AVG(base.data.bonus) AS avgBonus
-FROM employees base
-GROUP BY CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END
-ORDER BY "_id"
+SELECT CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END AS "_id", SUM(1) AS count, AVG(base.data.bonus) AS avgBonus FROM employees base GROUP BY CASE WHEN base.data.salary >= 60000 AND base.data.salary < 75000 THEN 60000 WHEN base.data.salary >= 75000 AND base.data.salary < 90000 THEN 75000 WHEN base.data.salary >= 90000 AND base.data.salary < 110000 THEN 90000 END ORDER BY "_id"
 ```
 
 ---
 
-## BucketAuto Tests
+## Bucketauto Tests
 
 ### BUCKETAUTO001: Basic $bucketAuto - auto price groups
 
 **Description:** Tests $bucketAuto to automatically group products by price  
 **Collection:** `products`  
 **Operator:** `$bucketAuto`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -1663,12 +1750,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT bucket_id, COUNT(*) AS count, AVG(groupby_value) AS avgPrice FROM (
-  SELECT base.data.price AS groupby_value, NTILE(3) OVER (ORDER BY base.data.price) AS bucket_id
-FROM products base
-WHERE base.data.active = :1)
-GROUP BY bucket_id
-ORDER BY bucket_id
+SELECT bucket_id, COUNT(*) AS count, AVG(groupby_value) AS avgPrice FROM (SELECT base.data.price AS groupby_value, NTILE(3) OVER (ORDER BY base.data.price) AS bucket_id FROM products base WHERE base.data.active = true) GROUP BY bucket_id ORDER BY bucket_id
 ```
 
 ---
@@ -1678,6 +1760,11 @@ ORDER BY bucket_id
 **Description:** Tests $bucketAuto to distribute employees into salary quartiles  
 **Collection:** `employees`  
 **Operator:** `$bucketAuto`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -1704,11 +1791,7 @@ ORDER BY bucket_id
 
 **Generated SQL:**
 ```sql
-SELECT bucket_id, COUNT(*) AS count, MIN(groupby_value) AS minSalary, MAX(groupby_value) AS maxSalary FROM (
-  SELECT base.data.salary AS groupby_value, NTILE(4) OVER (ORDER BY base.data.salary) AS bucket_id
-FROM employees base)
-GROUP BY bucket_id
-ORDER BY bucket_id
+SELECT bucket_id, COUNT(*) AS count, MIN(groupby_value) AS minSalary, MAX(groupby_value) AS maxSalary FROM (SELECT base.data.salary AS groupby_value, NTILE(4) OVER (ORDER BY base.data.salary) AS bucket_id FROM employees base) GROUP BY bucket_id ORDER BY bucket_id
 ```
 
 ---
@@ -1720,6 +1803,11 @@ ORDER BY bucket_id
 **Description:** Tests $eq operator with string field  
 **Collection:** `sales`  
 **Operator:** `$eq`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1741,9 +1829,7 @@ ORDER BY bucket_id
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status
-FROM sales base
-WHERE base.data.status = :1
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -1753,6 +1839,11 @@ WHERE base.data.status = :1
 **Description:** Tests $gt operator with numeric field  
 **Collection:** `sales`  
 **Operator:** `$gt`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1775,9 +1866,7 @@ WHERE base.data.status = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.amount AS amount
-FROM sales base
-WHERE CAST(base.data.amount AS NUMBER) > :1
+SELECT base.data."_id" AS "_id", base.data.amount AS amount FROM sales base WHERE CAST(base.data.amount AS NUMBER) > 200
 ```
 
 ---
@@ -1787,6 +1876,11 @@ WHERE CAST(base.data.amount AS NUMBER) > :1
 **Description:** Tests $gte operator with numeric field  
 **Collection:** `employees`  
 **Operator:** `$gte`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -1810,9 +1904,7 @@ WHERE CAST(base.data.amount AS NUMBER) > :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary
-FROM employees base
-WHERE CAST(base.data.salary AS NUMBER) >= :1
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base WHERE CAST(base.data.salary AS NUMBER) >= 90000
 ```
 
 ---
@@ -1822,6 +1914,11 @@ WHERE CAST(base.data.salary AS NUMBER) >= :1
 **Description:** Tests $lt operator with numeric field  
 **Collection:** `products`  
 **Operator:** `$lt`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -1845,9 +1942,7 @@ WHERE CAST(base.data.salary AS NUMBER) >= :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price
-FROM products base
-WHERE CAST(base.data.price AS NUMBER) < :1
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE CAST(base.data.price AS NUMBER) < 50
 ```
 
 ---
@@ -1857,6 +1952,11 @@ WHERE CAST(base.data.price AS NUMBER) < :1
 **Description:** Tests $lte operator with numeric field  
 **Collection:** `employees`  
 **Operator:** `$lte`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -1880,9 +1980,7 @@ WHERE CAST(base.data.price AS NUMBER) < :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.yearsOfService AS yearsOfService
-FROM employees base
-WHERE CAST(base.data.yearsOfService AS NUMBER) <= :1
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.yearsOfService AS yearsOfService FROM employees base WHERE CAST(base.data.yearsOfService AS NUMBER) <= 2
 ```
 
 ---
@@ -1892,6 +1990,11 @@ WHERE CAST(base.data.yearsOfService AS NUMBER) <= :1
 **Description:** Tests $ne operator with string field  
 **Collection:** `sales`  
 **Operator:** `$ne`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -1914,9 +2017,7 @@ WHERE CAST(base.data.yearsOfService AS NUMBER) <= :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status
-FROM sales base
-WHERE base.data.status <> :1
+SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE base.data.status <> 'completed'
 ```
 
 ---
@@ -1926,6 +2027,11 @@ WHERE base.data.status <> :1
 **Description:** Tests $in operator with array of strings  
 **Collection:** `sales`  
 **Operator:** `$in`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -1951,9 +2057,7 @@ WHERE base.data.status <> :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status
-FROM sales base
-WHERE base.data.status IN (:1, :2)
+SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE base.data.status IN ('completed', 'pending')
 ```
 
 ---
@@ -1963,6 +2067,11 @@ WHERE base.data.status IN (:1, :2)
 **Description:** Tests $nin operator with array of strings  
 **Collection:** `sales`  
 **Operator:** `$nin`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -1988,9 +2097,7 @@ WHERE base.data.status IN (:1, :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.region AS region
-FROM sales base
-WHERE base.data.region NOT IN (:1, :2)
+SELECT base.data."_id" AS "_id", base.data.region AS region FROM sales base WHERE base.data.region NOT IN ('north', 'south')
 ```
 
 ---
@@ -2000,6 +2107,11 @@ WHERE base.data.region NOT IN (:1, :2)
 **Description:** Tests $exists operator to match documents where field exists  
 **Collection:** `sales`  
 **Operator:** `$exists`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -2022,9 +2134,7 @@ WHERE base.data.region NOT IN (:1, :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId
-FROM sales base
-WHERE JSON_EXISTS(base.data, '$.metadata')
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WHERE JSON_EXISTS(base.data, '$.metadata')
 ```
 
 ---
@@ -2034,6 +2144,11 @@ WHERE JSON_EXISTS(base.data, '$.metadata')
 **Description:** Tests $exists operator to match documents where field does not exist  
 **Collection:** `sales`  
 **Operator:** `$exists`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 0
+- Oracle Count: 0
 
 **MongoDB Pipeline:**
 ```json
@@ -2056,9 +2171,7 @@ WHERE JSON_EXISTS(base.data, '$.metadata')
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId
-FROM sales base
-WHERE NOT JSON_EXISTS(base.data, '$.metadata')
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.metadata')
 ```
 
 ---
@@ -2070,6 +2183,11 @@ WHERE NOT JSON_EXISTS(base.data, '$.metadata')
 **Description:** Tests complex pipeline with multiple stages  
 **Collection:** `sales`  
 **Operator:** `multiple`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -2105,11 +2223,7 @@ WHERE NOT JSON_EXISTS(base.data, '$.metadata')
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalSales, SUM(:1) AS orderCount
-FROM sales base
-WHERE base.data.status IN (:2, :3)
-GROUP BY base.data.region
-ORDER BY totalSales DESC
+SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalSales, SUM(1) AS orderCount FROM sales base WHERE base.data.status IN ('completed', 'processing') GROUP BY base.data.region ORDER BY totalSales DESC
 ```
 
 ---
@@ -2119,6 +2233,11 @@ ORDER BY totalSales DESC
 **Description:** Tests complex pipeline with filter, projection, sort, and limit  
 **Collection:** `employees`  
 **Operator:** `multiple`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -2154,11 +2273,7 @@ ORDER BY totalSales DESC
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (base.data.salary + base.data.bonus) AS totalComp
-FROM employees base
-WHERE base.data.active = :1
-ORDER BY base.data.totalComp DESC
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (base.data.salary + base.data.bonus) AS totalComp FROM employees base WHERE base.data.active = true ORDER BY base.data.totalComp DESC FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -2168,6 +2283,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests complex pipeline with nested logical operators  
 **Collection:** `sales`  
 **Operator:** `multiple`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -2211,10 +2331,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.category AS category, base.data.amount AS amount
-FROM sales base
-WHERE ((base.data.category = :1) OR (base.data.category = :2)) AND (CAST(base.data.amount AS NUMBER) >= :3)
-ORDER BY base.data.amount DESC
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.category AS category, base.data.amount AS amount FROM sales base WHERE ((base.data.category = 'electronics') OR (base.data.category = 'jewelry')) AND (CAST(base.data.amount AS NUMBER) >= 100) ORDER BY base.data.amount DESC
 ```
 
 ---
@@ -2224,6 +2341,11 @@ ORDER BY base.data.amount DESC
 **Description:** Tests complex pipeline combining $lookup and $group  
 **Collection:** `sales`  
 **Operator:** `multiple`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -2265,12 +2387,7 @@ ORDER BY base.data.amount DESC
 
 **Generated SQL:**
 ```sql
-SELECT customers_1.data.tier AS "_id", SUM(base.data.amount) AS totalAmount, SUM(:1) AS orderCount
-FROM sales base LEFT
-OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id')
-WHERE base.data.status = :2
-GROUP BY customers_1.data.tier
-ORDER BY "_id"
+SELECT customers_1.data.tier AS "_id", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM sales base LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id') WHERE base.data.status = 'completed' GROUP BY customers_1.data.tier ORDER BY "_id"
 ```
 
 ---
@@ -2280,6 +2397,11 @@ ORDER BY "_id"
 **Description:** Tests complex pipeline with string operations and grouping  
 **Collection:** `employees`  
 **Operator:** `multiple`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -2312,10 +2434,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT UPPER(base.data.department) AS "_id", AVG(base.data.salary) AS avgSalary, SUM(:1) AS headcount, UPPER(base.data.department) AS deptUpper
-FROM employees base
-GROUP BY UPPER(base.data.department)
-ORDER BY "_id"
+SELECT UPPER(base.data.department) AS "_id", AVG(base.data.salary) AS avgSalary, SUM(1) AS headcount, UPPER(base.data.department) AS deptUpper FROM employees base GROUP BY UPPER(base.data.department) ORDER BY "_id"
 ```
 
 ---
@@ -2325,6 +2444,11 @@ ORDER BY "_id"
 **Description:** Tests flattening array with $unwind then aggregating with $group  
 **Collection:** `sales`  
 **Operator:** `$unwind+$group`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -2358,10 +2482,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT unwind_1.value.product AS "_id", SUM(unwind_1.value.qty) AS totalQuantity, SUM((unwind_1.value.qty * unwind_1.value.price)) AS totalRevenue
-FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1
-GROUP BY unwind_1.value.product
-ORDER BY "_id"
+SELECT unwind_1.value.product AS "_id", SUM(unwind_1.value.qty) AS totalQuantity, SUM((unwind_1.value.qty * unwind_1.value.price)) AS totalRevenue FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1 GROUP BY unwind_1.value.product ORDER BY "_id"
 ```
 
 ---
@@ -2371,6 +2492,11 @@ ORDER BY "_id"
 **Description:** Tests Top N pattern - aggregate, sort, and limit  
 **Collection:** `sales`  
 **Operator:** `$group+$sort+$limit`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -2399,11 +2525,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount, SUM(:1) AS orderCount
-FROM sales base
-GROUP BY base.data.category
-ORDER BY totalAmount DESC
-FETCH FIRST 3 ROWS ONLY
+SELECT base.data.category AS "_id", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM sales base GROUP BY base.data.category ORDER BY totalAmount DESC FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -2413,6 +2535,11 @@ FETCH FIRST 3 ROWS ONLY
 **Description:** Tests combining collections with $unionWith then aggregating  
 **Collection:** `sales`  
 **Operator:** `$unionWith+$group`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 2
+- Oracle Count: 2
 
 **MongoDB Pipeline:**
 ```json
@@ -2454,12 +2581,7 @@ FETCH FIRST 3 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT source AS "_id", SUM(amount) AS totalAmount FROM (
-  SELECT :1 AS source, base.data.amount AS amount
-FROM sales base
-UNION ALL SELECT :2 AS source, base.data.price AS amount
-FROM products base)
-GROUP BY source
+SELECT source AS "_id", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS source, base.data.amount AS amount FROM sales base UNION ALL SELECT 'products' AS source, base.data.price AS amount FROM products base) GROUP BY source
 ```
 
 ---
@@ -2471,6 +2593,11 @@ GROUP BY source
 **Description:** Tests $cond operator for conditional logic  
 **Collection:** `products`  
 **Operator:** `$cond`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2503,9 +2630,7 @@ GROUP BY source
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= :1 THEN :2 ELSE :3 END AS priceCategory
-FROM products base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= 100 THEN 'expensive' ELSE 'affordable' END AS priceCategory FROM products base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2515,6 +2640,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $ifNull operator for null handling  
 **Collection:** `sales`  
 **Operator:** `$ifNull`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -2541,9 +2671,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), :1) AS discountApplied
-FROM sales base
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied FROM sales base ORDER BY base.data.orderId
 ```
 
 ---
@@ -2553,6 +2681,11 @@ ORDER BY base.data.orderId
 **Description:** Tests nested $cond for multi-branch logic  
 **Collection:** `products`  
 **Operator:** `$cond`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2596,9 +2729,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= :1 THEN :2 ELSE CASE WHEN base.data.price >= :3 THEN :4 ELSE :5 END END AS priceRange
-FROM products base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.price >= 200 THEN 'high' ELSE CASE WHEN base.data.price >= 50 THEN 'medium' ELSE 'low' END END AS priceRange FROM products base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2611,6 +2742,11 @@ ORDER BY base.data."_id"
 **Collection:** `employees`  
 **Operator:** `$count`  
 
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
+
 **MongoDB Pipeline:**
 ```json
 [
@@ -2622,8 +2758,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('totalEmployees' VALUE COUNT(*)) AS data
-FROM employees base
+SELECT JSON_OBJECT('totalEmployees' VALUE COUNT(*)) AS data FROM employees base
 ```
 
 ---
@@ -2633,6 +2768,11 @@ FROM employees base
 **Description:** Tests $count stage after $match filter  
 **Collection:** `sales`  
 **Operator:** `$count`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -2650,9 +2790,7 @@ FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS data
-FROM sales base
-WHERE base.data.status = :1
+SELECT JSON_OBJECT('completedOrders' VALUE COUNT(*)) AS data FROM sales base WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -2662,6 +2800,11 @@ WHERE base.data.status = :1
 **Description:** Tests $count stage with complex $match conditions  
 **Collection:** `employees`  
 **Operator:** `$count`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -2688,9 +2831,7 @@ WHERE base.data.status = :1
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('highEarningActiveEmployees' VALUE COUNT(*)) AS data
-FROM employees base
-WHERE (base.data.active = :1) AND (CAST(base.data.salary AS NUMBER) >= :2)
+SELECT JSON_OBJECT('highEarningActiveEmployees' VALUE COUNT(*)) AS data FROM employees base WHERE (base.data.active = true) AND (CAST(base.data.salary AS NUMBER) >= 80000)
 ```
 
 ---
@@ -2702,6 +2843,11 @@ WHERE (base.data.active = :1) AND (CAST(base.data.salary AS NUMBER) >= :2)
 **Description:** Tests $year operator to extract year component  
 **Collection:** `events`  
 **Operator:** `$year`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2725,9 +2871,7 @@ WHERE (base.data.active = :1) AND (CAST(base.data.salary AS NUMBER) >= :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventYear
-FROM events base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventYear FROM events base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2737,6 +2881,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $month operator to extract month component  
 **Collection:** `events`  
 **Operator:** `$month`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2760,9 +2909,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventMonth
-FROM events base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventMonth FROM events base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2772,6 +2919,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $dayOfMonth operator to extract day component  
 **Collection:** `events`  
 **Operator:** `$dayOfMonth`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2795,9 +2947,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(DAY FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventDay
-FROM events base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(DAY FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventDay FROM events base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2807,6 +2957,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $hour operator to extract hour component  
 **Collection:** `events`  
 **Operator:** `$hour`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2830,9 +2985,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventHour
-FROM events base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.title AS title, EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS eventHour FROM events base ORDER BY base.data."_id"
 ```
 
 ---
@@ -2842,6 +2995,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $month with $group for monthly aggregation  
 **Collection:** `events`  
 **Operator:** `$month/$group`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2866,10 +3024,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(:1) AS eventCount
-FROM events base
-GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
-ORDER BY "_id"
+SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(1) AS eventCount FROM events base GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) ORDER BY "_id"
 ```
 
 ---
@@ -2879,6 +3034,11 @@ ORDER BY "_id"
 **Description:** Tests $minute operator to extract minute component from date  
 **Collection:** `events`  
 **Operator:** `$minute`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2897,8 +3057,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(MINUTE FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS minute
-FROM events base
+SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(MINUTE FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS minute FROM events base
 ```
 
 ---
@@ -2908,6 +3067,11 @@ FROM events base
 **Description:** Tests $second operator to extract second component from date  
 **Collection:** `events`  
 **Operator:** `$second`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2926,8 +3090,7 @@ FROM events base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(SECOND FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS second
-FROM events base
+SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, EXTRACT(SECOND FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS second FROM events base
 ```
 
 ---
@@ -2937,6 +3100,11 @@ FROM events base
 **Description:** Tests $dayOfWeek operator - returns 1 (Sunday) to 7 (Saturday)  
 **Collection:** `events`  
 **Operator:** `$dayOfWeek`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2955,8 +3123,7 @@ FROM events base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'D')) AS dayOfWeek
-FROM events base
+SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'D')) AS dayOfWeek FROM events base
 ```
 
 ---
@@ -2966,6 +3133,11 @@ FROM events base
 **Description:** Tests $dayOfYear operator - returns day of year (1-366)  
 **Collection:** `events`  
 **Operator:** `$dayOfYear`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -2984,8 +3156,7 @@ FROM events base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'DDD')) AS dayOfYear
-FROM events base
+SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'DDD')) AS dayOfYear FROM events base
 ```
 
 ---
@@ -2995,6 +3166,11 @@ FROM events base
 **Description:** Tests $week operator - returns ISO week number  
 **Collection:** `events`  
 **Operator:** `$week`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -3013,8 +3189,7 @@ FROM events base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'IW')) AS week
-FROM events base
+SELECT base.data."_id" AS "_id", base.data.eventName AS eventName, TO_NUMBER(TO_CHAR(TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'IW')) AS week FROM events base
 ```
 
 ---
@@ -3024,6 +3199,11 @@ FROM events base
 **Description:** Tests grouping by month extracted from date field  
 **Collection:** `events`  
 **Operator:** `$month`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -3048,10 +3228,7 @@ FROM events base
 
 **Generated SQL:**
 ```sql
-SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(:1) AS eventCount
-FROM events base
-GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
-ORDER BY "_id"
+SELECT EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS "_id", SUM(1) AS eventCount FROM events base GROUP BY EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.eventDate'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) ORDER BY "_id"
 ```
 
 ---
@@ -3063,6 +3240,11 @@ ORDER BY "_id"
 **Description:** Tests aggregation with zero values  
 **Collection:** `sales`  
 **Operator:** `$sum`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -3085,9 +3267,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT SUM(base.data.amount) AS totalAmount
-FROM sales base
-WHERE CAST(base.data.quantity AS NUMBER) = :1
+SELECT SUM(base.data.amount) AS totalAmount FROM sales base WHERE CAST(base.data.quantity AS NUMBER) = 0
 ```
 
 ---
@@ -3097,6 +3277,11 @@ WHERE CAST(base.data.quantity AS NUMBER) = :1
 **Description:** Tests aggregation with negative values  
 **Collection:** `sales`  
 **Operator:** `$sum`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -3121,9 +3306,7 @@ WHERE CAST(base.data.quantity AS NUMBER) = :1
 
 **Generated SQL:**
 ```sql
-SELECT SUM(base.data.amount) AS totalRefunds
-FROM sales base
-WHERE CAST(base.data.amount AS NUMBER) < :1
+SELECT SUM(base.data.amount) AS totalRefunds FROM sales base WHERE CAST(base.data.amount AS NUMBER) < 0
 ```
 
 ---
@@ -3133,6 +3316,11 @@ WHERE CAST(base.data.amount AS NUMBER) < :1
 **Description:** Tests query that returns no results  
 **Collection:** `sales`  
 **Operator:** `$match`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 0
+- Oracle Count: 0
 
 **MongoDB Pipeline:**
 ```json
@@ -3152,9 +3340,7 @@ WHERE CAST(base.data.amount AS NUMBER) < :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id"
-FROM sales base
-WHERE base.data.status = :1
+SELECT base.data."_id" AS "_id" FROM sales base WHERE base.data.status = 'nonexistent_status'
 ```
 
 ---
@@ -3166,6 +3352,11 @@ WHERE base.data.status = :1
 **Description:** Tests $switch operator for multi-branch conditional logic  
 **Collection:** `employees`  
 **Operator:** `$switch`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -3216,8 +3407,7 @@ WHERE base.data.status = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, CASE WHEN base.data.salary < :1 THEN :2 WHEN base.data.salary < :3 THEN :4 WHEN base.data.salary >= :5 THEN :6 ELSE :7 END AS salaryBand
-FROM employees base
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, CASE WHEN base.data.salary < 60000 THEN 'Junior' WHEN base.data.salary < 90000 THEN 'Mid' WHEN base.data.salary >= 90000 THEN 'Senior' ELSE 'Unknown' END AS salaryBand FROM employees base
 ```
 
 ---
@@ -3227,6 +3417,11 @@ FROM employees base
 **Description:** Tests deeply nested $cond expressions  
 **Collection:** `sales`  
 **Operator:** `$cond`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -3266,8 +3461,7 @@ FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status, CASE WHEN base.data.status = :1 THEN :2 ELSE CASE WHEN base.data.status = :3 THEN :4 ELSE :5 END END AS priority
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status, CASE WHEN base.data.status = 'completed' THEN 'low' ELSE CASE WHEN base.data.status = 'pending' THEN 'high' ELSE 'medium' END END AS priority FROM sales base
 ```
 
 ---
@@ -3279,6 +3473,11 @@ FROM sales base
 **Description:** Tests $facet for parallel aggregation pipelines  
 **Collection:** `sales`  
 **Operator:** `$facet`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -3322,17 +3521,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('byStatus' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count)
-ORDER BY "_id") FROM (
-  SELECT base.data.status AS "_id", SUM(:1) AS count
-FROM sales base
-GROUP BY base.data.status)), 'byRegion' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'totalAmount' VALUE totalAmount)
-ORDER BY "_id") FROM (
-  SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalAmount
-FROM sales base
-GROUP BY base.data.region))) AS data FROM DUAL
+SELECT JSON_OBJECT('byStatus' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count) ORDER BY "_id") FROM (SELECT base.data.status AS "_id", SUM(1) AS count FROM sales base GROUP BY base.data.status)), 'byRegion' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'totalAmount' VALUE totalAmount) ORDER BY "_id") FROM (SELECT base.data.region AS "_id", SUM(base.data.amount) AS totalAmount FROM sales base GROUP BY base.data.region))) AS data FROM DUAL
 ```
 
 ---
@@ -3342,6 +3531,11 @@ GROUP BY base.data.region))) AS data FROM DUAL
 **Description:** Tests $facet for multi-faceted product analysis  
 **Collection:** `products`  
 **Operator:** `$facet`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -3394,17 +3588,7 @@ GROUP BY base.data.region))) AS data FROM DUAL
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('categorySummary' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count, 'avgPrice' VALUE avgPrice)
-ORDER BY "_id") FROM (
-  SELECT base.data.category AS "_id", SUM(:1) AS count, AVG(base.data.price) AS avgPrice
-FROM products base
-WHERE base.data.active = :2
-GROUP BY base.data.category)), 'priceStats' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'minPrice' VALUE minPrice, 'maxPrice' VALUE maxPrice, 'avgPrice' VALUE avgPrice)) FROM (
-  SELECT MIN(base.data.price) AS minPrice, MAX(base.data.price) AS maxPrice, AVG(base.data.price) AS avgPrice
-FROM products base
-WHERE base.data.active = :3))) AS data FROM DUAL
+SELECT JSON_OBJECT('categorySummary' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count, 'avgPrice' VALUE avgPrice) ORDER BY "_id") FROM (SELECT base.data.category AS "_id", SUM(1) AS count, AVG(base.data.price) AS avgPrice FROM products base WHERE base.data.active = true GROUP BY base.data.category)), 'priceStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'minPrice' VALUE minPrice, 'maxPrice' VALUE maxPrice, 'avgPrice' VALUE avgPrice)) FROM (SELECT MIN(base.data.price) AS minPrice, MAX(base.data.price) AS maxPrice, AVG(base.data.price) AS avgPrice FROM products base WHERE base.data.active = true))) AS data FROM DUAL
 ```
 
 ---
@@ -3414,6 +3598,11 @@ WHERE base.data.active = :3))) AS data FROM DUAL
 **Description:** Tests $facet for employee dashboard with multiple views  
 **Collection:** `employees`  
 **Operator:** `$facet`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -3475,32 +3664,23 @@ WHERE base.data.active = :3))) AS data FROM DUAL
 
 **Generated SQL:**
 ```sql
-SELECT JSON_OBJECT('departmentCounts' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count)
-ORDER BY count DESC) FROM (
-  SELECT base.data.department AS "_id", SUM(:1) AS count
-FROM employees base
-GROUP BY base.data.department)), 'topEarners' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'name' VALUE name, 'salary' VALUE salary)
-ORDER BY salary DESC) FROM (
-  SELECT id AS "_id", base.data.name AS name, base.data.salary AS salary
-FROM employees base
-ORDER BY base.data.salary DESC
-FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE (
-  SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE totalEmployees, 'avgSalary' VALUE avgSalary, 'totalPayroll' VALUE totalPayroll)) FROM (
-  SELECT SUM(:2) AS totalEmployees, AVG(base.data.salary) AS avgSalary, SUM(base.data.salary) AS totalPayroll
-FROM employees base))) AS data FROM DUAL
+SELECT JSON_OBJECT('departmentCounts' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'count' VALUE count) ORDER BY count DESC) FROM (SELECT base.data.department AS "_id", SUM(1) AS count FROM employees base GROUP BY base.data.department)), 'topEarners' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE "_id", 'name' VALUE name, 'salary' VALUE salary) ORDER BY salary DESC) FROM (SELECT id AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base ORDER BY base.data.salary DESC FETCH FIRST 3 ROWS ONLY)), 'totalStats' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE NULL, 'totalEmployees' VALUE totalEmployees, 'avgSalary' VALUE avgSalary, 'totalPayroll' VALUE totalPayroll)) FROM (SELECT SUM(1) AS totalEmployees, AVG(base.data.salary) AS avgSalary, SUM(base.data.salary) AS totalPayroll FROM employees base))) AS data FROM DUAL
 ```
 
 ---
 
-## GraphLookup Tests
+## Graphlookup Tests
 
 ### GRAPHLOOKUP001: $graphLookup - with restrictSearchWithMatch
 
 **Description:** Tests $graphLookup with restrictSearchWithMatch filter  
 **Collection:** `employees`  
 **Operator:** `$graphLookup`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 0
+- Oracle Count: 0
 
 **MongoDB Pipeline:**
 ```json
@@ -3537,13 +3717,7 @@ FROM employees base))) AS data FROM DUAL
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.colleagues.size()') AS colleagueCount, colleagues_cte.colleagues AS colleagues
-FROM employees base LEFT
-OUTER JOIN LATERAL (
-  SELECT JSON_ARRAYAGG(g.data) AS colleagues
-FROM employees g
-WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department') AND JSON_VALUE(g.data, '$.active') = true) colleagues_cte ON 1=1
-WHERE CAST(base.data."_id" AS NUMBER) = :1
+SELECT base.data."_id" AS "_id", base.data.name AS name, JSON_VALUE(base.data, '$.colleagues.size()') AS colleagueCount, colleagues_cte.colleagues AS colleagues FROM employees base LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS colleagues FROM employees g WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department') AND JSON_VALUE(g.data, '$.active') = true) colleagues_cte ON 1=1 WHERE CAST(base.data."_id" AS NUMBER) = 1
 ```
 
 ---
@@ -3555,6 +3729,11 @@ WHERE CAST(base.data."_id" AS NUMBER) = :1
 **Description:** Tests $and operator with two conditions  
 **Collection:** `sales`  
 **Operator:** `$and`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -3583,9 +3762,7 @@ WHERE CAST(base.data."_id" AS NUMBER) = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status, base.data.category AS category
-FROM sales base
-WHERE (base.data.status = :1) AND (base.data.category = :2)
+SELECT base.data."_id" AS "_id", base.data.status AS status, base.data.category AS category FROM sales base WHERE (base.data.status = 'completed') AND (base.data.category = 'electronics')
 ```
 
 ---
@@ -3595,6 +3772,11 @@ WHERE (base.data.status = :1) AND (base.data.category = :2)
 **Description:** Tests $and operator with three conditions  
 **Collection:** `employees`  
 **Operator:** `$and`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -3629,9 +3811,7 @@ WHERE (base.data.status = :1) AND (base.data.category = :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary
-FROM employees base
-WHERE (base.data.department = :1) AND (base.data.active = :2) AND (CAST(base.data.salary AS NUMBER) >= :3)
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary FROM employees base WHERE (base.data.department = 'Engineering') AND (base.data.active = true) AND (CAST(base.data.salary AS NUMBER) >= 90000)
 ```
 
 ---
@@ -3641,6 +3821,11 @@ WHERE (base.data.department = :1) AND (base.data.active = :2) AND (CAST(base.dat
 **Description:** Tests $or operator with two conditions  
 **Collection:** `sales`  
 **Operator:** `$or`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 2
+- Oracle Count: 2
 
 **MongoDB Pipeline:**
 ```json
@@ -3668,9 +3853,7 @@ WHERE (base.data.department = :1) AND (base.data.active = :2) AND (CAST(base.dat
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.status AS status
-FROM sales base
-WHERE (base.data.status = :1) OR (base.data.status = :2)
+SELECT base.data."_id" AS "_id", base.data.status AS status FROM sales base WHERE (base.data.status = 'cancelled') OR (base.data.status = 'refunded')
 ```
 
 ---
@@ -3680,6 +3863,11 @@ WHERE (base.data.status = :1) OR (base.data.status = :2)
 **Description:** Tests combination of $or and $and operators  
 **Collection:** `employees`  
 **Operator:** `$or/$and`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 6
+- Oracle Count: 6
 
 **MongoDB Pipeline:**
 ```json
@@ -3715,9 +3903,7 @@ WHERE (base.data.status = :1) OR (base.data.status = :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department
-FROM employees base
-WHERE (base.data.department = :1) OR ((base.data.department = :2) AND (base.data.active = :3))
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department FROM employees base WHERE (base.data.department = 'Engineering') OR ((base.data.department = 'Sales') AND (base.data.active = true))
 ```
 
 ---
@@ -3727,6 +3913,11 @@ WHERE (base.data.department = :1) OR ((base.data.department = :2) AND (base.data
 **Description:** Tests $not operator  
 **Collection:** `products`  
 **Operator:** `$not`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -3752,9 +3943,7 @@ WHERE (base.data.department = :1) OR ((base.data.department = :2) AND (base.data
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price
-FROM products base
-WHERE NOT (CAST(base.data.price AS NUMBER) > :1)
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE NOT (CAST(base.data.price AS NUMBER) > 100)
 ```
 
 ---
@@ -3764,6 +3953,11 @@ WHERE NOT (CAST(base.data.price AS NUMBER) > :1)
 **Description:** Tests $nor operator - none of the conditions match  
 **Collection:** `sales`  
 **Operator:** `$nor`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -3792,9 +3986,7 @@ WHERE NOT (CAST(base.data.price AS NUMBER) > :1)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status
-FROM sales base
-WHERE NOT ((base.data.status = :1) OR (base.data.status = :2))
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE NOT ((base.data.status = 'completed') OR (base.data.status = 'pending'))
 ```
 
 ---
@@ -3806,6 +3998,11 @@ WHERE NOT ((base.data.status = :1) OR (base.data.status = :2))
 **Description:** Tests $lookup stage for basic left outer join  
 **Collection:** `sales`  
 **Operator:** `$lookup`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -3845,11 +4042,7 @@ WHERE NOT ((base.data.status = :1) OR (base.data.status = :2))
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.customerInfo.tier[0]') AS customerTier
-FROM sales base LEFT
-OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id')
-WHERE base.data.status = :1
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, JSON_VALUE(base.data, '$.customerInfo.tier[0]') AS customerTier FROM sales base LEFT OUTER JOIN customers customers_1 ON JSON_VALUE(base.data, '$.customerId') = JSON_VALUE(customers_1.data, '$._id') WHERE base.data.status = 'completed' ORDER BY base.data.orderId
 ```
 
 ---
@@ -3859,6 +4052,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $lookup stage joining products with inventory  
 **Collection:** `products`  
 **Operator:** `$lookup`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -3895,13 +4093,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, (
-  SELECT COUNT(*)
-FROM inventory
-WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$._id')) AS warehouseCount
-FROM products base
-WHERE base.data.active = :1
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, (SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$._id')) AS warehouseCount FROM products base WHERE base.data.active = true ORDER BY base.data."_id"
 ```
 
 ---
@@ -3911,6 +4103,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $lookup self-join on same collection  
 **Collection:** `employees`  
 **Operator:** `$lookup`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 0
+- Oracle Count: 0
 
 **MongoDB Pipeline:**
 ```json
@@ -3943,12 +4140,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (
-  SELECT COUNT(*)
-FROM employees
-WHERE JSON_VALUE(employees.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount
-FROM employees base
-WHERE CAST(base.data."_id" AS NUMBER) = :1
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, (SELECT COUNT(*) FROM employees WHERE JSON_VALUE(employees.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount FROM employees base WHERE CAST(base.data."_id" AS NUMBER) = 1
 ```
 
 ---
@@ -3958,6 +4150,11 @@ WHERE CAST(base.data."_id" AS NUMBER) = :1
 **Description:** Tests chain of multiple $lookup stages  
 **Collection:** `sales`  
 **Operator:** `$lookup`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -4005,26 +4202,23 @@ WHERE CAST(base.data."_id" AS NUMBER) = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (
-  SELECT COUNT(*)
-FROM customers
-WHERE JSON_VALUE(customers.data, '$.customerId') = JSON_VALUE(base.data, '$.customerId')) > :1 AS hasCustomer, (
-  SELECT COUNT(*)
-FROM inventory
-WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$.orderId')) AS inventoryCount
-FROM sales base
-WHERE base.data."_id" = :2
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, (SELECT COUNT(*) FROM customers WHERE JSON_VALUE(customers.data, '$.customerId') = JSON_VALUE(base.data, '$.customerId')) > 0 AS hasCustomer, (SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId') = JSON_VALUE(base.data, '$.orderId')) AS inventoryCount FROM sales base WHERE base.data."_id" = 'S001'
 ```
 
 ---
 
-## Null handling Tests
+## Null Handling Tests
 
 ### NULL001: Null equality comparison
 
 **Description:** Tests matching documents where field equals null explicitly  
 **Collection:** `sales`  
 **Operator:** `$eq`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -4046,9 +4240,7 @@ WHERE base.data."_id" = :2
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.discount AS discount
-FROM sales base
-WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.discount AS discount FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
 ```
 
 ---
@@ -4058,6 +4250,11 @@ WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
 **Description:** Tests $ifNull operator to replace null with default value  
 **Collection:** `sales`  
 **Operator:** `$ifNull`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -4079,8 +4276,7 @@ WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), :1) AS discountApplied
-FROM sales base
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, NVL(CAST(base.data.discount AS NUMBER), 0) AS discountApplied FROM sales base
 ```
 
 ---
@@ -4090,6 +4286,11 @@ FROM sales base
 **Description:** Tests matching nested field with null value in metadata.campaign  
 **Collection:** `sales`  
 **Operator:** `$eq`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -4111,9 +4312,7 @@ FROM sales base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.metadata.campaign AS campaign
-FROM sales base
-WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.metadata.campaign AS campaign FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
 ```
 
 ---
@@ -4123,6 +4322,11 @@ WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
 **Description:** Tests $sum accumulator behavior with null values in group  
 **Collection:** `sales`  
 **Operator:** `$sum`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -4145,10 +4349,7 @@ WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')
 
 **Generated SQL:**
 ```sql
-SELECT base.data.region AS "_id", SUM(base.data.discount) AS totalDiscount
-FROM sales base
-GROUP BY base.data.region
-ORDER BY "_id"
+SELECT base.data.region AS "_id", SUM(base.data.discount) AS totalDiscount FROM sales base GROUP BY base.data.region ORDER BY "_id"
 ```
 
 ---
@@ -4158,6 +4359,11 @@ ORDER BY "_id"
 **Description:** Tests $avg accumulator behavior with null values - nulls are ignored  
 **Collection:** `sales`  
 **Operator:** `$avg`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -4180,10 +4386,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data.category AS "_id", AVG(base.data.discount) AS avgDiscount
-FROM sales base
-GROUP BY base.data.category
-ORDER BY "_id"
+SELECT base.data.category AS "_id", AVG(base.data.discount) AS avgDiscount FROM sales base GROUP BY base.data.category ORDER BY "_id"
 ```
 
 ---
@@ -4195,6 +4398,11 @@ ORDER BY "_id"
 **Description:** Tests $mergeObjects operator to combine objects in projection  
 **Collection:** `sales`  
 **Operator:** `$mergeObjects`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -4222,9 +4430,7 @@ ORDER BY "_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", JSON_MERGEPATCH(JSON_OBJECT('orderId' VALUE base.data.orderId), JSON_QUERY(base.data, '$.metadata')) AS merged
-FROM sales base
-WHERE base.data."_id" = :1
+SELECT base.data."_id" AS "_id", JSON_MERGEPATCH(JSON_OBJECT('orderId' VALUE base.data.orderId), JSON_QUERY(base.data, '$.metadata')) AS merged FROM sales base WHERE base.data."_id" = 'S001'
 ```
 
 ---
@@ -4236,6 +4442,11 @@ WHERE base.data."_id" = :1
 **Description:** Tests $redact stage to filter documents based on condition  
 **Collection:** `employees`  
 **Operator:** `$redact`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4271,10 +4482,7 @@ WHERE base.data."_id" = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary
-FROM employees base
-WHERE CASE WHEN base.data.salary >= :1 THEN :2 ELSE :3 END <> :4
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base WHERE CASE WHEN base.data.salary >= 80000 THEN '$$KEEP' ELSE '$$PRUNE' END <> '$$PRUNE' ORDER BY base.data."_id"
 ```
 
 ---
@@ -4284,6 +4492,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $redact stage with DESCEND option  
 **Collection:** `sales`  
 **Operator:** `$redact`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4319,21 +4532,23 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status
-FROM sales base
-WHERE CASE WHEN base.data.status = :1 THEN :2 ELSE :3 END <> :4
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.status AS status FROM sales base WHERE CASE WHEN base.data.status = 'completed' THEN '$$DESCEND' ELSE '$$PRUNE' END <> '$$PRUNE' ORDER BY base.data.orderId
 ```
 
 ---
 
-## ReplaceRoot Tests
+## Replaceroot Tests
 
 ### REPLACEROOT001: Replace root with nested object
 
 **Description:** Tests $replaceRoot to promote nested object to root  
 **Collection:** `sales`  
 **Operator:** `$replaceRoot`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 9
+- Oracle Count: 9
 
 **MongoDB Pipeline:**
 ```json
@@ -4359,9 +4574,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data.orderId AS orderId, base.data.metadata.source AS source, base.data.metadata.campaign AS campaign
-FROM sales base
-WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
+SELECT base.data.orderId AS orderId, base.data.metadata.source AS source, base.data.metadata.campaign AS campaign FROM sales base WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
 ```
 
 ---
@@ -4373,6 +4586,11 @@ WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
 **Description:** Tests $sample stage to randomly select documents  
 **Collection:** `products`  
 **Operator:** `$sample`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -4393,10 +4611,7 @@ WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name
-FROM products base
-ORDER BY DBMS_RANDOM.VALUE
-FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name FROM products base ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -4406,6 +4621,11 @@ FETCH FIRST 3 ROWS ONLY
 **Description:** Tests $sample stage followed by other stages  
 **Collection:** `employees`  
 **Operator:** `$sample`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4427,21 +4647,23 @@ FETCH FIRST 3 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department
-FROM employees base
-ORDER BY DBMS_RANDOM.VALUE
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department FROM employees base ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
 
-## SetWindowFields Tests
+## Setwindowfields Tests
 
 ### WINDOW001: $setWindowFields - rank by salary
 
 **Description:** Tests $setWindowFields with $rank partitioned by department  
 **Collection:** `employees`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 4
+- Oracle Count: 4
 
 **MongoDB Pipeline:**
 ```json
@@ -4483,12 +4705,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.salary') AS salary, salaryRank AS salaryRank FROM (
-  SELECT id, data, RANK() OVER (PARTITION BY JSON_VALUE(base.data, '$.department')
-ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS salaryRank
-FROM employees base)
-WHERE salaryRank = :1
-ORDER BY JSON_VALUE(data, '$.department')
+SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.department') AS department, JSON_VALUE(data, '$.salary') AS salary, salaryRank AS salaryRank FROM (SELECT id, data, RANK() OVER (PARTITION BY JSON_VALUE(base.data, '$.department') ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS salaryRank FROM employees base) WHERE salaryRank = 1 ORDER BY JSON_VALUE(data, '$.department')
 ```
 
 ---
@@ -4498,6 +4715,11 @@ ORDER BY JSON_VALUE(data, '$.department')
 **Description:** Tests $setWindowFields with cumulative $sum  
 **Collection:** `sales`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4538,9 +4760,7 @@ ORDER BY JSON_VALUE(data, '$.department')
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, base.data.runningTotal AS runningTotal, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal
-FROM sales base
-WHERE base.data.status = :1
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales base WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -4550,6 +4770,11 @@ WHERE base.data.status = :1
 **Description:** Tests $setWindowFields with $documentNumber  
 **Collection:** `products`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -4590,12 +4815,7 @@ WHERE base.data.status = :1
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.category') AS category, JSON_VALUE(data, '$.price') AS price FROM (
-  SELECT id, data, ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(base.data, '$.category')
-ORDER BY JSON_VALUE(base.data, '$.price') DESC) AS priceRankInCategory
-FROM products base
-WHERE base.data.active = :1)
-WHERE priceRankInCategory = :2
+SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.category') AS category, JSON_VALUE(data, '$.price') AS price FROM (SELECT id, data, ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(base.data, '$.category') ORDER BY JSON_VALUE(base.data, '$.price') DESC) AS priceRankInCategory FROM products base WHERE base.data.active = true) WHERE priceRankInCategory = 1
 ```
 
 ---
@@ -4605,6 +4825,11 @@ WHERE priceRankInCategory = :2
 **Description:** Tests $setWindowFields with $denseRank  
 **Collection:** `employees`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -4646,11 +4871,7 @@ WHERE priceRankInCategory = :2
 
 **Generated SQL:**
 ```sql
-SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary') AS salary, denseRank AS denseRank FROM (
-  SELECT id, data, DENSE_RANK() OVER (ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS denseRank
-FROM employees base)
-WHERE denseRank <= :1
-ORDER BY denseRank
+SELECT id AS "_id", JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary') AS salary, denseRank AS denseRank FROM (SELECT id, data, DENSE_RANK() OVER (ORDER BY JSON_VALUE(base.data, '$.salary') DESC) AS denseRank FROM employees base) WHERE denseRank <= 3 ORDER BY denseRank
 ```
 
 ---
@@ -4662,6 +4883,11 @@ ORDER BY denseRank
 **Description:** Tests $limit stage  
 **Collection:** `sales`  
 **Operator:** `$limit`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -4685,10 +4911,7 @@ ORDER BY denseRank
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId
-FROM sales base
-ORDER BY base.data.orderId
-FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId FROM sales base ORDER BY base.data.orderId FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -4698,6 +4921,11 @@ FETCH FIRST 3 ROWS ONLY
 **Description:** Tests $skip stage  
 **Collection:** `employees`  
 **Operator:** `$skip`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4721,10 +4949,7 @@ FETCH FIRST 3 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name
-FROM employees base
-ORDER BY base.data.name
-OFFSET 5 ROWS
+SELECT base.data."_id" AS "_id", base.data.name AS name FROM employees base ORDER BY base.data.name OFFSET 5 ROWS
 ```
 
 ---
@@ -4734,6 +4959,11 @@ OFFSET 5 ROWS
 **Description:** Tests $skip and $limit stages combined (pagination)  
 **Collection:** `products`  
 **Operator:** `$skip/$limit`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -4761,11 +4991,7 @@ OFFSET 5 ROWS
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price
-FROM products base
-ORDER BY base.data.price DESC
-OFFSET 2 ROWS
-FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base ORDER BY base.data.price DESC OFFSET 2 ROWS FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -4775,6 +5001,11 @@ FETCH FIRST 3 ROWS ONLY
 **Description:** Tests $sort stage with ascending order  
 **Collection:** `employees`  
 **Operator:** `$sort`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -4796,9 +5027,7 @@ FETCH FIRST 3 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary
-FROM employees base
-ORDER BY base.data.salary
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary FROM employees base ORDER BY base.data.salary
 ```
 
 ---
@@ -4808,6 +5037,11 @@ ORDER BY base.data.salary
 **Description:** Tests $sort stage with descending order  
 **Collection:** `products`  
 **Operator:** `$sort`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -4834,10 +5068,7 @@ ORDER BY base.data.salary
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price
-FROM products base
-WHERE base.data.active = :1
-ORDER BY base.data.price DESC
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.price AS price FROM products base WHERE base.data.active = true ORDER BY base.data.price DESC
 ```
 
 ---
@@ -4847,6 +5078,11 @@ ORDER BY base.data.price DESC
 **Description:** Tests $sort stage with multiple fields  
 **Collection:** `employees`  
 **Operator:** `$sort`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -4870,9 +5106,7 @@ ORDER BY base.data.price DESC
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary
-FROM employees base
-ORDER BY base.data.department, base.data.salary DESC
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, base.data.salary AS salary FROM employees base ORDER BY base.data.department, base.data.salary DESC
 ```
 
 ---
@@ -4882,6 +5116,11 @@ ORDER BY base.data.department, base.data.salary DESC
 **Description:** Tests $project stage with field inclusion  
 **Collection:** `sales`  
 **Operator:** `$project`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -4909,10 +5148,7 @@ ORDER BY base.data.department, base.data.salary DESC
 
 **Generated SQL:**
 ```sql
-SELECT base.data.orderId AS orderId, base.data.amount AS amount, base.data.tax AS tax
-FROM sales base
-WHERE base.data.status = :1
-ORDER BY base.data.orderId
+SELECT base.data.orderId AS orderId, base.data.amount AS amount, base.data.tax AS tax FROM sales base WHERE base.data.status = 'completed' ORDER BY base.data.orderId
 ```
 
 ---
@@ -4924,6 +5160,11 @@ ORDER BY base.data.orderId
 **Description:** Tests $concat operator to join strings  
 **Collection:** `employees`  
 **Operator:** `$concat`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -4950,9 +5191,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", (base.data.name || :1 || base.data.department) AS fullInfo
-FROM employees base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", (base.data.name || ' - ' || base.data.department) AS fullInfo FROM employees base ORDER BY base.data."_id"
 ```
 
 ---
@@ -4962,6 +5201,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $toLower operator  
 **Collection:** `employees`  
 **Operator:** `$toLower`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -4984,9 +5228,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", LOWER(base.data.department) AS deptLower
-FROM employees base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", LOWER(base.data.department) AS deptLower FROM employees base ORDER BY base.data."_id"
 ```
 
 ---
@@ -4996,6 +5238,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $toUpper operator  
 **Collection:** `products`  
 **Operator:** `$toUpper`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -5018,9 +5265,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", UPPER(base.data.name) AS nameUpper
-FROM products base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", UPPER(base.data.name) AS nameUpper FROM products base ORDER BY base.data."_id"
 ```
 
 ---
@@ -5030,6 +5275,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $substr operator to extract part of string  
 **Collection:** `customers`  
 **Operator:** `$substr`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -5056,9 +5306,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", SUBSTR(base.data.name, :1, :2) AS namePrefix
-FROM customers base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", SUBSTR(base.data.name, 1, 4) AS namePrefix FROM customers base ORDER BY base.data."_id"
 ```
 
 ---
@@ -5068,6 +5316,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $strLenCP operator to get string length  
 **Collection:** `products`  
 **Operator:** `$strLenCP`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 8
+- Oracle Count: 8
 
 **MongoDB Pipeline:**
 ```json
@@ -5091,9 +5344,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, LENGTH(base.data.name) AS nameLength
-FROM products base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", base.data.name AS name, LENGTH(base.data.name) AS nameLength FROM products base ORDER BY base.data."_id"
 ```
 
 ---
@@ -5103,6 +5354,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $trim operator (using existing data)  
 **Collection:** `employees`  
 **Operator:** `$trim`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -5127,9 +5383,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", TRIM(base.data.name) AS trimmedName
-FROM employees base
-ORDER BY base.data."_id"
+SELECT base.data."_id" AS "_id", TRIM(base.data.name) AS trimmedName FROM employees base ORDER BY base.data."_id"
 ```
 
 ---
@@ -5139,6 +5393,11 @@ ORDER BY base.data."_id"
 **Description:** Tests $split operator to split strings by delimiter  
 **Collection:** `employees`  
 **Operator:** `$split`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5183,12 +5442,7 @@ ORDER BY base.data."_id"
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_SUBSTR(base.data.name, '[^'||:1||']+', 1, 1) AS firstName, (
-  SELECT JSON_ARRAYAGG(REGEXP_SUBSTR(base.data.name, '[^' || :2 || ']+', 1, LEVEL))
-FROM DUAL CONNECT BY REGEXP_SUBSTR(base.data.name, '[^' || :3 || ']+', 1, LEVEL) IS NOT NULL) AS nameParts
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_SUBSTR(base.data.name, '[^'||' '||']+', 1, 1) AS firstName, (SELECT JSON_ARRAYAGG(REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL)) FROM DUAL CONNECT BY REGEXP_SUBSTR(base.data.name, '[^' || ' ' || ']+', 1, LEVEL) IS NOT NULL) AS nameParts FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5198,6 +5452,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $indexOfCP operator to find position of substring  
 **Collection:** `employees`  
 **Operator:** `$indexOfCP`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5227,10 +5486,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN INSTR(base.data.name, :1) = 0 THEN -1 ELSE INSTR(base.data.name, :2) - 1 END AS aPosition
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN INSTR(base.data.name, 'a') = 0 THEN -1 ELSE INSTR(base.data.name, 'a') - 1 END AS aPosition FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5240,6 +5496,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $regexMatch operator for pattern matching  
 **Collection:** `employees`  
 **Operator:** `$regexMatch`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5269,10 +5530,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN REGEXP_LIKE(base.data.name, :1) THEN 1 ELSE 0 END AS hasVowelStart
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN REGEXP_LIKE(base.data.name, '^[AEIOUaeiou]') THEN 1 ELSE 0 END AS hasVowelStart FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5282,6 +5540,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $replaceOne operator to replace first match  
 **Collection:** `employees`  
 **Operator:** `$replaceOne`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5312,10 +5575,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.department, :1, :2, 1, 1) AS modifiedDept
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.department, 'Engineering', 'Tech', 1, 1) AS modifiedDept FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5325,6 +5585,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $replaceAll operator to replace all matches  
 **Collection:** `employees`  
 **Operator:** `$replaceAll`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5355,10 +5620,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.name, :1, :2) AS nameNoSpaces
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, REGEXP_REPLACE(base.data.name, ' ', '_') AS nameNoSpaces FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5368,6 +5630,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $ltrim operator to remove leading whitespace  
 **Collection:** `employees`  
 **Operator:** `$ltrim`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -5388,8 +5655,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName
-FROM employees base
+SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName FROM employees base
 ```
 
 ---
@@ -5399,6 +5665,11 @@ FROM employees base
 **Description:** Tests $rtrim operator to remove trailing whitespace  
 **Collection:** `employees`  
 **Operator:** `$rtrim`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -5419,8 +5690,7 @@ FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName
-FROM employees base
+SELECT base.data."_id" AS "_id", base.data.name AS name, TRIM(base.data.name) AS trimmedName FROM employees base
 ```
 
 ---
@@ -5430,6 +5700,11 @@ FROM employees base
 **Description:** Tests $strcasecmp operator for case-insensitive string comparison  
 **Collection:** `employees`  
 **Operator:** `$strcasecmp`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -5452,19 +5727,23 @@ FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, CASE WHEN UPPER(base.data.department) < UPPER(:1) THEN -1 WHEN UPPER(base.data.department) > UPPER(:2) THEN 1 ELSE 0 END AS compareResult
-FROM employees base
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.department AS department, CASE WHEN UPPER(base.data.department) < UPPER('ENGINEERING') THEN -1 WHEN UPPER(base.data.department) > UPPER('ENGINEERING') THEN 1 ELSE 0 END AS compareResult FROM employees base
 ```
 
 ---
 
-## TypeConversion Tests
+## Typeconversion Tests
 
 ### TYPE001: $type - get field type
 
 **Description:** Tests $type operator to get BSON type of a field  
 **Collection:** `sales`  
 **Operator:** `$type`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -5493,10 +5772,7 @@ FROM employees base
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", CASE WHEN base.data.status IS NULL THEN 'null' WHEN base.data.status IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS statusType, CASE WHEN base.data.amount IS NULL THEN 'null' WHEN base.data.amount IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS amountType
-FROM sales base
-ORDER BY base.data."_id"
-FETCH FIRST 3 ROWS ONLY
+SELECT base.data."_id" AS "_id", CASE WHEN base.data.status IS NULL THEN 'null' WHEN base.data.status IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.status, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS statusType, CASE WHEN base.data.amount IS NULL THEN 'null' WHEN base.data.amount IN ('true', 'false') THEN 'bool' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+$') THEN 'int' WHEN REGEXP_LIKE(base.data.amount, '^-?[0-9]+\.[0-9]+$') THEN 'double' ELSE 'string' END AS amountType FROM sales base ORDER BY base.data."_id" FETCH FIRST 3 ROWS ONLY
 ```
 
 ---
@@ -5506,6 +5782,11 @@ FETCH FIRST 3 ROWS ONLY
 **Description:** Tests $toInt operator to convert values to integers  
 **Collection:** `products`  
 **Operator:** `$toInt`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5532,10 +5813,7 @@ FETCH FIRST 3 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TRUNC(TO_NUMBER(base.data.price)) AS priceInt
-FROM products base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, TRUNC(TO_NUMBER(base.data.price)) AS priceInt FROM products base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5545,6 +5823,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $toString operator to convert values to strings  
 **Collection:** `employees`  
 **Operator:** `$toString`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5571,10 +5854,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TO_CHAR(base.data.salary) AS salaryStr
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, TO_CHAR(base.data.salary) AS salaryStr FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5584,6 +5864,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $toDouble operator to convert values to doubles  
 **Collection:** `products`  
 **Operator:** `$toDouble`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5610,10 +5895,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, TO_BINARY_DOUBLE(base.data.price) AS priceDouble
-FROM products base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, TO_BINARY_DOUBLE(base.data.price) AS priceDouble FROM products base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
@@ -5623,6 +5905,11 @@ FETCH FIRST 5 ROWS ONLY
 **Description:** Tests $toBool operator to convert values to booleans  
 **Collection:** `employees`  
 **Operator:** `$toBool`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5649,21 +5936,23 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.active IS NULL OR TO_CHAR(base.data.active) IN ('0', 'false') THEN 'false' ELSE 'true' END AS isActive
-FROM employees base
-ORDER BY base.data."_id"
-FETCH FIRST 5 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, CASE WHEN base.data.active IS NULL OR TO_CHAR(base.data.active) IN ('0', 'false') THEN 'false' ELSE 'true' END AS isActive FROM employees base ORDER BY base.data."_id" FETCH FIRST 5 ROWS ONLY
 ```
 
 ---
 
-## UnionWith Tests
+## Unionwith Tests
 
 ### UNION001: Basic $unionWith - two collections
 
 **Description:** Tests $unionWith to combine employees and customers (names from both)  
 **Collection:** `employees`  
 **Operator:** `$unionWith`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -5707,12 +5996,7 @@ FETCH FIRST 5 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, :1 AS source
-FROM employees base
-UNION ALL SELECT base.data."_id" AS "_id", base.data.name AS name, :2 AS source
-FROM customers base
-ORDER BY source ASC, name ASC
-FETCH FIRST 10 ROWS ONLY
+SELECT base.data."_id" AS "_id", base.data.name AS name, 'employee' AS source FROM employees base UNION ALL SELECT base.data."_id" AS "_id", base.data.name AS name, 'customer' AS source FROM customers base ORDER BY source ASC, name ASC FETCH FIRST 10 ROWS ONLY
 ```
 
 ---
@@ -5722,6 +6006,11 @@ FETCH FIRST 10 ROWS ONLY
 **Description:** Tests $unionWith with $match in sub-pipeline  
 **Collection:** `sales`  
 **Operator:** `$unionWith`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 7
+- Oracle Count: 7
 
 **MongoDB Pipeline:**
 ```json
@@ -5767,13 +6056,7 @@ FETCH FIRST 10 ROWS ONLY
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category
-FROM sales base
-WHERE base.data.status = :1
-UNION ALL SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category
-FROM sales base
-WHERE base.data.status = :2
-ORDER BY "_id" ASC
+SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'completed' UNION ALL SELECT base.data."_id" AS "_id", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'pending' ORDER BY "_id" ASC
 ```
 
 ---
@@ -5783,6 +6066,11 @@ ORDER BY "_id" ASC
 **Description:** Tests $unionWith followed by group aggregation  
 **Collection:** `products`  
 **Operator:** `$unionWith`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 1
+- Oracle Count: 1
 
 **MongoDB Pipeline:**
 ```json
@@ -5832,13 +6120,7 @@ ORDER BY "_id" ASC
 
 **Generated SQL:**
 ```sql
-SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (
-  SELECT base.data."_id" AS "_id", base.data.price AS price
-FROM products base
-WHERE base.data.category = :1
-UNION ALL SELECT base.data."_id" AS "_id", base.data.price AS price
-FROM products base
-WHERE base.data.category = :2)
+SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT base.data."_id" AS "_id", base.data.price AS price FROM products base WHERE base.data.category = 'electronics' UNION ALL SELECT base.data."_id" AS "_id", base.data.price AS price FROM products base WHERE base.data.category = 'tools')
 ```
 
 ---
@@ -5850,6 +6132,11 @@ WHERE base.data.category = :2)
 **Description:** Tests $unwind stage to flatten array  
 **Collection:** `sales`  
 **Operator:** `$unwind`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 2
+- Oracle Count: 2
 
 **MongoDB Pipeline:**
 ```json
@@ -5875,9 +6162,7 @@ WHERE base.data.category = :2)
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value.product AS product, unwind_1.value.qty AS qty
-FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1
-WHERE CAST(base.data.orderId AS NUMBER) = :1
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value.product AS product, unwind_1.value.qty AS qty FROM sales base, JSON_TABLE(base.data, '$.items[*]' COLUMNS (value JSON PATH '$')) unwind_1 WHERE CAST(base.data.orderId AS NUMBER) = 1001
 ```
 
 ---
@@ -5887,6 +6172,11 @@ WHERE CAST(base.data.orderId AS NUMBER) = :1
 **Description:** Tests $unwind with empty array preservation  
 **Collection:** `sales`  
 **Operator:** `$unwind`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 3
+- Oracle Count: 3
 
 **MongoDB Pipeline:**
 ```json
@@ -5924,11 +6214,7 @@ WHERE CAST(base.data.orderId AS NUMBER) = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value AS tag
-FROM sales base LEFT
-OUTER JOIN JSON_TABLE(base.data, '$.tags[*]' COLUMNS (value JSON PATH '$')) unwind_1 ON 1=1
-WHERE CAST(base.data.orderId AS NUMBER) IN (:1, :2)
-ORDER BY base.data.orderId
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, unwind_1.value AS tag FROM sales base LEFT OUTER JOIN JSON_TABLE(base.data, '$.tags[*]' COLUMNS (value JSON PATH '$')) unwind_1 ON 1=1 WHERE CAST(base.data.orderId AS NUMBER) IN (1001, 1007) ORDER BY base.data.orderId
 ```
 
 ---
@@ -5940,6 +6226,11 @@ ORDER BY base.data.orderId
 **Description:** Tests running total with window function  
 **Collection:** `sales`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 5
+- Oracle Count: 5
 
 **MongoDB Pipeline:**
 ```json
@@ -5980,9 +6271,7 @@ ORDER BY base.data.orderId
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, base.data.runningTotal AS runningTotal, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal
-FROM sales base
-WHERE base.data.status = :1
+SELECT base.data."_id" AS "_id", base.data.orderId AS orderId, base.data.amount AS amount, SUM(JSON_VALUE(base.data, '$.amount' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.orderDate') ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS runningTotal FROM sales base WHERE base.data.status = 'completed'
 ```
 
 ---
@@ -5992,6 +6281,11 @@ WHERE base.data.status = :1
 **Description:** Tests moving average with 3-row window  
 **Collection:** `employees`  
 **Operator:** `$setWindowFields`  
+
+**Test Results:**
+- Status: **PASS**
+- MongoDB Count: 10
+- Oracle Count: 10
 
 **MongoDB Pipeline:**
 ```json
@@ -6027,1101 +6321,7 @@ WHERE base.data.status = :1
 
 **Generated SQL:**
 ```sql
-SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, base.data.movingAvgSalary AS movingAvgSalary, AVG(JSON_VALUE(base.data, '$.salary' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.salary') ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary
-FROM employees base
+SELECT base.data."_id" AS "_id", base.data.name AS name, base.data.salary AS salary, AVG(JSON_VALUE(base.data, '$.salary' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(base.data, '$.salary') ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary FROM employees base
 ```
 
 ---
-
-## Large-Scale Complex Pipelines
-
-These are complex aggregation pipelines designed for cross-database validation testing with deeply nested documents and large datasets (219K+ documents).
-
-### PIPE001: E-commerce Order Revenue Analysis
-
-**Description:** Order-level revenue analysis by status and time period (without array unwinding)  
-**Collection:** `ecommerce_orders`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "status": {
-        "$in": [
-          "delivered",
-          "shipped"
-        ]
-      }
-    }
-  },
-  {
-    "$group": {
-      "_id": {
-        "status": "$status",
-        "month": {
-          "$month": "$timestamps.createdAt"
-        },
-        "year": {
-          "$year": "$timestamps.createdAt"
-        }
-      },
-      "totalRevenue": {
-        "$sum": "$pricing.subtotal"
-      },
-      "orderCount": {
-        "$sum": 1
-      },
-      "avgShipping": {
-        "$avg": "$pricing.shipping"
-      },
-      "avgTax": {
-        "$avg": "$pricing.tax"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "avgRevenuePerOrder": {
-        "$round": [
-          {
-            "$divide": [
-              "$totalRevenue",
-              "$orderCount"
-            ]
-          },
-          2
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "totalRevenue": -1
-    }
-  },
-  {
-    "$limit": 50
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND((totalRevenue / orderCount), :1) AS avgRevenuePerOrder FROM (
-  SELECT base.data.status AS status, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamps.createdAt'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS month, EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamps.createdAt'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS year, SUM(base.data.pricing.subtotal) AS totalRevenue, SUM(:2) AS orderCount, AVG(base.data.pricing.shipping) AS avgShipping, AVG(base.data.pricing.tax) AS avgTax
-FROM ecommerce_orders base
-WHERE base.data.status IN (:3, :4)
-GROUP BY base.data.status, EXTRACT(MONTH FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamps.createdAt'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')), EXTRACT(YEAR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamps.createdAt'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
-) inner_query
-ORDER BY totalRevenue DESC
-FETCH FIRST 50 ROWS ONLY
-```
-
----
-
-### PIPE002: Product Performance Analysis
-
-**Description:** Analyze all products by category and brand with rating metrics (without array unwinding)  
-**Collection:** `ecommerce_products`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$group": {
-      "_id": {
-        "category": "$category.primary",
-        "brand": "$brand.name"
-      },
-      "productCount": {
-        "$sum": 1
-      },
-      "avgRating": {
-        "$avg": "$ratings.average"
-      },
-      "totalReviews": {
-        "$sum": "$ratings.count"
-      },
-      "avgPrice": {
-        "$avg": "$pricing.basePrice"
-      },
-      "minPrice": {
-        "$min": "$pricing.basePrice"
-      },
-      "maxPrice": {
-        "$max": "$pricing.basePrice"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "priceRange": {
-        "$round": [
-          {
-            "$subtract": [
-              "$maxPrice",
-              "$minPrice"
-            ]
-          },
-          2
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "totalReviews": -1
-    }
-  },
-  {
-    "$limit": 30
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND((maxPrice - minPrice), :1) AS priceRange FROM (
-  SELECT base.data.category.primary AS category, base.data.brand.name AS brand, SUM(:2) AS productCount, AVG(base.data.ratings.average) AS avgRating, SUM(base.data.ratings.count) AS totalReviews, AVG(base.data.pricing.basePrice) AS avgPrice, MIN(base.data.pricing.basePrice) AS minPrice, MAX(base.data.pricing.basePrice) AS maxPrice
-FROM ecommerce_products base
-GROUP BY base.data.category.primary, base.data.brand.name
-) inner_query
-ORDER BY totalReviews DESC
-FETCH FIRST 30 ROWS ONLY
-```
-
----
-
-### PIPE003: Customer Lifetime Value Analysis
-
-**Description:** Calculate customer value with loyalty tier analysis and purchase patterns  
-**Collection:** `ecommerce_customers`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "metadata.status": "active",
-      "orderHistory.totalOrders": {
-        "$gte": 1
-      }
-    }
-  },
-  {
-    "$group": {
-      "_id": "$loyalty.tier",
-      "customerCount": {
-        "$sum": 1
-      },
-      "avgTotalSpent": {
-        "$avg": "$orderHistory.totalSpent"
-      },
-      "avgTotalOrders": {
-        "$avg": "$orderHistory.totalOrders"
-      },
-      "avgOrderValue": {
-        "$avg": "$orderHistory.averageOrderValue"
-      },
-      "avgReturnRate": {
-        "$avg": "$orderHistory.returnRate"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "avgReturnRatePercent": {
-        "$round": [
-          {
-            "$multiply": [
-              "$avgReturnRate",
-              100
-            ]
-          },
-          1
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "avgTotalSpent": -1
-    }
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND((avgReturnRate * :1), :2) AS avgReturnRatePercent FROM (
-  SELECT base.data.loyalty.tier AS "_id", SUM(:3) AS customerCount, AVG(base.data.orderHistory.totalSpent) AS avgTotalSpent, AVG(base.data.orderHistory.totalOrders) AS avgTotalOrders, AVG(base.data.orderHistory.averageOrderValue) AS avgOrderValue, AVG(base.data.orderHistory.returnRate) AS avgReturnRate
-FROM ecommerce_customers base
-WHERE (base.data.metadata.status = :4) AND (CAST(base.data.orderHistory.totalOrders AS NUMBER) >= :5)
-GROUP BY base.data.loyalty.tier
-) inner_query
-ORDER BY avgTotalSpent DESC
-```
-
----
-
-### PIPE004: Review Sentiment and Quality Analysis
-
-**Description:** Analyze review quality with aspect ratings and helpfulness metrics  
-**Collection:** `ecommerce_reviews`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "metadata.status": "published",
-      "verified": true
-    }
-  },
-  {
-    "$group": {
-      "_id": {
-        "sentiment": "$metadata.sentiment"
-      },
-      "reviewCount": {
-        "$sum": 1
-      },
-      "avgOverallRating": {
-        "$avg": "$rating.overall"
-      },
-      "avgQualityRating": {
-        "$avg": "$rating.aspects.quality"
-      },
-      "avgValueRating": {
-        "$avg": "$rating.aspects.value"
-      },
-      "avgShippingRating": {
-        "$avg": "$rating.aspects.shipping"
-      },
-      "avgPackagingRating": {
-        "$avg": "$rating.aspects.packaging"
-      },
-      "totalUpvotes": {
-        "$sum": "$helpful.upvotes"
-      },
-      "totalDownvotes": {
-        "$sum": "$helpful.downvotes"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "helpfulnessRatio": {
-        "$round": [
-          {
-            "$cond": [
-              {
-                "$gt": [
-                  {
-                    "$add": [
-                      "$totalUpvotes",
-                      "$totalDownvotes"
-                    ]
-                  },
-                  0
-                ]
-              },
-              {
-                "$divide": [
-                  "$totalUpvotes",
-                  {
-                    "$add": [
-                      "$totalUpvotes",
-                      "$totalDownvotes"
-                    ]
-                  }
-                ]
-              },
-              0
-            ]
-          },
-          2
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "reviewCount": -1
-    }
-  },
-  {
-    "$limit": 40
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND(CASE WHEN (totalUpvotes + totalDownvotes) > :1 THEN (totalUpvotes / (totalUpvotes + totalDownvotes)) ELSE :2 END, :3) AS helpfulnessRatio FROM (
-  SELECT base.data.metadata.sentiment AS sentiment, SUM(:4) AS reviewCount, AVG(base.data.rating.overall) AS avgOverallRating, AVG(base.data.rating.aspects.quality) AS avgQualityRating, AVG(base.data.rating.aspects.value) AS avgValueRating, AVG(base.data.rating.aspects.shipping) AS avgShippingRating, AVG(base.data.rating.aspects.packaging) AS avgPackagingRating, SUM(base.data.helpful.upvotes) AS totalUpvotes, SUM(base.data.helpful.downvotes) AS totalDownvotes
-FROM ecommerce_reviews base
-WHERE (base.data.metadata.status = :5) AND (base.data.verified = :6)
-GROUP BY base.data.metadata.sentiment
-) inner_query
-ORDER BY reviewCount DESC
-FETCH FIRST 40 ROWS ONLY
-```
-
----
-
-### PIPE005: Analytics Session Funnel Analysis
-
-**Description:** Analyze conversion funnel with device and traffic source breakdown  
-**Collection:** `analytics_sessions`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "duration": {
-        "$gte": 10
-      }
-    }
-  },
-  {
-    "$group": {
-      "_id": {
-        "deviceType": "$device.type",
-        "trafficSource": "$traffic.source"
-      },
-      "sessionCount": {
-        "$sum": 1
-      },
-      "avgPageViews": {
-        "$avg": "$engagement.pageViews"
-      },
-      "avgUniquePages": {
-        "$avg": "$engagement.uniquePages"
-      },
-      "avgEvents": {
-        "$avg": "$engagement.events"
-      },
-      "avgScrollDepth": {
-        "$avg": "$engagement.scrollDepth"
-      },
-      "avgDuration": {
-        "$avg": "$duration"
-      },
-      "conversions": {
-        "$sum": {
-          "$cond": [
-            "$conversion.converted",
-            1,
-            0
-          ]
-        }
-      },
-      "totalRevenue": {
-        "$sum": "$conversion.revenue"
-      },
-      "totalTransactions": {
-        "$sum": "$conversion.transactions"
-      },
-      "bounceCount": {
-        "$sum": {
-          "$cond": [
-            "$bounced",
-            1,
-            0
-          ]
-        }
-      },
-      "newUserCount": {
-        "$sum": {
-          "$cond": [
-            "$isNewUser",
-            1,
-            0
-          ]
-        }
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "conversionRate": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$conversions",
-                  "$sessionCount"
-                ]
-              },
-              100
-            ]
-          },
-          2
-        ]
-      },
-      "bounceRate": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$bounceCount",
-                  "$sessionCount"
-                ]
-              },
-              100
-            ]
-          },
-          2
-        ]
-      },
-      "newUserRate": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$newUserCount",
-                  "$sessionCount"
-                ]
-              },
-              100
-            ]
-          },
-          2
-        ]
-      },
-      "avgRevenuePerSession": {
-        "$round": [
-          {
-            "$divide": [
-              "$totalRevenue",
-              "$sessionCount"
-            ]
-          },
-          2
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "conversionRate": -1,
-      "sessionCount": -1
-    }
-  },
-  {
-    "$limit": 30
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND(((conversions / sessionCount) * :1), :2) AS conversionRate, ROUND(((bounceCount / sessionCount) * :3), :4) AS bounceRate, ROUND(((newUserCount / sessionCount) * :5), :6) AS newUserRate, ROUND((totalRevenue / sessionCount), :7) AS avgRevenuePerSession FROM (
-  SELECT base.data.device.type AS deviceType, base.data.traffic.source AS trafficSource, SUM(:8) AS sessionCount, AVG(base.data.engagement.pageViews) AS avgPageViews, AVG(base.data.engagement.uniquePages) AS avgUniquePages, AVG(base.data.engagement.events) AS avgEvents, AVG(base.data.engagement.scrollDepth) AS avgScrollDepth, AVG(base.data.duration) AS avgDuration, SUM(CASE WHEN base.data.conversion.converted THEN :9 ELSE :10 END) AS conversions, SUM(base.data.conversion.revenue) AS totalRevenue, SUM(base.data.conversion.transactions) AS totalTransactions, SUM(CASE WHEN base.data.bounced THEN :11 ELSE :12 END) AS bounceCount, SUM(CASE WHEN base.data.isNewUser THEN :13 ELSE :14 END) AS newUserCount
-FROM analytics_sessions base
-WHERE CAST(base.data.duration AS NUMBER) >= :15
-GROUP BY base.data.device.type, base.data.traffic.source
-) inner_query
-ORDER BY conversionRate DESC, sessionCount DESC
-FETCH FIRST 30 ROWS ONLY
-```
-
----
-
-### PIPE006: Social Post Engagement Analysis
-
-**Description:** Analyze post engagement including reaction and comment metrics  
-**Collection:** `social_posts`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "metadata.status": "published",
-      "visibility": {
-        "$in": [
-          "public",
-          "followers"
-        ]
-      }
-    }
-  },
-  {
-    "$group": {
-      "_id": {
-        "postType": "$type"
-      },
-      "postCount": {
-        "$sum": 1
-      },
-      "avgLikes": {
-        "$avg": "$reactions.like"
-      },
-      "avgLoves": {
-        "$avg": "$reactions.love"
-      },
-      "avgLaughs": {
-        "$avg": "$reactions.laugh"
-      },
-      "avgWows": {
-        "$avg": "$reactions.wow"
-      },
-      "avgViews": {
-        "$avg": "$engagement.views"
-      },
-      "avgReach": {
-        "$avg": "$engagement.reach"
-      },
-      "avgImpressions": {
-        "$avg": "$engagement.impressions"
-      },
-      "avgSaves": {
-        "$avg": "$engagement.saves"
-      },
-      "totalShares": {
-        "$sum": "$shares.count"
-      },
-      "sponsoredCount": {
-        "$sum": {
-          "$cond": [
-            "$metadata.sponsored",
-            1,
-            0
-          ]
-        }
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "avgTotalReactions": {
-        "$round": [
-          {
-            "$add": [
-              {
-                "$ifNull": [
-                  "$avgLikes",
-                  0
-                ]
-              },
-              {
-                "$ifNull": [
-                  "$avgLoves",
-                  0
-                ]
-              },
-              {
-                "$ifNull": [
-                  "$avgLaughs",
-                  0
-                ]
-              },
-              {
-                "$ifNull": [
-                  "$avgWows",
-                  0
-                ]
-              }
-            ]
-          },
-          0
-        ]
-      },
-      "sponsoredPercentage": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$sponsoredCount",
-                  "$postCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "avgViews": -1
-    }
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND((NVL(avgLikes, :1) + NVL(avgLoves, :2) + NVL(avgLaughs, :3) + NVL(avgWows, :4)), :5) AS avgTotalReactions, ROUND(((sponsoredCount / postCount) * :6), :7) AS sponsoredPercentage FROM (
-  SELECT base.data.type AS postType, SUM(:8) AS postCount, AVG(base.data.reactions.like) AS avgLikes, AVG(base.data.reactions.love) AS avgLoves, AVG(base.data.reactions.laugh) AS avgLaughs, AVG(base.data.reactions.wow) AS avgWows, AVG(base.data.engagement.views) AS avgViews, AVG(base.data.engagement.reach) AS avgReach, AVG(base.data.engagement.impressions) AS avgImpressions, AVG(base.data.engagement.saves) AS avgSaves, SUM(base.data.shares.count) AS totalShares, SUM(CASE WHEN base.data.metadata.sponsored THEN :9 ELSE :10 END) AS sponsoredCount
-FROM social_posts base
-WHERE (base.data.metadata.status = :11) AND (base.data.visibility IN (:12, :13))
-GROUP BY base.data.type
-) inner_query
-ORDER BY avgViews DESC
-```
-
----
-
-### PIPE007: IoT Device Health Analysis by Building
-
-**Description:** Analyze device health status by building (without array unwinding)  
-**Collection:** `iot_devices`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$group": {
-      "_id": {
-        "building": "$location.building",
-        "floor": "$location.floor"
-      },
-      "deviceCount": {
-        "$sum": 1
-      },
-      "onlineCount": {
-        "$sum": {
-          "$cond": [
-            "$status.online",
-            1,
-            0
-          ]
-        }
-      },
-      "healthyCount": {
-        "$sum": {
-          "$cond": [
-            {
-              "$eq": [
-                "$status.health",
-                "healthy"
-              ]
-            },
-            1,
-            0
-          ]
-        }
-      },
-      "avgBattery": {
-        "$avg": "$status.battery"
-      },
-      "avgSignalStrength": {
-        "$avg": "$status.signalStrength"
-      },
-      "avgSamplingRate": {
-        "$avg": "$configuration.samplingRate"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "onlinePercentage": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$onlineCount",
-                  "$deviceCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      },
-      "healthyPercentage": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$healthyCount",
-                  "$deviceCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "healthyPercentage": 1,
-      "deviceCount": -1
-    }
-  },
-  {
-    "$limit": 40
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND(((onlineCount / deviceCount) * :1), :2) AS onlinePercentage, ROUND(((healthyCount / deviceCount) * :3), :4) AS healthyPercentage FROM (
-  SELECT base.data.location.building AS building, base.data.location.floor AS floor, SUM(:5) AS deviceCount, SUM(CASE WHEN base.data.status.online THEN :6 ELSE :7 END) AS onlineCount, SUM(CASE WHEN base.data.status.health = :8 THEN :9 ELSE :10 END) AS healthyCount, AVG(base.data.status.battery) AS avgBattery, AVG(base.data.status.signalStrength) AS avgSignalStrength, AVG(base.data.configuration.samplingRate) AS avgSamplingRate
-FROM iot_devices base
-GROUP BY base.data.location.building, base.data.location.floor
-) inner_query
-ORDER BY healthyPercentage, deviceCount DESC
-FETCH FIRST 40 ROWS ONLY
-```
-
----
-
-### PIPE008: IoT Time-Series Aggregation
-
-**Description:** Aggregate sensor readings by hour (single group stage)  
-**Collection:** `iot_readings`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$group": {
-      "_id": {
-        "hourOfDay": {
-          "$hour": "$timestamp"
-        }
-      },
-      "readingCount": {
-        "$sum": 1
-      },
-      "avgTemperature": {
-        "$avg": "$readings.temperature.value"
-      },
-      "minTemperature": {
-        "$min": "$readings.temperature.value"
-      },
-      "maxTemperature": {
-        "$max": "$readings.temperature.value"
-      },
-      "avgHumidity": {
-        "$avg": "$readings.humidity.value"
-      },
-      "avgPressure": {
-        "$avg": "$readings.pressure.value"
-      },
-      "goodTempReadings": {
-        "$sum": {
-          "$cond": [
-            {
-              "$eq": [
-                "$readings.temperature.quality",
-                "good"
-              ]
-            },
-            1,
-            0
-          ]
-        }
-      },
-      "avgTransmissionDelay": {
-        "$avg": "$metadata.transmissionDelay"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "temperatureRange": {
-        "$subtract": [
-          "$maxTemperature",
-          "$minTemperature"
-        ]
-      },
-      "dataQualityRate": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$goodTempReadings",
-                  "$readingCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "readingCount": -1
-    }
-  },
-  {
-    "$limit": 24
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, (maxTemperature - minTemperature) AS temperatureRange, ROUND(((goodTempReadings / readingCount) * :1), :2) AS dataQualityRate FROM (
-  SELECT EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamp'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')) AS hourOfDay, SUM(:3) AS readingCount, AVG(base.data.readings.temperature.value) AS avgTemperature, MIN(base.data.readings.temperature.value) AS minTemperature, MAX(base.data.readings.temperature.value) AS maxTemperature, AVG(base.data.readings.humidity.value) AS avgHumidity, AVG(base.data.readings.pressure.value) AS avgPressure, SUM(CASE WHEN base.data.readings.temperature.quality = :4 THEN :5 ELSE :6 END) AS goodTempReadings, AVG(base.data.metadata.transmissionDelay) AS avgTransmissionDelay
-FROM iot_readings base
-GROUP BY EXTRACT(HOUR FROM TO_TIMESTAMP(JSON_VALUE(base.data, '$.timestamp'), 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))
-) inner_query
-ORDER BY readingCount DESC
-FETCH FIRST 24 ROWS ONLY
-```
-
----
-
-### PIPE009: User Follower Network Analysis
-
-**Description:** Analyze social user networks with engagement and activity patterns using bucket aggregation  
-**Collection:** `social_users`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$match": {
-      "metadata.status": "active"
-    }
-  },
-  {
-    "$bucket": {
-      "groupBy": "$stats.followers",
-      "boundaries": [
-        0,
-        100,
-        1000,
-        10000,
-        100000,
-        1000000,
-        10000000
-      ],
-      "default": 10000001,
-      "output": {
-        "userCount": {
-          "$sum": 1
-        },
-        "verifiedCount": {
-          "$sum": {
-            "$cond": [
-              "$profile.verified",
-              1,
-              0
-            ]
-          }
-        },
-        "privateCount": {
-          "$sum": {
-            "$cond": [
-              "$profile.private",
-              1,
-              0
-            ]
-          }
-        },
-        "avgFollowing": {
-          "$avg": "$stats.following"
-        },
-        "avgPosts": {
-          "$avg": "$stats.posts"
-        },
-        "avgLikes": {
-          "$avg": "$stats.likes"
-        },
-        "avgComments": {
-          "$avg": "$stats.comments"
-        },
-        "avgShares": {
-          "$avg": "$stats.shares"
-        },
-        "avgLoginStreak": {
-          "$avg": "$activity.loginStreak"
-        },
-        "avgTimeSpent": {
-          "$avg": "$activity.totalTimeSpent"
-        }
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "verifiedPercentage": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$verifiedCount",
-                  "$userCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      },
-      "privatePercentage": {
-        "$round": [
-          {
-            "$multiply": [
-              {
-                "$divide": [
-                  "$privateCount",
-                  "$userCount"
-                ]
-              },
-              100
-            ]
-          },
-          1
-        ]
-      },
-      "avgEngagement": {
-        "$round": [
-          {
-            "$add": [
-              "$avgLikes",
-              "$avgComments",
-              "$avgShares"
-            ]
-          },
-          0
-        ]
-      }
-    }
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND(((verifiedCount / userCount) * :1), :2) AS verifiedPercentage, ROUND(((privateCount / userCount) * :3), :4) AS privatePercentage, ROUND((avgLikes + avgComments + avgShares), :5) AS avgEngagement FROM (
-  SELECT CASE WHEN base.data.stats.followers >= 0 AND base.data.stats.followers < 100 THEN 0 WHEN base.data.stats.followers >= 100 AND base.data.stats.followers < 1000 THEN 100 WHEN base.data.stats.followers >= 1000 AND base.data.stats.followers < 10000 THEN 1000 WHEN base.data.stats.followers >= 10000 AND base.data.stats.followers < 100000 THEN 10000 WHEN base.data.stats.followers >= 100000 AND base.data.stats.followers < 1000000 THEN 100000 WHEN base.data.stats.followers >= 1000000 AND base.data.stats.followers < 10000000 THEN 1000000 ELSE 10000001 END AS "_id", SUM(:6) AS userCount, SUM(CASE WHEN base.data.profile.verified THEN :7 ELSE :8 END) AS verifiedCount, SUM(CASE WHEN base.data.profile.private THEN :9 ELSE :10 END) AS privateCount, AVG(base.data.stats.following) AS avgFollowing, AVG(base.data.stats.posts) AS avgPosts, AVG(base.data.stats.likes) AS avgLikes, AVG(base.data.stats.comments) AS avgComments, AVG(base.data.stats.shares) AS avgShares, AVG(base.data.activity.loginStreak) AS avgLoginStreak, AVG(base.data.activity.totalTimeSpent) AS avgTimeSpent
-FROM social_users base
-WHERE base.data.metadata.status = :11
-GROUP BY CASE WHEN base.data.stats.followers >= 0 AND base.data.stats.followers < 100 THEN 0 WHEN base.data.stats.followers >= 100 AND base.data.stats.followers < 1000 THEN 100 WHEN base.data.stats.followers >= 1000 AND base.data.stats.followers < 10000 THEN 1000 WHEN base.data.stats.followers >= 10000 AND base.data.stats.followers < 100000 THEN 10000 WHEN base.data.stats.followers >= 100000 AND base.data.stats.followers < 1000000 THEN 100000 WHEN base.data.stats.followers >= 1000000 AND base.data.stats.followers < 10000000 THEN 1000000 ELSE 10000001 END
-) inner_query
-```
-
----
-
-### PIPE010: Order Analysis by Payment and Shipping Method
-
-**Description:** Analyze all orders by payment method with totals metrics (without array unwinding)  
-**Collection:** `ecommerce_orders`  
-
-**MongoDB Pipeline:**
-```json
-[
-  {
-    "$group": {
-      "_id": {
-        "paymentMethod": "$payment.method",
-        "shippingMethod": "$shipping.method"
-      },
-      "orderCount": {
-        "$sum": 1
-      },
-      "totalRevenue": {
-        "$sum": "$pricing.subtotal"
-      },
-      "totalShipping": {
-        "$sum": "$pricing.shipping"
-      },
-      "totalTax": {
-        "$sum": "$pricing.tax"
-      },
-      "avgOrderValue": {
-        "$avg": "$pricing.subtotal"
-      },
-      "maxOrderValue": {
-        "$max": "$pricing.subtotal"
-      },
-      "minOrderValue": {
-        "$min": "$pricing.subtotal"
-      }
-    }
-  },
-  {
-    "$addFields": {
-      "avgRevenuePerOrder": {
-        "$round": [
-          {
-            "$divide": [
-              "$totalRevenue",
-              "$orderCount"
-            ]
-          },
-          2
-        ]
-      },
-      "shippingPercent": {
-        "$round": [
-          {
-            "$cond": [
-              {
-                "$gt": [
-                  "$totalRevenue",
-                  0
-                ]
-              },
-              {
-                "$multiply": [
-                  {
-                    "$divide": [
-                      "$totalShipping",
-                      "$totalRevenue"
-                    ]
-                  },
-                  100
-                ]
-              },
-              0
-            ]
-          },
-          1
-        ]
-      }
-    }
-  },
-  {
-    "$sort": {
-      "totalRevenue": -1
-    }
-  },
-  {
-    "$limit": 50
-  }
-]
-```
-
-**Generated SQL:**
-```sql
-SELECT inner_query.*, ROUND((totalRevenue / orderCount), :1) AS avgRevenuePerOrder, ROUND(CASE WHEN totalRevenue > :2 THEN ((totalShipping / totalRevenue) * :3) ELSE :4 END, :5) AS shippingPercent FROM (
-  SELECT base.data.payment.method AS paymentMethod, base.data.shipping.method AS shippingMethod, SUM(:6) AS orderCount, SUM(base.data.pricing.subtotal) AS totalRevenue, SUM(base.data.pricing.shipping) AS totalShipping, SUM(base.data.pricing.tax) AS totalTax, AVG(base.data.pricing.subtotal) AS avgOrderValue, MAX(base.data.pricing.subtotal) AS maxOrderValue, MIN(base.data.pricing.subtotal) AS minOrderValue
-FROM ecommerce_orders base
-GROUP BY base.data.payment.method, base.data.shipping.method
-) inner_query
-ORDER BY totalRevenue DESC
-FETCH FIRST 50 ROWS ONLY
-```
-
----
-

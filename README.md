@@ -60,7 +60,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 | Conditional | `$cond`, `$ifNull`, `$switch` |
 | String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll` |
 | Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` |
-| Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice` |
+| Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice`, `$setUnion`, `$setIntersection`, `$reverseArray`, `$in` |
 | Type | `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate` |
 | Object | `$mergeObjects`, `$objectToArray`, `$arrayToObject` |
 
@@ -169,7 +169,9 @@ Test with larger datasets (100MB - 4GB) and complex pipelines:
 
 ### Test Documentation
 
-See [docs/test-catalog.md](docs/test-catalog.md) for a complete catalog of all 152 tests with their MongoDB pipelines and generated SQL.
+See [docs/test-catalog.md](docs/test-catalog.md) for a complete catalog of all 152 tests with their MongoDB pipelines, generated SQL, and test results.
+
+> **Note:** The test catalog is automatically regenerated after each test run, ensuring it always contains the latest SQL output and test results.
 
 ### Test Coverage Report
 

@@ -436,6 +436,11 @@ echo "  JSON: $JSON_REPORT_FILE"
 ln -sf "$(basename "$REPORT_FILE")" "$RESULTS_DIR/test-report-latest.txt"
 ln -sf "$(basename "$JSON_REPORT_FILE")" "$RESULTS_DIR/test-report-latest.json"
 
+# Generate test catalog
+echo ""
+echo "Generating test-catalog.md..."
+python3 "$SCRIPT_DIR/generate-test-catalog.py" 2>/dev/null && echo "  Test catalog updated: $PROJECT_ROOT/docs/test-catalog.md" || echo "  Warning: Failed to generate test catalog"
+
 # Exit with error if any tests failed
 if [ $FAILED_TESTS -gt 0 ] || [ $ERROR_TESTS -gt 0 ]; then
     exit 1
