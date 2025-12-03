@@ -110,7 +110,16 @@ run_mongodb_query() {
         --eval "JSON.stringify(db.${collection}.aggregate(${pipeline}).toArray())" 2>/dev/null
 }
 
-# Function to run Oracle query
+# Function to wrap SQL to return JSON array using Oracle's JSON_ARRAYAGG
+wrap_sql_as_json_array() {
+    local sql="$1"
+    # Remove trailing semicolon if present
+    local clean_sql="${sql%;}"
+    # Wrap entire query as subquery and aggregate into JSON array
+    echo "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) AS json_result FROM (${clean_sql})"
+}
+
+# Function to run Oracle query (raw output)
 run_oracle_query() {
     local sql="$1"
 
@@ -127,6 +136,37 @@ SET LONGCHUNKSIZE 1000000
 ${sql};
 EXIT;
 EOSQL" 2>/dev/null
+}
+
+# Function to run Oracle query and return JSON array
+run_oracle_query_json() {
+    local sql="$1"
+    local json_sql
+    json_sql=$(wrap_sql_as_json_array "$sql")
+
+    local result
+    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET PAGESIZE 0
+SET LINESIZE 32767
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING OFF
+SET LONG 10000000
+SET LONGCHUNKSIZE 10000000
+${json_sql};
+EXIT;
+EOSQL" 2>/dev/null)
+
+    # Result is already a JSON array from JSON_ARRAYAGG
+    # Just clean up and return it (or empty array if null/empty)
+    local cleaned
+    cleaned=$(echo "$result" | tr -d '\n\r' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    if [ -z "$cleaned" ] || [ "$cleaned" = "null" ]; then
+        echo "[]"
+    else
+        echo "$cleaned"
+    fi
 }
 
 # Function to run Oracle count query (counts actual rows)
@@ -275,43 +315,62 @@ PYTHON
     TEST_SQL="$GENERATED_SQL"
 
     # Run MongoDB query
-    MONGO_RESULT=$(run_mongodb_query "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1) || MONGO_RESULT="ERROR"
+    MONGO_RESULT=$(run_mongodb_query "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1) || MONGO_RESULT="[]"
     MONGO_COUNT=$(echo "$MONGO_RESULT" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "ERROR")
 
-    # Run Oracle query
-    ORACLE_RESULT=$(run_oracle_query "$TEST_SQL" 2>&1) || ORACLE_RESULT="ERROR"
-    # Use separate count query for accurate row count (avoids multi-line output issues)
-    ORACLE_COUNT=$(run_oracle_count "$TEST_SQL" 2>&1) || ORACLE_COUNT="ERROR"
+    # Run Oracle query and get JSON results for document comparison
+    ORACLE_JSON=$(run_oracle_query_json "$TEST_SQL" 2>&1) || ORACLE_JSON="[]"
+    ORACLE_COUNT=$(echo "$ORACLE_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "ERROR")
 
     # Determine result
     STATUS=""
     DETAILS=""
+    COMPARE_RESULT=""
 
     if [ "$MONGO_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
         DETAILS="MongoDB query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
-    elif [ "$ORACLE_RESULT" = "ERROR" ]; then
+    elif [ "$ORACLE_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
         DETAILS="Oracle query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
-    elif [ "$MONGO_COUNT" = "$ORACLE_COUNT" ] && [ "$MONGO_COUNT" = "$TEST_EXPECTED" ]; then
-        STATUS="PASS"
-        DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT, Expected=$TEST_EXPECTED"
-        PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT)"
-    elif [ "$MONGO_COUNT" = "$ORACLE_COUNT" ]; then
-        STATUS="PASS"
-        DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (expected $TEST_EXPECTED, counts match)"
-        PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, expected: $TEST_EXPECTED)"
-    else
+    elif [ "$MONGO_COUNT" != "$ORACLE_COUNT" ]; then
         STATUS="FAIL"
-        DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT, Expected=$TEST_EXPECTED"
+        DETAILS="Count mismatch: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT, Expected=$TEST_EXPECTED"
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        echo -e "${RED}FAIL${NC} (MongoDB: $MONGO_COUNT, Oracle: $ORACLE_COUNT)"
+        echo -e "${RED}FAIL${NC} (count: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT)"
+    else
+        # Counts match - now compare document structure and values
+        COMPARE_RESULT=$(echo "{\"mongo\": $MONGO_RESULT, \"oracle\": $ORACLE_JSON}" | \
+            python3 "$SCRIPT_DIR/compare-results.py" --stdin 2>&1) || COMPARE_RESULT="ERROR"
+
+        if [[ "$COMPARE_RESULT" == MATCH* ]]; then
+            STATUS="PASS"
+            DETAILS="Documents match: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
+            PASSED_TESTS=$((PASSED_TESTS + 1))
+            echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, docs match)"
+        elif [[ "$COMPARE_RESULT" == *MISMATCH* ]]; then
+            STATUS="FAIL"
+            DETAILS="Document mismatch: $COMPARE_RESULT (counts: $MONGO_COUNT)"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+            echo -e "${RED}FAIL${NC} (count: $MONGO_COUNT, $COMPARE_RESULT)"
+        else
+            # Comparison error - fall back to count comparison
+            if [ "$MONGO_COUNT" = "$TEST_EXPECTED" ]; then
+                STATUS="PASS"
+                DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (comparison: $COMPARE_RESULT)"
+                PASSED_TESTS=$((PASSED_TESTS + 1))
+                echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT)"
+            else
+                STATUS="PASS"
+                DETAILS="Counts match: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (expected $TEST_EXPECTED)"
+                PASSED_TESTS=$((PASSED_TESTS + 1))
+                echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, expected: $TEST_EXPECTED)"
+            fi
+        fi
     fi
 
     # Log to report

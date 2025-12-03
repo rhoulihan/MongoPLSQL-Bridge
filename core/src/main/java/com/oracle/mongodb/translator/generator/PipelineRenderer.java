@@ -974,7 +974,7 @@ public final class PipelineRenderer {
       ctx.visit(components.bucketAutoStage);
     } else if (components.projectStage != null) {
       // $project determines the SELECT clause
-      renderProjectSelectClause(components.projectStage, ctx);
+      renderProjectSelectClause(components.projectStage, components, ctx);
     } else {
       // Default: select all data
       // Use table alias if present
@@ -1057,14 +1057,33 @@ public final class PipelineRenderer {
     }
   }
 
-  private void renderProjectSelectClause(ProjectStage project, SqlGenerationContext ctx) {
+  private void renderProjectSelectClause(
+      ProjectStage project, PipelineComponents components, SqlGenerationContext ctx) {
     boolean first = true;
+
+    // Collect computed field names from $addFields and $setWindowFields
+    // These will be rendered separately by renderAddFieldsClauses, so skip them in $project
+    Set<String> computedFieldNames = new HashSet<>();
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      computedFieldNames.addAll(addFields.getFields().keySet());
+    }
+    for (SetWindowFieldsStage swf : components.setWindowFieldsStages) {
+      computedFieldNames.addAll(swf.getOutput().keySet());
+    }
 
     for (var entry : project.getProjections().entrySet()) {
       final String alias = entry.getKey();
       ProjectStage.ProjectionField field = entry.getValue();
 
       if (field.isExcluded()) {
+        continue;
+      }
+
+      // Skip fields that are computed by $addFields or $setWindowFields
+      // These are rendered separately by renderAddFieldsClauses
+      // A field is a "reference to computed" if it's a simple inclusion (expression is
+      // FieldPathExpression matching a computed field name) or the alias matches computed name
+      if (computedFieldNames.contains(alias) && isSimpleFieldInclusion(field, alias)) {
         continue;
       }
 
@@ -1083,6 +1102,23 @@ public final class PipelineRenderer {
     if (first) {
       ctx.sql("NULL AS dummy");
     }
+  }
+
+  /**
+   * Checks if a projection field is a simple field inclusion (just referencing the field, not
+   * transforming it). This is true when: - the expression is a FieldPathExpression pointing to the
+   * same field name as the alias - or when expression is null (implicit inclusion)
+   */
+  private boolean isSimpleFieldInclusion(ProjectStage.ProjectionField field, String alias) {
+    Expression expr = field.getExpression();
+    if (expr == null) {
+      return true; // Implicit inclusion like {fieldName: 1}
+    }
+    if (expr instanceof FieldPathExpression fieldPath) {
+      // Check if it's just referencing the same field (e.g., {totalCompensation: "$totalCompensation"})
+      return fieldPath.getPath().equals(alias);
+    }
+    return false;
   }
 
   /**

@@ -7,6 +7,7 @@ package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.api.AggregationTranslator;
 import com.oracle.mongodb.translator.api.OracleConfiguration;
+import com.oracle.mongodb.translator.api.TranslationOptions;
 import com.oracle.mongodb.translator.api.TranslationResult;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,7 +39,8 @@ public class LargePipelineSqlGenerator {
       List<Document> rawPipeline = p.getList("pipeline", Document.class);
 
       OracleConfiguration config = OracleConfiguration.builder().collectionName(collection).build();
-      AggregationTranslator translator = AggregationTranslator.create(config);
+      TranslationOptions opts = TranslationOptions.builder().inlineBindVariables(true).build();
+      AggregationTranslator translator = AggregationTranslator.create(config, opts);
 
       try {
         TranslationResult result = translator.translate(rawPipeline);
@@ -82,7 +84,8 @@ public class LargePipelineSqlGenerator {
       List<Document> rawPipeline = t.getList("mongodb_pipeline", Document.class);
 
       OracleConfiguration config = OracleConfiguration.builder().collectionName(collection).build();
-      AggregationTranslator translator = AggregationTranslator.create(config);
+      TranslationOptions opts = TranslationOptions.builder().inlineBindVariables(true).build();
+      AggregationTranslator translator = AggregationTranslator.create(config, opts);
 
       try {
         TranslationResult result = translator.translate(rawPipeline);

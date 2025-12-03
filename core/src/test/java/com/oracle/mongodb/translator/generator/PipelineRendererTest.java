@@ -114,7 +114,7 @@ class PipelineRendererTest {
 
     assertThat(context.toSql())
         .startsWith("SELECT base.data FROM orders base WHERE")
-        .contains("$.status");
+        .contains("base.data.status");
   }
 
   @Test
@@ -135,8 +135,8 @@ class PipelineRendererTest {
     assertThat(context.toSql())
         .contains("WHERE")
         .contains("AND")
-        .contains("$.status")
-        .contains("$.amount");
+        .contains("base.data.status")
+        .contains("base.data.amount");
   }
 
   @Test
@@ -150,8 +150,7 @@ class PipelineRendererTest {
     renderer.render(pipeline, context);
 
     assertThat(context.toSql())
-        .isEqualTo(
-            "SELECT base.data FROM orders base ORDER BY JSON_VALUE(base.data, '$.createdAt') DESC");
+        .isEqualTo("SELECT base.data FROM orders base ORDER BY base.data.createdAt DESC");
   }
 
   @Test
@@ -170,8 +169,8 @@ class PipelineRendererTest {
 
     assertThat(context.toSql())
         .contains("ORDER BY")
-        .contains("$.status")
-        .contains("$.amount")
+        .contains("base.data.status")
+        .contains("base.data.amount")
         .contains("DESC");
   }
 
@@ -2264,8 +2263,8 @@ class PipelineRendererTest {
   }
 
   @Test
-  void shouldUseJsonValueNotJsonQueryForScalarAccess() {
-    // Scalar field access should use JSON_VALUE, not JSON_QUERY
+  void shouldUseDotNotationForScalarAccess() {
+    // Scalar field access should use Oracle dot notation (base.data.field)
     var projections = new LinkedHashMap<String, ProjectionField>();
     projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
 
@@ -2274,8 +2273,8 @@ class PipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // JSON_VALUE is efficient for scalar access
-    assertThat(sql).contains("JSON_VALUE");
+    // Oracle dot notation is efficient for scalar access
+    assertThat(sql).contains("base.data.name");
     // JSON_QUERY is for objects/arrays - should not be used for simple scalar
     assertThat(sql).doesNotContain("JSON_QUERY");
   }
