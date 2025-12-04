@@ -63,8 +63,12 @@ public final class InlineObjectExpression implements Expression {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj) return true;
-    if (obj == null || getClass() != obj.getClass()) return false;
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null || getClass() != obj.getClass()) {
+      return false;
+    }
     InlineObjectExpression that = (InlineObjectExpression) obj;
     return Objects.equals(fields, that.fields);
   }

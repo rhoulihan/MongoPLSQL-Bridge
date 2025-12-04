@@ -26,7 +26,7 @@ public class LargePipelineSqlGenerator {
   void generateSqlForAllPipelines() throws IOException {
     String json = Files.readString(Paths.get("../query-tests/large-scale/complex-pipelines.json"));
     Document root = Document.parse(json);
-    List<Document> pipelines = root.getList("pipelines", Document.class);
+    final List<Document> pipelines = root.getList("pipelines", Document.class);
 
     System.out.println("===BEGIN_LARGE_PIPELINE_SQL===");
     System.out.println("{");
@@ -71,7 +71,7 @@ public class LargePipelineSqlGenerator {
   void generateSqlForUnitTests() throws IOException {
     String json = Files.readString(Paths.get("../query-tests/tests/test-cases.json"));
     Document root = Document.parse(json);
-    List<Document> testCases = root.getList("test_cases", Document.class);
+    final List<Document> testCases = root.getList("test_cases", Document.class);
 
     System.out.println("===BEGIN_UNIT_TEST_SQL===");
     System.out.println("{");

@@ -30,7 +30,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("(:1 || JSON_VALUE(data, '$.name'))");
+    assertThat(context.toSql()).isEqualTo("(:1 || data.name)");
   }
 
   @Test
@@ -45,9 +45,9 @@ class StringExpressionTest {
     expr.render(context);
 
     assertThat(context.toSql())
-        .contains("JSON_VALUE(data, '$.firstName')")
+        .contains("data.firstName")
         .contains(" || ")
-        .contains("JSON_VALUE(data, '$.lastName')");
+        .contains("data.lastName");
   }
 
   @Test
@@ -56,7 +56,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("LOWER(JSON_VALUE(data, '$.email'))");
+    assertThat(context.toSql()).isEqualTo("LOWER(data.email)");
   }
 
   @Test
@@ -65,7 +65,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("UPPER(JSON_VALUE(data, '$.code'))");
+    assertThat(context.toSql()).isEqualTo("UPPER(data.code)");
   }
 
   @Test
@@ -78,7 +78,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SUBSTR(JSON_VALUE(data, '$.text'), :1, :2)");
+    assertThat(context.toSql()).isEqualTo("SUBSTR(data.text, :1, :2)");
     // Start index should be 1 (0 + 1 for Oracle's 1-based indexing)
     assertThat(context.getBindVariables()).containsExactly(1, 5);
   }
@@ -93,7 +93,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SUBSTR(JSON_VALUE(data, '$.text'), :1, :2)");
+    assertThat(context.toSql()).isEqualTo("SUBSTR(data.text, :1, :2)");
     assertThat(context.getBindVariables()).containsExactly(4, 10);
   }
 
@@ -103,7 +103,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("TRIM(JSON_VALUE(data, '$.input'))");
+    assertThat(context.toSql()).isEqualTo("TRIM(data.input)");
   }
 
   @Test
@@ -112,7 +112,7 @@ class StringExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("LENGTH(JSON_VALUE(data, '$.name'))");
+    assertThat(context.toSql()).isEqualTo("LENGTH(data.name)");
   }
 
   @Test
@@ -142,7 +142,7 @@ class StringExpressionTest {
 
     outer.render(context);
 
-    assertThat(context.toSql()).isEqualTo("UPPER(TRIM(JSON_VALUE(data, '$.name')))");
+    assertThat(context.toSql()).isEqualTo("UPPER(TRIM(data.name))");
   }
 
   // New string operator tests

@@ -60,7 +60,7 @@ class CompoundIdExpressionTest {
     var expr = new CompoundIdExpression(fields);
     expr.render(context);
 
-    assertThat(context.toSql()).contains("$.category");
+    assertThat(context.toSql()).contains("data.category");
   }
 
   @Test
@@ -73,8 +73,8 @@ class CompoundIdExpressionTest {
     expr.render(context);
 
     String sql = context.toSql();
-    assertThat(sql).contains("$.category");
-    assertThat(sql).contains("$.brand");
+    assertThat(sql).contains("data.category");
+    assertThat(sql).contains("data.brand");
     assertThat(sql).contains(", ");
   }
 

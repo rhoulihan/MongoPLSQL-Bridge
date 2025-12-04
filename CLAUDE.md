@@ -281,18 +281,38 @@ Both databases contain matching test data:
 
 ## Development Guidelines
 
-### TDD Methodology
-This project follows strict Test-Driven Development:
-1. **ALWAYS write tests first** before implementing any new feature or fix
-2. Write a failing test that demonstrates the expected behavior
-3. Implement minimal code to pass the test
-4. Refactor while keeping tests green
-5. Maintain 80%+ code coverage
+### TDD Methodology (MANDATORY)
+This project follows **strict Test-Driven Development**. This is non-negotiable.
 
-**Important:** When adding new operators or fixing bugs, create the test case FIRST. This ensures:
-- The requirement is clearly understood before implementation
-- The implementation is verifiable
-- Regressions are caught early
+**THE RED-GREEN-REFACTOR CYCLE:**
+1. **RED**: Write a failing test FIRST that defines the expected behavior
+2. **GREEN**: Write the minimal production code to make the test pass
+3. **REFACTOR**: Clean up the code while keeping tests green
+
+**CRITICAL RULES:**
+- **NEVER** write production code without a failing test first
+- **NEVER** implement a feature and then write tests afterward
+- **ALWAYS** demonstrate the failing test before implementing
+- If you're about to write code, STOP and ask: "Where is my failing test?"
+
+**For new features:**
+1. Create test file first (or add to existing test class)
+2. Write test method that calls the not-yet-existing code
+3. Show the compilation error or test failure
+4. Then implement the minimum code to pass
+5. Refactor if needed
+
+**For bug fixes:**
+1. Write a test that reproduces the bug
+2. Verify the test fails
+3. Fix the bug
+4. Verify the test passes
+
+**Consequences:** Code written without tests first will be rejected. This ensures:
+- Requirements are clearly understood before implementation
+- All code is verifiable and testable
+- Regressions are caught immediately
+- Design is driven by usage, not speculation
 
 ### Code Style
 - Google Java Style (enforced via Checkstyle with 2-space indentation)
@@ -302,16 +322,55 @@ This project follows strict Test-Driven Development:
 - Return defensive copies or unmodifiable views for collections
 - Use entrySet() instead of keySet() when iterating maps with values
 
-### Pre-commit Hooks
-The project uses pre-commit hooks to enforce code quality:
+### Pre-commit Hooks (MANDATORY)
+The project uses pre-commit hooks to enforce code quality. **All hooks must pass before any commit.**
+
+**IMPORTANT:** Never skip pre-commit hooks. The codebase must always pass:
+- Checkstyle (Google Java Style)
+- SpotBugs (security and bug detection)
+- Compile check
+- Unit tests
+
 ```bash
-# Install hooks
+# Install hooks (required for all developers)
 pip install pre-commit && pre-commit install
 
 # Run on all files
 pre-commit run --all-files
+
+# Verify hooks are passing before pushing
+./gradlew check test
 ```
-All hooks (Checkstyle, SpotBugs, compile, tests) must pass before commit.
+
+If hooks fail, fix the issues before committing. Do not use `SKIP=` or `--no-verify`.
+
+### TODO.md Tracking
+During development, maintain a `TODO.md` file in the project root to track improvements, enhancements, and features noticed but not immediately addressed.
+
+**When to update TODO.md:**
+- When you notice a potential improvement while working on a different task
+- When you discover technical debt that should be addressed later
+- When you identify missing features or edge cases
+- When you find code that could be optimized but is not the current focus
+
+**Format:**
+```markdown
+# TODO
+
+## High Priority
+- [ ] Description of urgent item (discovered: YYYY-MM-DD)
+
+## Improvements
+- [ ] Description of improvement (discovered: YYYY-MM-DD)
+
+## Technical Debt
+- [ ] Description of debt item (discovered: YYYY-MM-DD)
+
+## Future Features
+- [ ] Description of feature idea (discovered: YYYY-MM-DD)
+```
+
+This ensures nothing falls through the cracks and provides visibility into potential work items.
 
 ### Adding a New Operator
 

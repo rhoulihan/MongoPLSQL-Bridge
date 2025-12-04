@@ -40,7 +40,7 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status') = :1");
+    assertThat(context.toSql()).isEqualTo("data.status = :1");
     assertThat(context.getBindVariables()).containsExactly("active");
   }
 
@@ -51,7 +51,7 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    assertThat(context.toSql()).contains("JSON_VALUE(data, '$.age'");
+    assertThat(context.toSql()).contains("data.age");
     assertThat(context.toSql()).contains("> :1");
   }
 
@@ -103,7 +103,7 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    assertThat(context.toSql()).contains("$.customer.address.city");
+    assertThat(context.toSql()).contains("data.customer.address.city");
   }
 
   @Test
@@ -177,7 +177,8 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    assertThat(context.toSql()).contains("IS NULL");
+    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
+    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test
@@ -1211,8 +1212,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": null}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // NULL comparison should use IS NULL
-    assertThat(context.toSql()).contains("IS NULL");
+    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
+    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.status?(@ != null)')");
   }
 
   @Test
@@ -1220,8 +1221,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": {\"$ne\": null}}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // Not equal to NULL should use IS NOT NULL
-    assertThat(context.toSql()).contains("IS NOT NULL");
+    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
+    assertThat(context.toSql()).contains("JSON_EXISTS(data, '$.status?(@ != null)')");
   }
 
   @Test
@@ -1332,7 +1333,8 @@ class ExpressionParserTest {
                 + "\"branches\": ["
                 + "  {\"case\": {\"$gt\": [\"$score\", 90]}, "
                 + "   \"then\": {\"$switch\": {"
-                + "     \"branches\": [{\"case\": {\"$eq\": [\"$bonus\", true]}, \"then\": \"A+\"}],"
+                + "     \"branches\": "
+                + "[{\"case\": {\"$eq\": [\"$bonus\", true]}, \"then\": \"A+\"}],"
                 + "     \"default\": \"A\""
                 + "   }}},"
                 + "  {\"case\": {\"$gt\": [\"$score\", 80]}, \"then\": \"B\"}"
@@ -1368,7 +1370,8 @@ class ExpressionParserTest {
     // $sortArray with object containing multiple sort fields
     var doc =
         Document.parse(
-            "{\"$sortArray\": {\"input\": \"$employees\", \"sortBy\": {\"department\": 1, \"salary\": -1}}}");
+            "{\"$sortArray\": "
+                + "{\"input\": \"$employees\", \"sortBy\": {\"department\": 1, \"salary\": -1}}}");
     Expression expr = parser.parseValue(doc);
     expr.render(context);
     String sql = context.toSql();
@@ -1382,7 +1385,9 @@ class ExpressionParserTest {
     // $in with a large literal array (100+ elements)
     StringBuilder arrayBuilder = new StringBuilder("[");
     for (int i = 0; i < 100; i++) {
-      if (i > 0) arrayBuilder.append(",");
+      if (i > 0) {
+        arrayBuilder.append(",");
+      }
       arrayBuilder.append(i);
     }
     arrayBuilder.append("]");

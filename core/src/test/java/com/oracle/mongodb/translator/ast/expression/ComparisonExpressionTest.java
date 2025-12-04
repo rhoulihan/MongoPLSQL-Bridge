@@ -43,7 +43,7 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status') = :1");
+    assertThat(context.toSql()).isEqualTo("data.status = :1");
     assertThat(context.getBindVariables()).containsExactly("active");
   }
 
@@ -57,7 +57,7 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.age' RETURNING NUMBER) > :1");
+    assertThat(context.toSql()).isEqualTo("CAST(data.age AS NUMBER) > :1");
     assertThat(context.getBindVariables()).containsExactly(21);
   }
 
@@ -71,29 +71,31 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.customer.address.city') = :1");
+    assertThat(context.toSql()).isEqualTo("data.customer.address.city = :1");
   }
 
   @Test
   void shouldHandleNullEqualityComparison() {
+    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
     var expr =
         new ComparisonExpression(
             ComparisonOp.EQ, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NULL");
+    assertThat(context.toSql()).isEqualTo("NOT JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test
   void shouldHandleNullInequalityComparison() {
+    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
     var expr =
         new ComparisonExpression(
             ComparisonOp.NE, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.deletedAt') IS NOT NULL");
+    assertThat(context.toSql()).isEqualTo("JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test
@@ -131,7 +133,7 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.price' RETURNING NUMBER) <= :1");
+    assertThat(context.toSql()).isEqualTo("CAST(data.price AS NUMBER) <= :1");
   }
 
   @Test

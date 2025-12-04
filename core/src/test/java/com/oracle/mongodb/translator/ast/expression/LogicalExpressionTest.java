@@ -41,9 +41,7 @@ class LogicalExpressionTest {
     expr.render(context);
 
     assertThat(context.toSql())
-        .isEqualTo(
-            "(JSON_VALUE(data, '$.status') = :1) AND (JSON_VALUE(data, '$.age' RETURNING NUMBER) >"
-                + " :2)");
+        .isEqualTo("(data.status = :1) AND (CAST(data.age AS NUMBER) > :2)");
   }
 
   @Test
@@ -59,8 +57,7 @@ class LogicalExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql())
-        .isEqualTo("(JSON_VALUE(data, '$.type') = :1) OR (JSON_VALUE(data, '$.type') = :2)");
+    assertThat(context.toSql()).isEqualTo("(data.type = :1) OR (data.type = :2)");
   }
 
   @Test
@@ -76,7 +73,7 @@ class LogicalExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("NOT (JSON_VALUE(data, '$.deleted') = :1)");
+    assertThat(context.toSql()).isEqualTo("NOT (data.deleted = :1)");
   }
 
   @Test
@@ -120,7 +117,7 @@ class LogicalExpressionTest {
 
     // Single operand should render without AND
     assertThat(context.toSql()).doesNotContain("AND");
-    assertThat(context.toSql()).isEqualTo("(JSON_VALUE(data, '$.status') = :1)");
+    assertThat(context.toSql()).isEqualTo("(data.status = :1)");
   }
 
   @Test

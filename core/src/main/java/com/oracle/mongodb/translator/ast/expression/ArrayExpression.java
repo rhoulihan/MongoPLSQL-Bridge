@@ -732,7 +732,7 @@ public final class ArrayExpression implements Expression {
    */
   private void renderReverseArray(SqlGenerationContext ctx) {
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
+      final String path = fieldPath.getPath();
       ctx.sql("(SELECT JSON_ARRAYAGG(val ORDER BY rn DESC) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
@@ -757,7 +757,7 @@ public final class ArrayExpression implements Expression {
     }
 
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
+      final String path = fieldPath.getPath();
       ctx.sql("(SELECT JSON_ARRAYAGG(val ORDER BY val ");
       ctx.sql(ascending ? "ASC" : "DESC");
       ctx.sql(") FROM JSON_TABLE(");
@@ -782,7 +782,7 @@ public final class ArrayExpression implements Expression {
     // indexExpression contains the value to search for
     // arrayExpression contains the array to search in
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
+      final String path = fieldPath.getPath();
       ctx.sql("JSON_EXISTS(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
@@ -839,7 +839,7 @@ public final class ArrayExpression implements Expression {
    */
   private void renderIsArray(SqlGenerationContext ctx) {
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
+      final String path = fieldPath.getPath();
       // Use JSON_EXISTS with array test
       ctx.sql("CASE WHEN JSON_EXISTS(");
       renderDataColumn(ctx);
@@ -860,7 +860,7 @@ public final class ArrayExpression implements Expression {
    */
   private void renderIndexOfArray(SqlGenerationContext ctx) {
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
+      final String path = fieldPath.getPath();
       ctx.sql("(SELECT COALESCE(MIN(rn) - 1, -1) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
@@ -1048,8 +1048,8 @@ public final class ArrayExpression implements Expression {
     }
 
     // Compare first two arrays (symmetric difference = 0)
-    Expression arr1 = additionalArgs.get(0);
-    Expression arr2 = additionalArgs.get(1);
+    final Expression arr1 = additionalArgs.get(0);
+    final Expression arr2 = additionalArgs.get(1);
 
     ctx.sql("CASE WHEN (");
 

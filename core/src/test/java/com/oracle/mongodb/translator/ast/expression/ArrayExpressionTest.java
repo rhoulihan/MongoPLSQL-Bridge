@@ -550,7 +550,8 @@ class ArrayExpressionTest {
   @Test
   void shouldRenderInOperatorWithFieldValue() {
     // MongoDB: {$in: ["$item", "$validItems"]} - checks if field value is in array
-    var expr = ArrayExpression.in(FieldPathExpression.of("item"), FieldPathExpression.of("validItems"));
+    var expr =
+        ArrayExpression.in(FieldPathExpression.of("item"), FieldPathExpression.of("validItems"));
 
     expr.render(context);
 

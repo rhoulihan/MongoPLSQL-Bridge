@@ -1115,7 +1115,8 @@ public final class PipelineRenderer {
       return true; // Implicit inclusion like {fieldName: 1}
     }
     if (expr instanceof FieldPathExpression fieldPath) {
-      // Check if it's just referencing the same field (e.g., {totalCompensation: "$totalCompensation"})
+      // Check if it's just referencing the same field
+      // (e.g., {totalCompensation: "$totalCompensation"})
       return fieldPath.getPath().equals(alias);
     }
     return false;

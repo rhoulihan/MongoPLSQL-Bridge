@@ -27,7 +27,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER))");
+    assertThat(context.toSql()).isEqualTo("SUM(CAST(data.amount AS NUMBER))");
   }
 
   @Test
@@ -36,7 +36,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("AVG(JSON_VALUE(data, '$.price' RETURNING NUMBER))");
+    assertThat(context.toSql()).isEqualTo("AVG(CAST(data.price AS NUMBER))");
   }
 
   @Test
@@ -54,7 +54,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MIN(JSON_VALUE(data, '$.score' RETURNING NUMBER))");
+    assertThat(context.toSql()).isEqualTo("MIN(CAST(data.score AS NUMBER))");
   }
 
   @Test
@@ -63,25 +63,27 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MAX(JSON_VALUE(data, '$.score' RETURNING NUMBER))");
+    assertThat(context.toSql()).isEqualTo("MAX(CAST(data.score AS NUMBER))");
   }
 
   @Test
   void shouldRenderFirst() {
+    // $first uses MIN() in GROUP BY context because Oracle's FIRST_VALUE requires OVER clause
     var expr = AccumulatorExpression.first(FieldPathExpression.of("name"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("FIRST_VALUE(JSON_VALUE(data, '$.name'))");
+    assertThat(context.toSql()).isEqualTo("MIN(data.name)");
   }
 
   @Test
   void shouldRenderLast() {
+    // $last uses MAX() in GROUP BY context because Oracle's LAST_VALUE requires OVER clause
     var expr = AccumulatorExpression.last(FieldPathExpression.of("name"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("LAST_VALUE(JSON_VALUE(data, '$.name'))");
+    assertThat(context.toSql()).isEqualTo("MAX(data.name)");
   }
 
   @Test
@@ -132,7 +134,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(JSON_VALUE(data, '$.name'))");
+    assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(data.name)");
   }
 
   @Test
@@ -141,7 +143,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(JSON_VALUE(data, '$.order.item'))");
+    assertThat(context.toSql()).isEqualTo("JSON_ARRAYAGG(data.order.item)");
   }
 
   @Test
@@ -153,8 +155,8 @@ class AccumulatorExpressionTest {
     // Uses LISTAGG workaround since Oracle doesn't support JSON_ARRAYAGG(DISTINCT ...)
     assertThat(context.toSql())
         .isEqualTo(
-            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || JSON_VALUE(data, '$.category') || '\"',"
-                + " ',') WITHIN GROUP (ORDER BY JSON_VALUE(data, '$.category')) || ']', '$'"
+            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || data.category || '\"',"
+                + " ',') WITHIN GROUP (ORDER BY data.category) || ']', '$'"
                 + " RETURNING CLOB)");
   }
 
@@ -167,8 +169,8 @@ class AccumulatorExpressionTest {
     // Uses LISTAGG workaround since Oracle doesn't support JSON_ARRAYAGG(DISTINCT ...)
     assertThat(context.toSql())
         .isEqualTo(
-            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || JSON_VALUE(data, '$.metadata.tag') || '\"',"
-                + " ',') WITHIN GROUP (ORDER BY JSON_VALUE(data, '$.metadata.tag')) || ']', '$'"
+            "JSON_QUERY('[' || LISTAGG(DISTINCT '\"' || data.metadata.tag || '\"',"
+                + " ',') WITHIN GROUP (ORDER BY data.metadata.tag) || ']', '$'"
                 + " RETURNING CLOB)");
   }
 

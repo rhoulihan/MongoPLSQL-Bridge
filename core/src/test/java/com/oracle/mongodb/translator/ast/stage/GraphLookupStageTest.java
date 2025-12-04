@@ -555,7 +555,8 @@ class GraphLookupStageTest {
   void shouldRenderGraphWithMultipleConditions() {
     // Graph with multiple filter conditions
     var restrictMatch =
-        Document.parse("{\"active\": true, \"type\": {\"$ne\": \"archived\"}, \"priority\": {\"$gt\": 0}}");
+        Document.parse(
+            "{\"active\": true, \"type\": {\"$ne\": \"archived\"}, \"priority\": {\"$gt\": 0}}");
     var stage =
         new GraphLookupStage(
             "tasks", "$dependencies", "dependencies", "_id", "taskChain", 5, null, restrictMatch);

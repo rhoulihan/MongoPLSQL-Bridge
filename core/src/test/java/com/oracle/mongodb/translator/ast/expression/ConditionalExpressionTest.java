@@ -52,7 +52,7 @@ class ConditionalExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).startsWith("NVL(").contains("$.description").endsWith(")");
+    assertThat(context.toSql()).startsWith("NVL(").contains("data.description").endsWith(")");
   }
 
   @Test
@@ -91,9 +91,9 @@ class ConditionalExpressionTest {
     expr.render(context);
 
     assertThat(context.toSql())
-        .contains("$.status")
-        .contains("$.activePrice")
-        .contains("$.defaultPrice");
+        .contains("data.status")
+        .contains("data.activePrice")
+        .contains("data.defaultPrice");
   }
 
   @Test

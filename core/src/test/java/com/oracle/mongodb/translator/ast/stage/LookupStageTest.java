@@ -222,7 +222,8 @@ class LookupStageTest {
     // Test that multiple $lookup stages can render in sequence
     var lookup1 = LookupStage.equality("inventory", "item", "sku", "inventory_docs");
     var lookup2 = LookupStage.equality("customers", "customerId", "_id", "customer_info");
-    var lookup3 = LookupStage.equality("categories", "categoryId", "id", "category_data");
+    final var lookup3 =
+        LookupStage.equality("categories", "categoryId", "id", "category_data");
 
     // Each lookup should render independently
     lookup1.render(context);
@@ -269,7 +270,9 @@ class LookupStageTest {
   @Test
   void shouldHandleDeeplyNestedFieldLookup() {
     // Lookup with deeply nested field paths
-    var stage = LookupStage.equality("products", "order.items.productId", "inventory.product.id", "product_data");
+    var stage =
+        LookupStage.equality(
+            "products", "order.items.productId", "inventory.product.id", "product_data");
 
     stage.render(context);
 
@@ -317,7 +320,8 @@ class LookupStageTest {
   @Test
   void shouldCreateLookupWithEmptyPipeline() {
     // Pipeline form with no inner pipeline stages
-    var stage = LookupStage.withPipeline("related", Map.of("parentId", "id"), List.of(), "related_docs");
+    var stage =
+        LookupStage.withPipeline("related", Map.of("parentId", "id"), List.of(), "related_docs");
 
     assertThat(stage.isPipelineForm()).isTrue();
     assertThat(stage.getPipeline()).isEmpty();

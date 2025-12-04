@@ -29,7 +29,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status')");
+    assertThat(context.toSql()).isEqualTo("data.status");
   }
 
   @Test
@@ -38,7 +38,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.customer.address.city')");
+    assertThat(context.toSql()).isEqualTo("data.customer.address.city");
   }
 
   @Test
@@ -47,7 +47,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status')");
+    assertThat(context.toSql()).isEqualTo("data.status");
   }
 
   @ParameterizedTest
@@ -69,7 +69,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.amount' RETURNING NUMBER)");
+    assertThat(context.toSql()).isEqualTo("CAST(data.amount AS NUMBER)");
   }
 
   @Test
@@ -78,7 +78,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(doc, '$.name')");
+    assertThat(context.toSql()).isEqualTo("doc.name");
   }
 
   @Test
@@ -154,7 +154,7 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("customer.tier");
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(customers_1.data, '$.tier')");
+    assertThat(context.toSql()).isEqualTo("customers_1.data.tier");
   }
 
   @Test
@@ -164,7 +164,7 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("inventory.quantity", JsonReturnType.NUMBER);
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(inv_1.data, '$.quantity' RETURNING NUMBER)");
+    assertThat(context.toSql()).isEqualTo("CAST(inv_1.data.quantity AS NUMBER)");
   }
 
   @Test
@@ -175,7 +175,7 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("order");
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(orders_1.data, '$')");
+    assertThat(context.toSql()).isEqualTo("orders_1.data");
   }
 
   @Test
@@ -185,7 +185,7 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("status");
     expr.render(contextWithAlias);
 
-    assertThat(contextWithAlias.toSql()).isEqualTo("JSON_VALUE(base.data, '$.status')");
+    assertThat(contextWithAlias.toSql()).isEqualTo("base.data.status");
   }
 
   @Test
@@ -197,7 +197,7 @@ class FieldPathExpressionTest {
     expr.render(contextWithAlias);
 
     // doc is not qualified because it's not "data"
-    assertThat(contextWithAlias.toSql()).isEqualTo("JSON_VALUE(doc, '$.name')");
+    assertThat(contextWithAlias.toSql()).isEqualTo("doc.name");
   }
 
   @Test

@@ -29,7 +29,8 @@ public final class ObjectExpression implements Expression {
   private final Expression inputExpression;
   private final List<Expression> additionalArgs;
 
-  private ObjectExpression(ObjectOp op, Expression inputExpression, List<Expression> additionalArgs) {
+  private ObjectExpression(
+      ObjectOp op, Expression inputExpression, List<Expression> additionalArgs) {
     this.op = Objects.requireNonNull(op, "op must not be null");
     this.inputExpression = inputExpression;
     this.additionalArgs = additionalArgs != null ? new ArrayList<>(additionalArgs) : null;
@@ -83,6 +84,7 @@ public final class ObjectExpression implements Expression {
       case MERGE_OBJECTS -> renderMergeObjects(ctx);
       case OBJECT_TO_ARRAY -> renderObjectToArray(ctx);
       case ARRAY_TO_OBJECT -> renderArrayToObject(ctx);
+      default -> throw new UnsupportedOperationException("Unknown ObjectOp: " + op);
     }
   }
 

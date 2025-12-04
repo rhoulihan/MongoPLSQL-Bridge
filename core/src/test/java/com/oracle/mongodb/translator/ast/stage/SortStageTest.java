@@ -34,7 +34,7 @@ class SortStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).isEqualTo("ORDER BY JSON_VALUE(data, '$.name')");
+    assertThat(context.toSql()).isEqualTo("ORDER BY data.name");
   }
 
   @Test
@@ -46,7 +46,7 @@ class SortStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).isEqualTo("ORDER BY JSON_VALUE(data, '$.createdAt') DESC");
+    assertThat(context.toSql()).isEqualTo("ORDER BY data.createdAt DESC");
   }
 
   @Test
@@ -60,8 +60,7 @@ class SortStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql())
-        .isEqualTo("ORDER BY JSON_VALUE(data, '$.status'), JSON_VALUE(data, '$.createdAt') DESC");
+    assertThat(context.toSql()).isEqualTo("ORDER BY data.status, data.createdAt DESC");
   }
 
   @Test
@@ -75,7 +74,7 @@ class SortStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).contains("RETURNING NUMBER").contains("DESC");
+    assertThat(context.toSql()).contains("AS NUMBER").contains("DESC");
   }
 
   @Test

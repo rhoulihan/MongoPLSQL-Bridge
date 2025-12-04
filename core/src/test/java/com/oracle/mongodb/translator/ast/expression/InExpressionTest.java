@@ -29,7 +29,7 @@ class InExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status') IN (:1, :2)");
+    assertThat(context.toSql()).isEqualTo("data.status IN (:1, :2)");
     assertThat(context.getBindVariables()).containsExactly("active", "pending");
   }
 
@@ -39,7 +39,7 @@ class InExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.status') NOT IN (:1, :2)");
+    assertThat(context.toSql()).isEqualTo("data.status NOT IN (:1, :2)");
   }
 
   @Test
@@ -48,7 +48,7 @@ class InExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.type') IN (:1)");
+    assertThat(context.toSql()).isEqualTo("data.type IN (:1)");
   }
 
   @Test
@@ -59,7 +59,7 @@ class InExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).contains("RETURNING NUMBER").contains("IN (:1, :2, :3)");
+    assertThat(context.toSql()).contains("AS NUMBER").contains("IN (:1, :2, :3)");
     assertThat(context.getBindVariables()).containsExactly(1, 2, 3);
   }
 

@@ -1863,7 +1863,7 @@ class PipelineRendererTest {
   // ==================== Complex Pipeline Integration Tests ====================
 
   @Test
-  void shouldRenderECommerceFunnelAnalysis() {
+  void shouldRenderEcommerceFunnelAnalysis() {
     // E-commerce funnel: match active users -> group by stage -> project counts -> sort
     var filter =
         new ComparisonExpression(
@@ -1930,7 +1930,7 @@ class PipelineRendererTest {
   @Test
   void shouldRenderTimeSeriesAggregation() {
     // Time series: match date range -> group by hour -> add computed fields -> sort
-    var dateFilter =
+    final var dateFilter =
         new LogicalExpression(
             LogicalOp.AND,
             List.of(
@@ -1975,13 +1975,18 @@ class PipelineRendererTest {
   void shouldRenderHierarchicalReporting() {
     // Hierarchical reporting: group by region -> add rank -> filter top N -> project
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
-    accumulators.put("totalSales", AccumulatorExpression.sum(FieldPathExpression.of("sales", JsonReturnType.NUMBER)));
-    accumulators.put("avgOrderValue", AccumulatorExpression.avg(FieldPathExpression.of("orderValue", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "totalSales",
+        AccumulatorExpression.sum(FieldPathExpression.of("sales", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "avgOrderValue",
+        AccumulatorExpression.avg(FieldPathExpression.of("orderValue", JsonReturnType.NUMBER)));
 
     var projections = new LinkedHashMap<String, ProjectionField>();
     projections.put("region", ProjectionField.include(FieldPathExpression.of("_id")));
     projections.put("totalSales", ProjectionField.include(FieldPathExpression.of("totalSales")));
-    projections.put("avgOrderValue", ProjectionField.include(FieldPathExpression.of("avgOrderValue")));
+    projections.put(
+        "avgOrderValue", ProjectionField.include(FieldPathExpression.of("avgOrderValue")));
 
     Pipeline pipeline =
         Pipeline.of(
@@ -2009,7 +2014,9 @@ class PipelineRendererTest {
     // Customer segmentation: bucket by purchase amount -> add fields -> sort
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("customerCount", AccumulatorExpression.count());
-    accumulators.put("totalSpend", AccumulatorExpression.sum(FieldPathExpression.of("purchaseAmount", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "totalSpend",
+        AccumulatorExpression.sum(FieldPathExpression.of("purchaseAmount", JsonReturnType.NUMBER)));
 
     List<Object> boundaries = List.of(0, 100, 500, 1000, 5000);
 
@@ -2018,7 +2025,9 @@ class PipelineRendererTest {
         "avgSpendPerCustomer",
         new ArithmeticExpression(
             ArithmeticOp.DIVIDE,
-            List.of(FieldPathExpression.of("totalSpend"), FieldPathExpression.of("customerCount"))));
+            List.of(
+                FieldPathExpression.of("totalSpend"),
+                FieldPathExpression.of("customerCount"))));
 
     Pipeline pipeline =
         Pipeline.of(
@@ -2042,7 +2051,9 @@ class PipelineRendererTest {
   void shouldRenderInventoryAudit() {
     // Inventory audit: union orders + returns -> group by product -> match low stock
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
-    accumulators.put("netQuantity", AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "netQuantity",
+        AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
 
     var stockFilter =
         new ComparisonExpression(
@@ -2102,8 +2113,13 @@ class PipelineRendererTest {
   void shouldRenderRevenueComparison() {
     // Revenue comparison: group by product -> add YoY calculation -> filter significant changes
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
-    accumulators.put("currentRevenue", AccumulatorExpression.sum(FieldPathExpression.of("revenue", JsonReturnType.NUMBER)));
-    accumulators.put("lastYearRevenue", AccumulatorExpression.sum(FieldPathExpression.of("lastYearRevenue", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "currentRevenue",
+        AccumulatorExpression.sum(FieldPathExpression.of("revenue", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "lastYearRevenue",
+        AccumulatorExpression.sum(
+            FieldPathExpression.of("lastYearRevenue", JsonReturnType.NUMBER)));
 
     var computedFields = new LinkedHashMap<String, Expression>();
     computedFields.put(
@@ -2146,14 +2162,17 @@ class PipelineRendererTest {
     categoryAccumulators.put("count", AccumulatorExpression.count());
 
     var statusAccumulators = new LinkedHashMap<String, AccumulatorExpression>();
-    statusAccumulators.put("totalValue", AccumulatorExpression.sum(FieldPathExpression.of("value", JsonReturnType.NUMBER)));
+    statusAccumulators.put(
+        "totalValue",
+        AccumulatorExpression.sum(FieldPathExpression.of("value", JsonReturnType.NUMBER)));
 
     var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
     facets.put(
         "byCategory",
         List.of(
             new GroupStage(FieldPathExpression.of("category"), categoryAccumulators),
-            new SortStage(List.of(new SortField(FieldPathExpression.of("count"), SortDirection.DESC))),
+            new SortStage(
+                List.of(new SortField(FieldPathExpression.of("count"), SortDirection.DESC))),
             new LimitStage(5)));
     facets.put(
         "byStatus",
@@ -2174,7 +2193,9 @@ class PipelineRendererTest {
   void shouldRenderSupplyChainTracking() {
     // Supply chain: unwind items -> lookup suppliers -> group by supplier -> sort
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
-    accumulators.put("totalOrdered", AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "totalOrdered",
+        AccumulatorExpression.sum(FieldPathExpression.of("quantity", JsonReturnType.NUMBER)));
     accumulators.put("orderCount", AccumulatorExpression.count());
 
     Pipeline pipeline =
@@ -2246,7 +2267,9 @@ class PipelineRendererTest {
             ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
     var filter2 =
         new ComparisonExpression(
-            ComparisonOp.GT, FieldPathExpression.of("amount", JsonReturnType.NUMBER), LiteralExpression.of(100));
+            ComparisonOp.GT,
+            FieldPathExpression.of("amount", JsonReturnType.NUMBER),
+            LiteralExpression.of(100));
 
     Pipeline pipeline =
         Pipeline.of("orders", new MatchStage(filter1), new MatchStage(filter2));
@@ -2284,7 +2307,9 @@ class PipelineRendererTest {
     // Group aggregates should be direct, not using subqueries
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("count", AccumulatorExpression.count());
-    accumulators.put("total", AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    accumulators.put(
+        "total",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
 
     Pipeline pipeline =
         Pipeline.of("orders", new GroupStage(FieldPathExpression.of("category"), accumulators));

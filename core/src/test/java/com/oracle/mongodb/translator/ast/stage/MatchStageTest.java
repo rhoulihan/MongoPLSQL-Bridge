@@ -38,7 +38,7 @@ class MatchStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).isEqualTo("WHERE JSON_VALUE(data, '$.status') = :1");
+    assertThat(context.toSql()).isEqualTo("WHERE data.status = :1");
   }
 
   @Test
@@ -62,8 +62,8 @@ class MatchStageTest {
     assertThat(context.toSql())
         .startsWith("WHERE ")
         .contains("AND")
-        .contains("$.status")
-        .contains("$.amount");
+        .contains("data.status")
+        .contains("data.amount");
   }
 
   @Test

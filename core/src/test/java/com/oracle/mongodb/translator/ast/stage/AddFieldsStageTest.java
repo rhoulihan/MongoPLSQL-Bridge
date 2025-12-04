@@ -62,7 +62,7 @@ class AddFieldsStageTest {
 
     String sql = context.toSql();
     assertThat(sql).contains("doubleAmount");
-    assertThat(sql).contains("$.amount");
+    assertThat(sql).contains("data.amount");
   }
 
   @Test
@@ -100,7 +100,7 @@ class AddFieldsStageTest {
 
     String sql = context.toSql();
     assertThat(sql).contains("copyOfName");
-    assertThat(sql).contains("$.name");
+    assertThat(sql).contains("data.name");
   }
 
   @Test

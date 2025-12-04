@@ -91,7 +91,11 @@ class ArithmeticExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).contains("$.a").contains("$.b").contains("$.c").contains(" + ");
+    assertThat(context.toSql())
+        .contains("data.a")
+        .contains("data.b")
+        .contains("data.c")
+        .contains(" + ");
   }
 
   @Test

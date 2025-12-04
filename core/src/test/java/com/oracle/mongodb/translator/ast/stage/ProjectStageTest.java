@@ -35,7 +35,7 @@ class ProjectStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SELECT JSON_VALUE(data, '$.name') AS name");
+    assertThat(context.toSql()).isEqualTo("SELECT data.name AS name");
   }
 
   @Test
@@ -67,7 +67,7 @@ class ProjectStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SELECT JSON_VALUE(data, '$.name') AS userName");
+    assertThat(context.toSql()).isEqualTo("SELECT data.name AS userName");
   }
 
   @Test
@@ -95,7 +95,7 @@ class ProjectStageTest {
     stage.render(context);
 
     assertThat(context.toSql())
-        .isEqualTo("SELECT JSON_VALUE(data, '$.name') AS name")
+        .isEqualTo("SELECT data.name AS name")
         .doesNotContain("_id");
   }
 

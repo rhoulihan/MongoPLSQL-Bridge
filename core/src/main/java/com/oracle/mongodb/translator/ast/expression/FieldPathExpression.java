@@ -209,7 +209,8 @@ public final class FieldPathExpression implements Expression {
    *
    * <p>Example: After "$unwind: $items", "$items.product" becomes: unwind_1.value.product
    */
-  private void renderUnwindFieldPath(SqlGenerationContext ctx, SqlGenerationContext.UnwindInfo info) {
+  private void renderUnwindFieldPath(
+      SqlGenerationContext ctx, SqlGenerationContext.UnwindInfo info) {
     // Build dot notation expression
     StringBuilder dotExpr = new StringBuilder();
     dotExpr.append(info.tableAlias()).append(".value");

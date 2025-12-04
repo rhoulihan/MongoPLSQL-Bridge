@@ -96,7 +96,7 @@ class ObjectExpressionTest {
   // $arrayToObject tests
 
   @Test
-  void shouldRenderArrayToObjectFromKVPairs() {
+  void shouldRenderArrayToObjectFromKvPairs() {
     // MongoDB: {$arrayToObject: "$arr"} where arr contains [{k: "key", v: "value"}, ...]
     var expr = ObjectExpression.arrayToObject(FieldPathExpression.of("arr"));
 
