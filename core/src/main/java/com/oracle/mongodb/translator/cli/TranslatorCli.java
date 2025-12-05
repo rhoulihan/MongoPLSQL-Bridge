@@ -10,6 +10,7 @@ import com.oracle.mongodb.translator.api.AggregationTranslator;
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.api.TranslationOptions;
 import com.oracle.mongodb.translator.api.TranslationResult;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -45,11 +46,15 @@ public final class TranslatorCli {
     this(System.out, System.err);
   }
 
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification = "CLI intentionally shares output streams")
   public TranslatorCli(PrintStream out, PrintStream err) {
     this.out = out;
     this.err = err;
   }
 
+  /** CLI entry point. */
   public static void main(String[] args) {
     TranslatorCli cli = new TranslatorCli();
     int exitCode = cli.run(args);
@@ -220,7 +225,8 @@ public final class TranslatorCli {
       pipelines.add(parsePipelineDoc(doc, collectionOverride));
     } else {
       throw new IllegalArgumentException(
-          "Invalid input file format. Expected a pipeline array, or a document with 'pipeline' or 'pipelines' key.");
+          "Invalid input file format. Expected a pipeline array, "
+              + "or a document with 'pipeline' or 'pipelines' key.");
     }
 
     return pipelines;
@@ -313,8 +319,8 @@ public final class TranslatorCli {
     out.println("  3. Multiple pipelines:");
     out.println("     {");
     out.println("       \"pipelines\": [");
-    out.println("         {\"name\": \"Pipeline 1\", \"collection\": \"orders\", \"pipeline\": [...]},");
-    out.println("         {\"name\": \"Pipeline 2\", \"collection\": \"products\", \"pipeline\": [...]}");
+    out.println("         {\"name\": \"P1\", \"collection\": \"orders\", \"pipeline\": [...]},");
+    out.println("         {\"name\": \"P2\", \"collection\": \"products\", \"pipeline\": [...]}");
     out.println("       ]");
     out.println("     }");
     out.println();

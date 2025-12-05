@@ -30,6 +30,8 @@ import com.oracle.mongodb.translator.ast.stage.GroupStage;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
 import com.oracle.mongodb.translator.ast.stage.LookupStage;
 import com.oracle.mongodb.translator.ast.stage.MatchStage;
+import com.oracle.mongodb.translator.ast.stage.MergeStage;
+import com.oracle.mongodb.translator.ast.stage.OutStage;
 import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.RedactStage;
@@ -80,6 +82,18 @@ public final class PipelineRenderer {
   public void render(Pipeline pipeline, SqlGenerationContext ctx) {
     // Analyze pipeline to extract components
     PipelineComponents components = analyzePipeline(pipeline);
+
+    // If there's an $out stage, render INSERT INTO ... SELECT pattern
+    if (components.outStage != null) {
+      renderWithOutStage(pipeline, components, ctx);
+      return;
+    }
+
+    // If there's a $merge stage, render MERGE INTO ... USING ... ON ... pattern
+    if (components.mergeStage != null) {
+      renderWithMergeStage(pipeline, components, ctx);
+      return;
+    }
 
     // Register virtual fields from $addFields stages
     // These fields can then be referenced by subsequent stages like $group
@@ -493,6 +507,208 @@ public final class PipelineRenderer {
 
     // ORDER BY bucket_id
     ctx.sql(" ORDER BY bucket_id");
+  }
+
+  /**
+   * Renders a query with $out stage. The $out stage changes the query from SELECT to INSERT INTO
+   * ... SELECT pattern, writing the aggregation results to the target collection.
+   *
+   * <pre>
+   * INSERT INTO targetCollection (data)
+   * SELECT ... FROM sourceCollection WHERE ... GROUP BY ... ORDER BY ...
+   * </pre>
+   */
+  private void renderWithOutStage(
+      Pipeline pipeline, PipelineComponents components, SqlGenerationContext ctx) {
+    OutStage outStage = components.outStage;
+
+    // Validate target table name
+    FieldNameValidator.validateTableName(outStage.getTargetCollection());
+
+    // Render INSERT INTO clause
+    ctx.sql("INSERT INTO ");
+    if (outStage.hasTargetDatabase()) {
+      FieldNameValidator.validateTableName(outStage.getTargetDatabase());
+      ctx.sql(outStage.getTargetDatabase());
+      ctx.sql(".");
+    }
+    ctx.sql(outStage.getTargetCollection());
+    ctx.sql(" (");
+    ctx.sql(config.dataColumnName());
+    ctx.sql(") ");
+
+    // Clear the $out from components so it doesn't interfere with SELECT rendering
+    components.outStage = null;
+
+    // Now render the SELECT query using the standard flow
+    // We need to re-register virtual fields and aliases since the context is shared
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      for (var entry : addFields.getFields().entrySet()) {
+        ctx.registerVirtualField(entry.getKey(), entry.getValue());
+      }
+    }
+
+    for (LookupStage lookup : components.lookupStages) {
+      if (!lookup.isPipelineForm()) {
+        ctx.registerLookupField(
+            lookup.getAs(), lookup.getFrom(), lookup.getLocalField(), lookup.getForeignField());
+        String alias = ctx.generateTableAlias(lookup.getFrom());
+        ctx.registerLookupTableAlias(lookup.getAs(), alias);
+      }
+    }
+
+    for (UnwindStage unwind : components.unwindStages) {
+      if (!isUnwindOnLookupField(unwind.getPath(), components)) {
+        String alias = ctx.generateTableAlias("unwind");
+        ctx.registerUnwoundPath(unwind.getPath(), alias);
+      }
+    }
+
+    // Render the SELECT part of the query
+    if (components.hasPostUnionGroup) {
+      renderWithPostUnionGroup(components, ctx);
+    } else if (components.hasPostWindowMatch) {
+      renderWithPostWindowMatch(components, ctx);
+    } else if (components.hasPostGroupAddFields) {
+      renderWithPostGroupAddFields(components, ctx);
+    } else if (components.bucketAutoStage != null) {
+      renderWithBucketAuto(components, ctx);
+    } else {
+      renderStandardQuery(components, ctx);
+    }
+
+    // Render UNION ALL clauses if present
+    if (!components.hasPostUnionGroup) {
+      renderUnionWithClauses(components, ctx);
+      renderPostUnionSortAndLimit(components, ctx);
+    }
+  }
+
+  /**
+   * Renders a query with $merge stage. The $merge stage generates an Oracle MERGE statement that
+   * matches documents based on the ON fields and applies whenMatched/whenNotMatched actions.
+   *
+   * <pre>
+   * MERGE INTO targetCollection t
+   * USING (SELECT ... FROM sourceCollection WHERE ...) s
+   * ON (t."_id" = s."_id")
+   * WHEN MATCHED THEN UPDATE SET t.data = s.data
+   * WHEN NOT MATCHED THEN INSERT (data) VALUES (s.data)
+   * </pre>
+   */
+  private void renderWithMergeStage(
+      Pipeline pipeline, PipelineComponents components, SqlGenerationContext ctx) {
+    MergeStage mergeStage = components.mergeStage;
+
+    // Validate target table name
+    FieldNameValidator.validateTableName(mergeStage.getTargetCollection());
+
+    // Render MERGE INTO clause
+    ctx.sql("MERGE INTO ");
+    ctx.sql(mergeStage.getTargetCollection());
+    ctx.sql(" t ");
+
+    // Render USING subquery
+    ctx.sql("USING (");
+
+    // Clear the $merge from components so it doesn't interfere with SELECT rendering
+    components.mergeStage = null;
+
+    // Register virtual fields and aliases for the subquery
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      for (var entry : addFields.getFields().entrySet()) {
+        ctx.registerVirtualField(entry.getKey(), entry.getValue());
+      }
+    }
+
+    for (LookupStage lookup : components.lookupStages) {
+      if (!lookup.isPipelineForm()) {
+        ctx.registerLookupField(
+            lookup.getAs(), lookup.getFrom(), lookup.getLocalField(), lookup.getForeignField());
+        String alias = ctx.generateTableAlias(lookup.getFrom());
+        ctx.registerLookupTableAlias(lookup.getAs(), alias);
+      }
+    }
+
+    for (UnwindStage unwind : components.unwindStages) {
+      if (!isUnwindOnLookupField(unwind.getPath(), components)) {
+        String alias = ctx.generateTableAlias("unwind");
+        ctx.registerUnwoundPath(unwind.getPath(), alias);
+      }
+    }
+
+    // Render the SELECT part of the subquery
+    if (components.hasPostUnionGroup) {
+      renderWithPostUnionGroup(components, ctx);
+    } else if (components.hasPostWindowMatch) {
+      renderWithPostWindowMatch(components, ctx);
+    } else if (components.hasPostGroupAddFields) {
+      renderWithPostGroupAddFields(components, ctx);
+    } else if (components.bucketAutoStage != null) {
+      renderWithBucketAuto(components, ctx);
+    } else {
+      renderStandardQuery(components, ctx);
+    }
+
+    // Render UNION ALL clauses if present
+    if (!components.hasPostUnionGroup) {
+      renderUnionWithClauses(components, ctx);
+      renderPostUnionSortAndLimit(components, ctx);
+    }
+
+    ctx.sql(") s ");
+
+    // Render ON clause with matching fields
+    ctx.sql("ON (");
+    List<String> onFields = mergeStage.getOnFields();
+    for (int i = 0; i < onFields.size(); i++) {
+      if (i > 0) {
+        ctx.sql(" AND ");
+      }
+      String field = onFields.get(i);
+      // Use JSON_VALUE to extract the field from both target and source
+      ctx.sql("JSON_VALUE(t.");
+      ctx.sql(config.dataColumnName());
+      ctx.sql(", '$.");
+      ctx.sql(field);
+      ctx.sql("') = JSON_VALUE(s.");
+      ctx.sql(config.dataColumnName());
+      ctx.sql(", '$.");
+      ctx.sql(field);
+      ctx.sql("')");
+    }
+    ctx.sql(") ");
+
+    // Render WHEN MATCHED clause based on whenMatched option
+    MergeStage.WhenMatched whenMatched = mergeStage.getWhenMatched();
+    if (whenMatched != MergeStage.WhenMatched.KEEP_EXISTING
+        && whenMatched != MergeStage.WhenMatched.FAIL) {
+      ctx.sql("WHEN MATCHED THEN UPDATE SET t.");
+      ctx.sql(config.dataColumnName());
+      if (whenMatched == MergeStage.WhenMatched.MERGE) {
+        // Use JSON_MERGEPATCH to merge the documents
+        ctx.sql(" = JSON_MERGEPATCH(t.");
+        ctx.sql(config.dataColumnName());
+        ctx.sql(", s.");
+        ctx.sql(config.dataColumnName());
+        ctx.sql(")");
+      } else {
+        // REPLACE: Simply replace the whole document
+        ctx.sql(" = s.");
+        ctx.sql(config.dataColumnName());
+      }
+      ctx.sql(" ");
+    }
+
+    // Render WHEN NOT MATCHED clause based on whenNotMatched option
+    MergeStage.WhenNotMatched whenNotMatched = mergeStage.getWhenNotMatched();
+    if (whenNotMatched == MergeStage.WhenNotMatched.INSERT) {
+      ctx.sql("WHEN NOT MATCHED THEN INSERT (");
+      ctx.sql(config.dataColumnName());
+      ctx.sql(") VALUES (s.");
+      ctx.sql(config.dataColumnName());
+      ctx.sql(")");
+    }
   }
 
   /**
@@ -938,6 +1154,10 @@ public final class PipelineRenderer {
         components.redactStages.add(redact);
       } else if (stage instanceof ReplaceRootStage replaceRoot) {
         components.replaceRootStage = replaceRoot;
+      } else if (stage instanceof OutStage out) {
+        components.outStage = out;
+      } else if (stage instanceof MergeStage merge) {
+        components.mergeStage = merge;
       }
       // For unknown stages, we skip them (they won't be rendered)
     }
@@ -1803,6 +2023,8 @@ public final class PipelineRenderer {
     CountStage countStage;
     SampleStage sampleStage;
     ReplaceRootStage replaceRootStage;
+    OutStage outStage; // Terminal $out stage that writes results to another collection
+    MergeStage mergeStage; // Terminal $merge stage that merges results into another collection
     boolean hasPostGroupAddFields = false; // Track if $addFields comes after $group
     boolean hasPostWindowMatch = false; // Track if $match comes after $setWindowFields
     boolean hasPostUnionSortOrLimit = false; // Track if $sort/$limit come after $unionWith

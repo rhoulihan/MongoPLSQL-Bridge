@@ -16,6 +16,7 @@ import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
+import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -175,13 +176,40 @@ class LookupStageTest {
   }
 
   @Test
-  void shouldThrowOnRenderPipelineForm() {
-    var stage = LookupStage.withPipeline("orders", Map.of("x", "y"), List.of(), "result");
+  void shouldRenderPipelineFormWithLateralJoin() {
+    var stage = LookupStage.withPipeline("orders", Map.of("x", "$y"), List.of(), "result");
 
-    assertThatThrownBy(() -> stage.render(context))
-        .isInstanceOf(UnsupportedOperatorException.class)
-        .hasMessageContaining("$lookup")
-        .hasMessageContaining("pipeline");
+    stage.render(context);
+
+    String sql = context.toSql();
+    // Should render LATERAL join pattern
+    assertThat(sql).contains("LATERAL");
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("orders");
+    assertThat(sql).contains("result");
+  }
+
+  @Test
+  void shouldSubstituteLetVariablesInPipelineMatch() {
+    // Parser converts $$custId to $custId (removes one $), so we use $custId for the variable ref
+    var matchFilter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("_id"), FieldPathExpression.of("$custId"));
+    var matchStage = new MatchStage(matchFilter);
+    var stage =
+        LookupStage.withPipeline(
+            "customers", Map.of("custId", "$customerId"), List.of(matchStage), "customerData");
+
+    // Use a context with base table alias set for variable substitution
+    var contextWithBase =
+        new DefaultSqlGenerationContext(false, Oracle26aiDialect.INSTANCE, "base");
+    stage.render(contextWithBase);
+
+    String sql = contextWithBase.toSql();
+    // Variable $custId should be substituted with outer table reference to customerId
+    assertThat(sql).contains("JSON_VALUE(base.data, '$.customerId')");
+    // Inner table field _id should reference the inner alias
+    assertThat(sql).contains("JSON_VALUE(customers_1_inner.data, '$._id')");
   }
 
   @Test

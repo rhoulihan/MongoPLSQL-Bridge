@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-02
+**Last Updated:** 2025-12-04
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -64,7 +64,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 
 | Ticket | Description | Status | Notes |
 |--------|-------------|--------|-------|
-| IMPL-031 | $lookup Stage Implementation | ✅ Done | LEFT OUTER JOIN with table alias management |
+| IMPL-031 | $lookup Stage Implementation | ✅ Done | LEFT OUTER JOIN (equality) / LATERAL join (pipeline form with let variables) |
 | IMPL-032 | $unwind Stage Implementation | ✅ Done | JSON_TABLE with NESTED PATH |
 | IMPL-033 | $addFields/$set Stage Implementation | ✅ Done | Computed columns in SELECT |
 | IMPL-034 | Additional Accumulators | ✅ Done | $push (JSON_ARRAYAGG), $addToSet (DISTINCT) |

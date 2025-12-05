@@ -4567,6 +4567,231 @@
       "sort_by": "_id"
     },
     {
+      "id": "LOOKUP_PIPELINE001",
+      "name": "$lookup with pipeline - basic let/match",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup with pipeline form using let variables and $match",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "status": "completed"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "customers",
+            "let": {
+              "custId": "$customerId"
+            },
+            "pipeline": [
+              {
+                "$match": {
+                  "$expr": {
+                    "$eq": ["$_id", "$$custId"]
+                  }
+                }
+              }
+            ],
+            "as": "customerData"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "customerData": 1
+          }
+        },
+        {
+          "$sort": {
+            "orderId": 1
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+    },
+    {
+      "id": "LOOKUP_PIPELINE002",
+      "name": "$lookup with pipeline - filter by status",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup pipeline filtering related documents by status",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "tier": "gold"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "sales",
+            "let": {
+              "custId": "$_id"
+            },
+            "pipeline": [
+              {
+                "$match": {
+                  "$expr": {
+                    "$and": [
+                      {"$eq": ["$customerId", "$$custId"]},
+                      {"$eq": ["$status", "completed"]}
+                    ]
+                  }
+                }
+              }
+            ],
+            "as": "completedOrders"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "orderCount": {
+              "$size": "$completedOrders"
+            }
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+    },
+    {
+      "id": "LOOKUP_PIPELINE003",
+      "name": "$lookup with pipeline - with $sort inside",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup pipeline with $sort stage to order results",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "C001"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "sales",
+            "let": {
+              "custId": "$_id"
+            },
+            "pipeline": [
+              {
+                "$match": {
+                  "$expr": {
+                    "$eq": ["$customerId", "$$custId"]
+                  }
+                }
+              },
+              {
+                "$sort": {
+                  "amount": -1
+                }
+              }
+            ],
+            "as": "ordersByAmount"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "ordersByAmount": 1
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+    },
+    {
+      "id": "LOOKUP_PIPELINE004",
+      "name": "$lookup with pipeline - with $limit inside",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup pipeline with $limit to restrict results",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "tier": "gold"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "sales",
+            "let": {
+              "custId": "$_id"
+            },
+            "pipeline": [
+              {
+                "$match": {
+                  "$expr": {
+                    "$eq": ["$customerId", "$$custId"]
+                  }
+                }
+              },
+              {
+                "$sort": {
+                  "orderDate": -1
+                }
+              },
+              {
+                "$limit": 3
+              }
+            ],
+            "as": "recentOrders"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "recentOrders": 1
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+    },
+    {
+      "id": "LOOKUP_PIPELINE005",
+      "name": "$lookup with empty pipeline",
+      "category": "lookup",
+      "operator": "$lookup",
+      "description": "Tests $lookup pipeline form with empty pipeline (selects all)",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "_id": "S001"
+          }
+        },
+        {
+          "$lookup": {
+            "from": "inventory",
+            "let": {},
+            "pipeline": [],
+            "as": "allInventory"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "inventoryCount": {
+              "$size": "$allInventory"
+            }
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+    },
+    {
       "id": "WINDOW005",
       "name": "Window running total",
       "category": "window",

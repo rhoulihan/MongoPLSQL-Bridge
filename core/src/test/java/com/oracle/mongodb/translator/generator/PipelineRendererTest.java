@@ -32,6 +32,8 @@ import com.oracle.mongodb.translator.ast.stage.GroupStage;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
 import com.oracle.mongodb.translator.ast.stage.LookupStage;
 import com.oracle.mongodb.translator.ast.stage.MatchStage;
+import com.oracle.mongodb.translator.ast.stage.MergeStage;
+import com.oracle.mongodb.translator.ast.stage.OutStage;
 import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage.ProjectionField;
@@ -2430,5 +2432,427 @@ class PipelineRendererTest {
     int unionAllCount = sql.split("UNION ALL").length - 1;
     // If there's a UNION, it should be UNION ALL
     assertThat(unionAllCount).isGreaterThan(0);
+  }
+
+  // ==================== $out Stage Tests ====================
+
+  @Test
+  void shouldRenderOutStageAsInsertInto() {
+    // Simple $out: { $out: "outputCollection" }
+    Pipeline pipeline = Pipeline.of("orders", new OutStage("outputCollection"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // $out should generate INSERT INTO ... SELECT pattern
+    assertThat(sql).startsWith("INSERT INTO outputCollection");
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("FROM orders");
+  }
+
+  @Test
+  void shouldRenderOutStageWithMatchBeforeIt() {
+    // { $match: { status: "active" } }, { $out: "activeOrders" }
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+
+    Pipeline pipeline =
+        Pipeline.of("orders", new MatchStage(filter), new OutStage("activeOrders"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).startsWith("INSERT INTO activeOrders");
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("status");
+  }
+
+  @Test
+  void shouldRenderOutStageWithGroupBeforeIt() {
+    // { $group: { _id: "$category", total: { $sum: "$amount" } } }, { $out: "categoryTotals" }
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "total",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new GroupStage(FieldPathExpression.of("category"), accumulators),
+            new OutStage("categoryTotals"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).startsWith("INSERT INTO categoryTotals");
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("GROUP BY");
+    assertThat(sql).contains("SUM(");
+  }
+
+  @Test
+  void shouldRenderOutStageWithDatabaseName() {
+    // { $out: { db: "archive", coll: "orders_archive" } }
+    Pipeline pipeline = Pipeline.of("orders", new OutStage("orders_archive", "archive"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use schema-qualified table name
+    assertThat(sql).startsWith("INSERT INTO archive.orders_archive");
+    assertThat(sql).contains("SELECT");
+  }
+
+  @Test
+  void shouldRenderOutStageWithComplexPipeline() {
+    // Complex pipeline: match, group, sort, limit, then $out
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("amount", JsonReturnType.NUMBER),
+            LiteralExpression.of(100));
+
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+    accumulators.put(
+        "totalAmount",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MatchStage(filter),
+            new GroupStage(FieldPathExpression.of("category"), accumulators),
+            new SortStage(
+                List.of(
+                    new SortField(
+                        FieldPathExpression.of("totalAmount", JsonReturnType.NUMBER),
+                        SortDirection.DESC))),
+            new LimitStage(10),
+            new OutStage("topCategories"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).startsWith("INSERT INTO topCategories");
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("GROUP BY");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("FETCH FIRST 10 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderOutStageWithProjectBeforeIt() {
+    // { $project: { name: 1, status: 1 } }, { $out: "projectedOrders" }
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+    projections.put("status", ProjectionField.include(FieldPathExpression.of("status")));
+
+    Pipeline pipeline =
+        Pipeline.of("orders", new ProjectStage(projections), new OutStage("projectedOrders"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).startsWith("INSERT INTO projectedOrders");
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("AS name");
+    assertThat(sql).contains("AS status");
+  }
+
+  // ==================== $merge Stage Tests ====================
+
+  @Test
+  void shouldRenderMergeStageAsMergeInto() {
+    // Simple $merge with defaults: { $merge: "outputCollection" }
+    Pipeline pipeline = Pipeline.of("orders", new MergeStage("outputCollection"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // $merge should generate MERGE INTO ... USING ... ON ... WHEN MATCHED ... WHEN NOT MATCHED
+    assertThat(sql).contains("MERGE INTO outputCollection");
+    assertThat(sql).contains("USING (");
+    assertThat(sql).contains("FROM orders");
+    assertThat(sql).contains("ON (");
+    assertThat(sql).contains("$._id"); // Default ON field in JSON path
+    assertThat(sql).contains("WHEN MATCHED THEN UPDATE");
+    assertThat(sql).contains("WHEN NOT MATCHED THEN INSERT");
+  }
+
+  @Test
+  void shouldRenderMergeStageWithCustomOnFields() {
+    // $merge with multiple ON fields
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MergeStage(
+                "orderArchive",
+                List.of("orderId", "customerId"),
+                MergeStage.WhenMatched.REPLACE,
+                MergeStage.WhenNotMatched.INSERT));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("MERGE INTO orderArchive");
+    assertThat(sql).contains("ON (");
+    assertThat(sql).contains("$.orderId"); // Field in JSON path
+    assertThat(sql).contains("$.customerId"); // Field in JSON path
+  }
+
+  @Test
+  void shouldRenderMergeStageWithMatchBeforeIt() {
+    // $match followed by $merge
+    var filter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("completed"));
+    Pipeline pipeline =
+        Pipeline.of("orders", new MatchStage(filter), new MergeStage("completedOrders"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("MERGE INTO completedOrders");
+    assertThat(sql).contains("USING (");
+    assertThat(sql).contains("WHERE");
+  }
+
+  @Test
+  void shouldRenderMergeStageWithKeepExisting() {
+    // $merge with whenMatched: "keepExisting" - should skip WHEN MATCHED clause
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MergeStage(
+                "archive",
+                List.of("_id"),
+                MergeStage.WhenMatched.KEEP_EXISTING,
+                MergeStage.WhenNotMatched.INSERT));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("MERGE INTO archive");
+    // KEEP_EXISTING means no update, so no WHEN MATCHED UPDATE clause
+    assertThat(sql).doesNotContain("WHEN MATCHED THEN UPDATE");
+    assertThat(sql).contains("WHEN NOT MATCHED THEN INSERT");
+  }
+
+  @Test
+  void shouldRenderMergeStageWithDiscard() {
+    // $merge with whenNotMatched: "discard" - should skip WHEN NOT MATCHED clause
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MergeStage(
+                "existingOrders",
+                List.of("_id"),
+                MergeStage.WhenMatched.REPLACE,
+                MergeStage.WhenNotMatched.DISCARD));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("MERGE INTO existingOrders");
+    assertThat(sql).contains("WHEN MATCHED THEN UPDATE");
+    // DISCARD means no insert, so no WHEN NOT MATCHED INSERT clause
+    assertThat(sql).doesNotContain("WHEN NOT MATCHED THEN INSERT");
+  }
+
+  @Test
+  void shouldRenderMergeStageWithGroupBeforeIt() {
+    // $group followed by $merge
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", AccumulatorExpression.count());
+    accumulators.put(
+        "total",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new GroupStage(FieldPathExpression.of("category"), accumulators),
+            new MergeStage("categorySummary"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("MERGE INTO categorySummary");
+    assertThat(sql).contains("USING (");
+    assertThat(sql).contains("GROUP BY");
+    assertThat(sql).contains("COUNT(*)");
+  }
+
+  // ==================== $lookup Pipeline Form Tests ====================
+
+  @Test
+  void shouldRenderLookupPipelineFormWithSimpleMatch() {
+    // $lookup with pipeline form: { from: "reviews", let: { pid: "$productId" },
+    //   pipeline: [ { $match: { productId: "$$pid" } } ], as: "reviews" }
+    // Note: For the pipeline form, the inner match is against the bound variable
+    var innerMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("productId"),
+                FieldPathExpression.of("$$pid")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            LookupStage.withPipeline(
+                "reviews", Map.of("pid", "$productId"), List.of(innerMatch), "productReviews"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should generate a correlated subquery pattern
+    assertThat(sql).contains("SELECT");
+    assertThat(sql).contains("reviews");
+    assertThat(sql).contains("productReviews");
+    // The let variable should be bound to the outer query's field
+    assertThat(sql).contains("productId");
+  }
+
+  @Test
+  void shouldRenderLookupPipelineFormWithMultipleLetVariables() {
+    // Multiple let variables: { let: { customerId: "$customerId", orderDate: "$date" } }
+    var innerMatch =
+        new MatchStage(
+            new LogicalExpression(
+                LogicalOp.AND,
+                List.of(
+                    new ComparisonExpression(
+                        ComparisonOp.EQ,
+                        FieldPathExpression.of("customerId"),
+                        FieldPathExpression.of("$$customerId")),
+                    new ComparisonExpression(
+                        ComparisonOp.LTE,
+                        FieldPathExpression.of("date"),
+                        FieldPathExpression.of("$$orderDate")))));
+
+    var letVars = new LinkedHashMap<String, String>();
+    letVars.put("customerId", "$customerId");
+    letVars.put("orderDate", "$date");
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            LookupStage.withPipeline("customerHistory", letVars, List.of(innerMatch), "history"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("customerHistory");
+    assertThat(sql).contains("history");
+    assertThat(sql).contains("customerId");
+  }
+
+  @Test
+  void shouldRenderLookupPipelineFormWithEmptyPipeline() {
+    // Empty pipeline - just fetches all documents from the foreign collection
+    // { $lookup: { from: "categories", let: {}, pipeline: [], as: "allCategories" } }
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            LookupStage.withPipeline("categories", Map.of(), List.of(), "allCategories"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("categories");
+    assertThat(sql).contains("allCategories");
+  }
+
+  @Test
+  void shouldRenderLookupPipelineFormWithMatchBeforeIt() {
+    // $match before $lookup pipeline form
+    var outerFilter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+
+    var innerMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("orderId"),
+                FieldPathExpression.of("$$orderId")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new MatchStage(outerFilter),
+            LookupStage.withPipeline(
+                "orderItems", Map.of("orderId", "$_id"), List.of(innerMatch), "items"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("WHERE");
+    assertThat(sql).contains("status");
+    assertThat(sql).contains("orderItems");
+    assertThat(sql).contains("items");
+  }
+
+  @Test
+  void shouldRenderLookupPipelineFormWithLimitInSubpipeline() {
+    // Pipeline with $limit: gets only N related documents
+    var innerMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("productId"),
+                FieldPathExpression.of("$$productId")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            LookupStage.withPipeline(
+                "reviews",
+                Map.of("productId", "$_id"),
+                List.of(innerMatch, new LimitStage(5)),
+                "topReviews"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("reviews");
+    assertThat(sql).contains("topReviews");
+    // Should have some form of limit in the subquery
+    assertThat(sql).containsAnyOf("FETCH FIRST 5", "ROWNUM <= 5", "LIMIT 5");
+  }
+
+  @Test
+  void shouldRenderLookupPipelineFormWithSortInSubpipeline() {
+    // Pipeline with $sort to order related documents
+    var innerMatch =
+        new MatchStage(
+            new ComparisonExpression(
+                ComparisonOp.EQ,
+                FieldPathExpression.of("userId"),
+                FieldPathExpression.of("$$userId")));
+    var innerSort =
+        new SortStage(
+            List.of(new SortField(FieldPathExpression.of("createdAt"), SortDirection.DESC)));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "users",
+            LookupStage.withPipeline(
+                "posts",
+                Map.of("userId", "$_id"),
+                List.of(innerMatch, innerSort, new LimitStage(10)),
+                "recentPosts"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("posts");
+    assertThat(sql).contains("recentPosts");
+    assertThat(sql).contains("ORDER BY");
   }
 }

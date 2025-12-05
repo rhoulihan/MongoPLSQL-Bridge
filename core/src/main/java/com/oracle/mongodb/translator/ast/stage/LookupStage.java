@@ -6,7 +6,12 @@
 
 package com.oracle.mongodb.translator.ast.stage;
 
-import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
+import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
+import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
+import com.oracle.mongodb.translator.ast.expression.Expression;
+import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
+import com.oracle.mongodb.translator.ast.expression.LogicalOp;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
 import com.oracle.mongodb.translator.util.FieldNameValidator;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -183,11 +188,220 @@ public final class LookupStage implements Stage {
   }
 
   private void renderPipelineForm(SqlGenerationContext ctx) {
-    // Pipeline form with let/pipeline is complex and requires correlated subquery support
-    // For now, throw an exception with a clear message
-    throw new UnsupportedOperatorException(
-        "$lookup with let/pipeline (correlated subquery) is not yet fully supported. "
-            + "Use the simple form with localField/foreignField instead.");
+    // Pipeline form with let/pipeline uses LATERAL join with correlated subquery
+    // Result pattern:
+    // , LATERAL (SELECT JSON_ARRAYAGG(f.data) FROM collection f WHERE ...) lookup_alias
+
+    // Validate table name
+    FieldNameValidator.validateTableName(from);
+
+    // Generate alias for the LATERAL subquery
+    String alias = ctx.generateTableAlias(from);
+    ctx.registerLookupTableAlias(as, alias);
+
+    // Start LATERAL join - use comma join since LATERAL works as correlated subquery
+    ctx.sql(", LATERAL (SELECT JSON_ARRAYAGG(");
+    ctx.sql(alias);
+    ctx.sql("_inner.data");
+
+    // Add ORDER BY inside JSON_ARRAYAGG if we have a sort stage in the pipeline
+    SortStage sortStage = findSortStage();
+    if (sortStage != null) {
+      ctx.sql(" ORDER BY ");
+      renderSortFields(sortStage, alias + "_inner", ctx);
+    }
+
+    ctx.sql(") AS ");
+    ctx.sql(as);
+    ctx.sql(" FROM ");
+    ctx.tableName(from);
+    ctx.sql(" ");
+    ctx.sql(alias);
+    ctx.sql("_inner");
+
+    // Render WHERE clause from pipeline $match stages with let variable substitution
+    boolean hasWhere = false;
+
+    // Process each match stage in the pipeline
+    for (Stage stage : pipeline) {
+      if (stage instanceof MatchStage matchStage) {
+        if (!hasWhere) {
+          ctx.sql(" WHERE ");
+          hasWhere = true;
+        } else {
+          ctx.sql(" AND ");
+        }
+        // Render the match expression with variable substitution
+        renderExpressionWithVarSubstitution(
+            matchStage.getFilter(), alias + "_inner", ctx);
+      }
+    }
+
+    // Add FETCH FIRST for $limit stage in pipeline
+    LimitStage limitStage = findLimitStage();
+    if (limitStage != null) {
+      ctx.sql(" FETCH FIRST ");
+      ctx.sql(String.valueOf(limitStage.getLimit()));
+      ctx.sql(" ROWS ONLY");
+    }
+
+    ctx.sql(") ");
+    ctx.sql(alias);
+  }
+
+  /** Finds the $sort stage in the pipeline, if present. */
+  private SortStage findSortStage() {
+    for (Stage stage : pipeline) {
+      if (stage instanceof SortStage) {
+        return (SortStage) stage;
+      }
+    }
+    return null;
+  }
+
+  /** Finds the $limit stage in the pipeline, if present. */
+  private LimitStage findLimitStage() {
+    for (Stage stage : pipeline) {
+      if (stage instanceof LimitStage) {
+        return (LimitStage) stage;
+      }
+    }
+    return null;
+  }
+
+  /** Renders sort fields for ORDER BY inside JSON_ARRAYAGG. */
+  private void renderSortFields(SortStage sortStage, String tableAlias, SqlGenerationContext ctx) {
+    var sortFields = sortStage.getSortFields();
+    for (int i = 0; i < sortFields.size(); i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      var sortField = sortFields.get(i);
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(tableAlias);
+      ctx.sql(".data, '$.");
+      // Get field name directly from the FieldPathExpression
+      String fieldName = sortField.getFieldPath().getPath();
+      ctx.sql(fieldName);
+      ctx.sql("')");
+      if (sortField.getDirection() == SortStage.SortDirection.DESC) {
+        ctx.sql(" DESC");
+      }
+    }
+  }
+
+  /**
+   * Renders an expression with variable substitution for $$varName references.
+   *
+   * <p>This method recursively handles:
+   *
+   * <ul>
+   *   <li>LogicalExpression (AND/OR) - renders each operand with proper operators
+   *   <li>ComparisonExpression - renders with inner/outer table references
+   * </ul>
+   */
+  private void renderExpressionWithVarSubstitution(
+      Expression expr, String innerAlias, SqlGenerationContext ctx) {
+    if (expr instanceof LogicalExpression logical) {
+      // Render each operand with the logical operator between them
+      List<Expression> operands = logical.getOperands();
+      String sqlOperator = logical.getOp() == LogicalOp.AND ? " AND " : " OR ";
+
+      ctx.sql("(");
+      for (int i = 0; i < operands.size(); i++) {
+        if (i > 0) {
+          ctx.sql(sqlOperator);
+        }
+        renderExpressionWithVarSubstitution(operands.get(i), innerAlias, ctx);
+      }
+      ctx.sql(")");
+    } else if (expr instanceof ComparisonExpression comp) {
+      renderComparisonWithVarSubstitution(comp, innerAlias, ctx);
+    } else {
+      // Fallback for other expressions - visit directly
+      // This may not work for all cases but handles simple expressions
+      ctx.visit(expr);
+    }
+  }
+
+  /** Renders a comparison expression with variable substitution. */
+  private void renderComparisonWithVarSubstitution(
+      ComparisonExpression comp, String innerAlias, SqlGenerationContext ctx) {
+    Expression left = comp.getLeft();
+
+    // Left side is typically the inner table field reference
+    renderFieldReference(left, innerAlias, ctx);
+
+    // Render comparison operator
+    ctx.sql(" ");
+    ctx.sql(getSqlOperator(comp.getOp()));
+    ctx.sql(" ");
+
+    // Right side may be a $$variable reference or a regular value
+    // Parser converts $$varName to $varName, so check for $prefix and lookup in letVariables
+    final Expression right = comp.getRight();
+    if (right instanceof FieldPathExpression rightField) {
+      String path = rightField.getPath();
+      if (path.startsWith("$")) {
+        String potentialVarName = path.substring(1); // Remove $ to get potential variable name
+        String outerFieldPath = letVariables.get(potentialVarName);
+        if (outerFieldPath != null) {
+          // Variable reference - substitute with outer table field
+          String outerField =
+              outerFieldPath.startsWith("$") ? outerFieldPath.substring(1) : outerFieldPath;
+          ctx.sql("JSON_VALUE(");
+          ctx.sql(ctx.getBaseTableAlias());
+          ctx.sql(".data, '$.");
+          ctx.sql(outerField);
+          ctx.sql("')");
+        } else {
+          // Not a variable, treat as inner table field reference
+          ctx.sql("JSON_VALUE(");
+          ctx.sql(innerAlias);
+          ctx.sql(".data, '$.");
+          ctx.sql(potentialVarName);
+          ctx.sql("')");
+        }
+      } else {
+        // Regular field reference without prefix
+        renderFieldReference(right, innerAlias, ctx);
+      }
+    } else {
+      // Non-field expression (literal, etc.)
+      ctx.visit(right);
+    }
+  }
+
+  /** Renders a field reference expression. */
+  private void renderFieldReference(Expression expr, String tableAlias, SqlGenerationContext ctx) {
+    if (expr instanceof FieldPathExpression fieldExpr) {
+      String path = fieldExpr.getPath();
+      // Remove $ prefix if present for inner table fields
+      if (path.startsWith("$") && !path.startsWith("$$")) {
+        path = path.substring(1);
+      }
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(tableAlias);
+      ctx.sql(".data, '$.");
+      ctx.sql(path);
+      ctx.sql("')");
+    } else {
+      ctx.visit(expr);
+    }
+  }
+
+  /** Returns the SQL operator for a comparison operator. */
+  private String getSqlOperator(ComparisonOp op) {
+    return switch (op) {
+      case EQ -> "=";
+      case NE -> "<>";
+      case GT -> ">";
+      case GTE -> ">=";
+      case LT -> "<";
+      case LTE -> "<=";
+      case IN -> "IN";
+      case NIN -> "NOT IN";
+    };
   }
 
   @Override

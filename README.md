@@ -34,7 +34,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 | `$sort` | ORDER BY (with Top-N optimization) |
 | `$limit` | FETCH FIRST n ROWS ONLY |
 | `$skip` | OFFSET n ROWS |
-| `$lookup` | LEFT OUTER JOIN |
+| `$lookup` | LEFT OUTER JOIN (equality) / LATERAL join (pipeline form) |
 | `$unwind` | JSON_TABLE with NESTED PATH |
 | `$addFields`/`$set` | Computed columns |
 | `$unionWith` | UNION ALL |
