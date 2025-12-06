@@ -214,13 +214,22 @@ def compare_results(mongo_results, oracle_results) -> tuple:
 
 
 def load_query_test_results() -> dict:
-    """Load cached test results from JSON file."""
+    """Load cached test results from JSON file including saved query results."""
     results = {}
     try:
         with open(TEST_RESULTS_FILE, 'r') as f:
             data = json.load(f)
             for result in data.get('results', []):
-                results[result['id']] = result
+                # Store all fields including mongodb_results and oracle_results
+                results[result['id']] = {
+                    'id': result.get('id'),
+                    'status': result.get('status'),
+                    'matchType': result.get('matchType', ''),
+                    'mongodb_count': result.get('mongodb_count', 'N/A'),
+                    'oracle_count': result.get('oracle_count', 'N/A'),
+                    'mongodb_results': result.get('mongodb_results'),
+                    'oracle_results': result.get('oracle_results')
+                }
     except Exception as e:
         print(f"Warning: Could not load test results: {e}", file=sys.stderr)
     return results
@@ -360,8 +369,9 @@ def process_query_tests(run_queries: bool = False) -> tuple:
         # Get cached results or run queries
         result = results.get(test_id, {})
 
-        mongo_results = None
-        oracle_results = None
+        # Use saved results from test report if available
+        mongo_results = result.get('mongodb_results')
+        oracle_results = result.get('oracle_results')
         comparison_result = ""
 
         if run_queries and not test.get('skip', False):
@@ -413,8 +423,8 @@ def process_query_tests(run_queries: bool = False) -> tuple:
             "comparisonResult": comparison_result,
             "sortBy": test.get('sort_by', '_id'),
 
-            "mongodbResults": mongo_results[:10] if mongo_results and len(mongo_results) > 0 else None,
-            "oracleResults": oracle_results[:10] if oracle_results and len(oracle_results) > 0 else None
+            "mongodbResults": mongo_results if mongo_results else None,
+            "oracleResults": oracle_results if oracle_results else None
         }
 
         tests.append(test_entry)

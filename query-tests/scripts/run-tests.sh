@@ -321,7 +321,7 @@ PYTHON
         else
             echo "," >> "$JSON_REPORT_FILE"
         fi
-        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": []}" >> "$JSON_REPORT_FILE"
         continue
     fi
 
@@ -342,7 +342,7 @@ PYTHON
         else
             echo "," >> "$JSON_REPORT_FILE"
         fi
-        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": []}" >> "$JSON_REPORT_FILE"
         continue
     fi
     TEST_SQL="$GENERATED_SQL"
@@ -429,13 +429,18 @@ PYTHON
     echo "  Details: $DETAILS" >> "$REPORT_FILE"
     echo "" >> "$REPORT_FILE"
 
-    # Add to JSON report
+    # Add to JSON report - escape special characters in results for valid JSON
+    MONGO_RESULT_ESCAPED=$(echo "$MONGO_RESULT" | python3 -c 'import sys,json; print(json.dumps(json.loads(sys.stdin.read())))' 2>/dev/null || echo "[]")
+    ORACLE_JSON_ESCAPED=$(echo "$ORACLE_JSON" | python3 -c 'import sys,json; print(json.dumps(json.loads(sys.stdin.read())))' 2>/dev/null || echo "[]")
+
+    # Write comma prefix and JSON in single operation to avoid race conditions
+    JSON_ENTRY="{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"matchType\": \"$MATCH_TYPE\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": $MONGO_RESULT_ESCAPED, \"oracle_results\": $ORACLE_JSON_ESCAPED}"
     if [ "$FIRST_RESULT" = true ]; then
         FIRST_RESULT=false
+        echo "$JSON_ENTRY" >> "$JSON_REPORT_FILE"
     else
-        echo "," >> "$JSON_REPORT_FILE"
+        echo ",$JSON_ENTRY" >> "$JSON_REPORT_FILE"
     fi
-    echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"matchType\": \"$MATCH_TYPE\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
 
     # Show verbose output if requested
     if [ "$VERBOSE" = true ]; then
