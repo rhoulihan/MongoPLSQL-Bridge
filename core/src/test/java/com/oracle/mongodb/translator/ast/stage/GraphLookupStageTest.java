@@ -366,7 +366,12 @@ class GraphLookupStageTest {
   }
 
   @Test
-  void shouldRenderCteDefinitionWithRecursiveDepth() {
+  void shouldRenderCteDefinitionWithRecursiveDepthAsPlaceholder() {
+    // Recursive $graphLookup with maxDepth > 0 cannot be fully implemented due to Oracle
+    // limitations:
+    // 1. Recursive CTEs inside LATERAL can't reference outer columns (ORA-00904)
+    // 2. CONNECT BY with PRIOR doesn't work with JSON dot notation (ORA-19200)
+    // For now, a placeholder is used that returns empty results.
     var stage =
         new GraphLookupStage(
             "employees", "$reportsTo", "reportsTo", "name", "hierarchy", 5, null, null);
@@ -375,20 +380,22 @@ class GraphLookupStageTest {
     stage.renderCteDefinition(cteContext, "source");
 
     String sql = cteContext.toSql();
-    // For recursive cases, placeholder is used
+    // Recursive cases use a placeholder that returns empty results
     assertThat(sql).contains("DUAL");
     assertThat(sql).contains("1=0");
   }
 
   @Test
-  void shouldRenderCteDefinitionWithNoMaxDepth() {
+  void shouldRenderCteDefinitionWithNoMaxDepthAsPlaceholder() {
+    // No maxDepth means unlimited recursion, but due to Oracle limitations,
+    // this also falls back to placeholder
     var stage = new GraphLookupStage("employees", "$reportsTo", "reportsTo", "name", "hierarchy");
 
     var cteContext = new DefaultSqlGenerationContext();
     stage.renderCteDefinition(cteContext, "source");
 
     String sql = cteContext.toSql();
-    // No max depth means it uses recursive placeholder
+    // Recursive cases use a placeholder
     assertThat(sql).contains("DUAL");
   }
 
@@ -406,7 +413,8 @@ class GraphLookupStageTest {
     stage.render(context);
 
     String sql = context.toSql();
-    assertThat(sql).contains("$.reportsTo");
+    // Uses dot notation now instead of JSON path
+    assertThat(sql).contains("data.reportsTo");
   }
 
   @Test
@@ -455,7 +463,8 @@ class GraphLookupStageTest {
     String sql = context.toSql();
     // Without maxDepth, WHERE clause starts differently
     assertThat(sql).contains("WHERE 1=1");
-    assertThat(sql).contains("AND JSON_VALUE(c.data");
+    // Uses dot notation for type preservation
+    assertThat(sql).contains("AND c.data.");
   }
 
   @Test

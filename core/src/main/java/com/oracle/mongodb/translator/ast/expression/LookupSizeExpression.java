@@ -20,11 +20,10 @@ import java.util.Objects;
  * { $project: { invCount: { $size: "$inv" } } }
  * </pre>
  *
- * <p>Generates SQL:
+ * <p>Generates SQL using dot notation for type preservation:
  *
  * <pre>
- * (SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId')
- *    = JSON_VALUE(base.data, '$._id'))
+ * (SELECT COUNT(*) FROM inventory WHERE inventory.data.productId = base.data."_id")
  * </pre>
  */
 public final class LookupSizeExpression implements Expression {
@@ -48,22 +47,50 @@ public final class LookupSizeExpression implements Expression {
 
   @Override
   public void render(SqlGenerationContext ctx) {
-    // Generate correlated subquery: (SELECT COUNT(*) FROM table WHERE foreign = local)
+    // Generate correlated subquery using dot notation for type preservation:
+    // (SELECT COUNT(*) FROM table t WHERE t.data."foreignField" = base.data."localField")
+    // Note: We use an alias for the subquery table and quote ALL field names
+    // because Oracle dot notation requires an alias for proper resolution in correlated
+    // subqueries, and field names must be quoted to preserve case sensitivity.
+    String subqueryAlias = "sz_" + foreignTable.substring(0, Math.min(3, foreignTable.length()));
     ctx.sql("(SELECT COUNT(*) FROM ");
     ctx.tableName(foreignTable);
-    ctx.sql(" WHERE JSON_VALUE(");
-    ctx.tableName(foreignTable);
-    ctx.sql(".data, '$.");
-    ctx.jsonField(foreignField);
-    ctx.sql("') = JSON_VALUE(");
+    ctx.sql(" ");
+    ctx.sql(subqueryAlias);
+    ctx.sql(" WHERE ");
+    ctx.sql(subqueryAlias);
+    ctx.sql(".data.");
+    ctx.sql(quotePath(foreignField));
+    ctx.sql(" = ");
     String alias = ctx.getBaseTableAlias();
     if (alias != null && !alias.isEmpty()) {
       ctx.sql(alias);
       ctx.sql(".");
     }
-    ctx.sql("data, '$.");
-    ctx.jsonField(localField);
-    ctx.sql("'))");
+    ctx.sql("data.");
+    ctx.sql(quotePath(localField));
+    ctx.sql(")");
+  }
+
+  /**
+   * Quotes a field path for Oracle dot notation. ALL field names are quoted to preserve case
+   * sensitivity, since Oracle identifiers are case-insensitive when unquoted but JSON field names
+   * are case-sensitive.
+   */
+  private static String quotePath(String path) {
+    String[] segments = path.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        result.append(".");
+      }
+      String segment = segments[i];
+      if (!segment.isEmpty()) {
+        // Always quote to preserve case sensitivity
+        result.append("\"").append(segment).append("\"");
+      }
+    }
+    return result.toString();
   }
 
   @Override

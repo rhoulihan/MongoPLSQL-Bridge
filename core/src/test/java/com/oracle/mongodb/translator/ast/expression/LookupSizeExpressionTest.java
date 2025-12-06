@@ -29,10 +29,11 @@ class LookupSizeExpressionTest {
 
     expr.render(context);
 
+    // Uses dot notation with alias and quoted field names for type preservation
     assertThat(context.toSql())
         .isEqualTo(
-            "(SELECT COUNT(*) FROM inventory WHERE JSON_VALUE(inventory.data, '$.productId')"
-                + " = JSON_VALUE(data, '$._id'))");
+            "(SELECT COUNT(*) FROM inventory sz_inv WHERE sz_inv.data.\"productId\""
+                + " = data.\"_id\")");
   }
 
   @Test
@@ -42,10 +43,11 @@ class LookupSizeExpressionTest {
 
     expr.render(context);
 
+    // Uses dot notation with alias and quoted field names for type preservation
     assertThat(context.toSql())
         .isEqualTo(
-            "(SELECT COUNT(*) FROM orders WHERE JSON_VALUE(orders.data, '$.custId')"
-                + " = JSON_VALUE(base.data, '$.customerId'))");
+            "(SELECT COUNT(*) FROM orders sz_ord WHERE sz_ord.data.\"custId\""
+                + " = base.data.\"customerId\")");
   }
 
   @Test
@@ -55,10 +57,11 @@ class LookupSizeExpressionTest {
 
     expr.render(context);
 
+    // Uses dot notation with alias and quoted field names for type preservation
     assertThat(context.toSql())
         .isEqualTo(
-            "(SELECT COUNT(*) FROM line_items WHERE JSON_VALUE(line_items.data, '$.order_id')"
-                + " = JSON_VALUE(data, '$.orderId'))");
+            "(SELECT COUNT(*) FROM line_items sz_lin WHERE sz_lin.data.\"order_id\""
+                + " = data.\"orderId\")");
   }
 
   @Test
@@ -68,10 +71,11 @@ class LookupSizeExpressionTest {
 
     expr.render(context);
 
+    // Uses dot notation with alias and quoted field names for type preservation
     assertThat(context.toSql())
         .isEqualTo(
-            "(SELECT COUNT(*) FROM reviews WHERE JSON_VALUE(reviews.data, '$.item.productRef')"
-                + " = JSON_VALUE(data, '$.product.id'))");
+            "(SELECT COUNT(*) FROM reviews sz_rev WHERE sz_rev.data.\"item\".\"productRef\""
+                + " = data.\"product\".\"id\")");
   }
 
   @Test
@@ -109,9 +113,10 @@ class LookupSizeExpressionTest {
 
     expr.render(context);
 
+    // Uses dot notation with alias and quoted field names for type preservation
     assertThat(context.toSql())
         .isEqualTo(
-            "(SELECT COUNT(*) FROM products WHERE JSON_VALUE(products.data, '$.itemSku')"
-                + " = JSON_VALUE(data, '$.sku'))");
+            "(SELECT COUNT(*) FROM products sz_pro WHERE sz_pro.data.\"itemSku\""
+                + " = data.\"sku\")");
   }
 }

@@ -177,8 +177,8 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
-    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
+    // Uses dot notation with IS NULL for null comparison
+    assertThat(context.toSql()).contains("data.deletedAt IS NULL");
   }
 
   @Test
@@ -1212,8 +1212,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": null}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
-    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.status?(@ != null)')");
+    // Uses dot notation with IS NULL for null comparison
+    assertThat(context.toSql()).contains("data.status IS NULL");
   }
 
   @Test
@@ -1221,8 +1221,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": {\"$ne\": null}}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // For FieldPathExpression, uses JSON_EXISTS to properly handle JSON null vs missing field
-    assertThat(context.toSql()).contains("JSON_EXISTS(data, '$.status?(@ != null)')");
+    // Uses dot notation with IS NOT NULL for not-null comparison
+    assertThat(context.toSql()).contains("data.status IS NOT NULL");
   }
 
   @Test

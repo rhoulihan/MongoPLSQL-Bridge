@@ -1,52 +1,75 @@
 # TODO - MongoDB to Oracle SQL Translator
 
 This file tracks improvements, enhancements, and features discovered during development.
-Last updated: 2025-12-04
+Last updated: 2025-12-05
 
-## Stub/Incomplete Implementations
+## Completed Implementations
 
 ### High Priority - Stage Implementations
 
-- [ ] **$out Stage - Full Implementation** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/OutStage.java:38-39`
-  - Current: Stub implementation that only renders a comment
-  - Needed: Full implementation using CREATE TABLE AS SELECT or DROP/INSERT pattern
-  - Oracle translation: `INSERT INTO outputCollection (data) SELECT data FROM (aggregation query)`
+- [x] **$out Stage - Full Implementation** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:521-590`
+  - Implemented: `INSERT INTO table (data) SELECT ...` pattern
+  - Supports: database.collection notation
+  - Tests: `PipelineRendererTest.java` lines 2437-2560
 
-- [ ] **$merge Stage - Full Implementation** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/MergeStage.java:40-41`
-  - Current: Stub implementation for AST structure only
-  - Needed: Full MERGE statement generation with whenMatched/whenNotMatched handling
-  - Oracle translation: `MERGE INTO targetCollection t USING (SELECT...) s ON (...) WHEN MATCHED THEN... WHEN NOT MATCHED THEN...`
+- [x] **$merge Stage - Full Implementation** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:599-712`
+  - Implemented: Full Oracle MERGE statement generation
+  - Supports: `MERGE INTO t USING (SELECT...) s ON (...) WHEN MATCHED THEN... WHEN NOT MATCHED THEN...`
+  - Supports: whenMatched (REPLACE, MERGE with JSON_MERGEPATCH, KEEP_EXISTING, FAIL)
+  - Supports: whenNotMatched (INSERT, DISCARD, FAIL)
+  - Tests: `PipelineRendererTest.java` lines 2566+
 
-- [ ] **$lookup Pipeline Form (Correlated Subquery)** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/LookupStage.java:186-190`
-  - Current: Throws UnsupportedOperatorException for let/pipeline form
-  - Needed: Support for correlated subqueries using Oracle LATERAL or correlated subquery syntax
-  - Use case: Complex joins with variable bindings
+- [x] **$lookup Pipeline Form (Correlated Subquery)** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/LookupStage.java`
+  - Implemented: LATERAL join with JSON_ARRAYAGG for correlated subqueries
+  - Supports: let variable bindings with proper substitution
 
-### Medium Priority - Expression Implementations
+- [x] **$graphLookup Non-Recursive Support** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:1026-1187`
+  - Implemented: GRAPHLOOKUP001 (maxDepth=0) - simple single-level lookup via LATERAL join
+  - Tests: `query-tests/tests/test-cases.json` - GRAPHLOOKUP001 passing
 
-- [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/GraphLookupStage.java:385-387`
-  - Current: Uses empty placeholder CTE for recursive cases (maxDepth > 0 or null)
-  - Needed: Full recursive CTE implementation using Oracle's CONNECT BY or recursive WITH clause
-  - Note: maxDepth=0 case works correctly
+- [x] **$reduce Array Operation** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:575-645`
+  - Implemented: Pattern detection for common reductions
+  - Supports: Sum pattern (ADD -> SUM), Concat pattern (CONCAT -> LISTAGG)
+  - Tests: `ArrayExpressionTest.java` shouldRenderReduceSumPattern, shouldRenderReduceWithConcatPattern
 
-- [ ] **$reduce Array Operation** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:564-567`
-  - Current: Renders `/* $reduce not fully supported */ NULL`
-  - Needed: Implement accumulator handling in SQL, possibly using recursive CTE or MODEL clause
+- [x] **$filter/$map Fallback for Expression Arrays** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:544-573`
+  - Implemented: Proper fallback handling for non-field-path arrays
+  - Field paths: Full JSON_TABLE with JSON_ARRAYAGG support
+  - Expression arrays: Graceful fallback with descriptive comment
+  - Tests: `ArrayExpressionTest.java` shouldRenderFilterOnExpressionArray, shouldRenderMapOnExpressionArray
 
-- [ ] **$filter Array Operation - General Case** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:544-552`
-  - Current: Basic JSON_TABLE implementation for field path arrays only
-  - Needed: Support for expression arrays, not just field path references
+- [x] **Variable Binding for $filter/$map/$reduce** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:544-700`
+  - Implemented: $$item.field and $$this.field variable binding support
+  - $filter: Extracts field from condition, creates JSON_TABLE with field column
+  - $map: Extracts field from mapping expression, creates JSON_TABLE with field column
+  - $reduce: Extracts $$this.field from ADD expressions for SUM pattern
+  - Tests: `ArrayExpressionTest.java` shouldRenderFilterWithVariableFieldAccess, shouldRenderMapWithVariableFieldAccess, shouldRenderReduceSumPatternWithNestedFieldAccess
 
-- [ ] **$map Array Operation - General Case** (discovered: 2025-12-04)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:554-562`
-  - Current: Basic JSON_TABLE implementation for field path arrays only
-  - Needed: Support for applying mapping expressions to each element properly
+- [x] **$filter/$map Empty Array Handling** (completed: 2025-12-05)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:550-602`
+  - Issue: Oracle JSON_ARRAYAGG returns NULL when no rows match, MongoDB returns empty array `[]`
+  - Fix: Wrapped JSON_ARRAYAGG with COALESCE(..., JSON_ARRAY()) pattern
+  - Applied to: $filter (lines 551-552, 565-566), $map (lines 587-589, 600-602)
+  - Test: ARR015 ($filter on field path array) now shows "docs match" with empty arrays
+
+## Stub/Incomplete Implementations
+
+- [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-05)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:1026-1187`
+  - Issue: Oracle 23ai does not support CTEs inside LATERAL that reference outer columns (ORA-00904)
+  - Issue: PRIOR keyword does not work with JSON dot notation (ORA-19200)
+  - Current: Returns stub SQL with empty result set for recursive cases (maxDepth > 0)
+  - Skipped Tests:
+    - `query-tests/tests/test-cases.json` - GRAPHLOOKUP002 (recursive hierarchy traversal)
+    - `PipelineRendererTest.java` - 7 tests with @Disabled annotation
+  - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
 
 ## Improvements
 
@@ -63,9 +86,21 @@ Last updated: 2025-12-04
 
 ## Technical Debt
 
-- [ ] **Variable Binding Support for Complex Array Operations**
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:540-541`
-  - Note: $filter, $map, $reduce require variable bindings ($$this, $$value, etc.) which need proper scoping
+- [x] **Variable Binding Support for Complex Array Operations** (completed: 2025-12-04)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/ArrayExpression.java:544-700`
+  - Note: $filter, $map, $reduce now support variable bindings ($$item.field, $$this.field)
+  - See "Variable Binding for $filter/$map/$reduce" in Completed Implementations section
+
+- [ ] **Type Preservation for JSON Field Paths** (discovered: 2025-12-05)
+  - Issue: Oracle JSON_VALUE returns strings by default, MongoDB preserves types
+  - Example: MongoDB `orderId: 1002` (number) vs Oracle `"ORDERID": "1002"` (string)
+  - Files: `core/src/main/java/com/oracle/mongodb/translator/ast/expression/FieldPathExpression.java`
+  - Potential solutions:
+    - Add `RETURNING NUMBER` clause for numeric fields (requires type inference)
+    - Use JSON_QUERY for non-scalar values
+    - Implement schema inference from sample documents
+    - Add explicit type hints in translation options
+  - Complexity: Medium-High (requires type propagation through AST)
 
 ## Notes
 

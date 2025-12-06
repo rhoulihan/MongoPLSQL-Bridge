@@ -3454,7 +3454,7 @@
       "mongodb_pipeline": [
         {
           "$match": {
-            "_id": 1
+            "_id": "E001"
           }
         },
         {
@@ -3480,7 +3480,6 @@
           }
         }
       ],
-      "oracle_sql": "SELECT JSON_VALUE(base.data, '$._id') AS \"_id\", JSON_VALUE(base.data, '$.name') AS name, JSON_VALUE(data, '$.colleagues.size()') AS colleagueCount, colleagues_cte.colleagues AS colleagues FROM employees base LEFT OUTER JOIN LATERAL (SELECT JSON_ARRAYAGG(g.data) AS colleagues FROM employees g WHERE JSON_VALUE(g.data, '$.department') = JSON_VALUE(base.data, '$.department') AND JSON_VALUE(g.data, '$.active') = true) colleagues_cte ON 1=1 WHERE JSON_VALUE(base.data, '$._id' RETURNING NUMBER) = :1",
       "expected_count": 1,
       "sort_by": null
     },
@@ -4489,7 +4488,7 @@
       "mongodb_pipeline": [
         {
           "$match": {
-            "_id": 1
+            "_id": "E001"
           }
         },
         {
@@ -4511,7 +4510,6 @@
           }
         }
       ],
-      "oracle_sql": "SELECT base.id, JSON_VALUE(base.data, '$.name') AS name, JSON_VALUE(base.data, '$.department') AS department, (SELECT COUNT(*) FROM employees e2 WHERE JSON_VALUE(e2.data, '$.department') = JSON_VALUE(base.data, '$.department')) AS colleagueCount FROM employees base WHERE JSON_VALUE(base.data, '$._id' RETURNING NUMBER) = 1 ORDER BY base.id",
       "expected_count": 1,
       "sort_by": "_id"
     },
@@ -4610,8 +4608,7 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+      "expected_count": 5
     },
     {
       "id": "LOOKUP_PIPELINE002",
@@ -4657,8 +4654,7 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+      "expected_count": 2
     },
     {
       "id": "LOOKUP_PIPELINE003",
@@ -4704,8 +4700,7 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+      "expected_count": 1
     },
     {
       "id": "LOOKUP_PIPELINE004",
@@ -4754,8 +4749,7 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+      "expected_count": 2
     },
     {
       "id": "LOOKUP_PIPELINE005",
@@ -4788,8 +4782,7 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "LATERAL join - requires oracle_sql field for execution comparison"
+      "expected_count": 1
     },
     {
       "id": "WINDOW005",
@@ -4873,6 +4866,142 @@
       "oracle_sql": "SELECT id, JSON_VALUE(data, '$.name') AS name, JSON_VALUE(data, '$.salary' RETURNING NUMBER) AS salary, AVG(JSON_VALUE(data, '$.salary' RETURNING NUMBER)) OVER (ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS movingAvgSalary FROM employees ORDER BY JSON_VALUE(data, '$.salary' RETURNING NUMBER)",
       "expected_count": 10,
       "sort_by": null
+    },
+    {
+      "id": "REDUCE001",
+      "name": "$reduce - sum array elements",
+      "category": "array",
+      "operator": "$reduce",
+      "description": "Tests $reduce operator with sum pattern to total item prices",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "itemTotal": {
+              "$reduce": {
+                "input": "$items",
+                "initialValue": 0,
+                "in": {
+                  "$add": ["$$value", "$$this.price"]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "REDUCE002",
+      "name": "$reduce - concatenate tags",
+      "category": "array",
+      "operator": "$reduce",
+      "description": "Tests $reduce operator with concat pattern to join tags",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "allTags": {
+              "$reduce": {
+                "input": "$tags",
+                "initialValue": "",
+                "in": {
+                  "$concat": ["$$value", "$$this"]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_count": 10,
+      "sort_by": "name"
+    },
+    {
+      "id": "GRAPHLOOKUP002",
+      "name": "$graphLookup - recursive hierarchy",
+      "category": "graphLookup",
+      "operator": "$graphLookup",
+      "description": "Tests $graphLookup with recursive depth for hierarchical data traversal",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {
+          "$graphLookup": {
+            "from": "employees",
+            "startWith": "$_id",
+            "connectFromField": "reportsTo",
+            "connectToField": "_id",
+            "as": "reportingChain",
+            "maxDepth": 3,
+            "depthField": "depth"
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "name": 1,
+            "reportingChain": 1
+          }
+        }
+      ],
+      "skip": true,
+      "skip_reason": "$graphLookup requires hierarchical test data with reportsTo field - unit tests in PipelineRendererTest cover recursive CTE generation"
+    },
+    {
+      "id": "ARR015",
+      "name": "$filter on field path array",
+      "category": "array",
+      "operator": "$filter",
+      "description": "Tests $filter operator with field path array input - supported case",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "expensiveItems": {
+              "$filter": {
+                "input": "$items",
+                "as": "item",
+                "cond": {
+                  "$gte": ["$$item.price", 100]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ARR016",
+      "name": "$map on field path array",
+      "category": "array",
+      "operator": "$map",
+      "description": "Tests $map operator with field path array input - supported case",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {
+          "$project": {
+            "_id": 1,
+            "orderId": 1,
+            "productNames": {
+              "$map": {
+                "input": "$items",
+                "as": "item",
+                "in": "$$item.product"
+              }
+            }
+          }
+        }
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
     }
   ]
 }

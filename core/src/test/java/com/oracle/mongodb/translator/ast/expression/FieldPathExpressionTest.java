@@ -231,4 +231,33 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("status");
     assertThat(expr.toString()).isEqualTo("FieldPath($status)");
   }
+
+  @Test
+  void shouldRenderUnderscoreFieldWithQuotedIdentifier() {
+    // Oracle JSON dot notation requires quoting for fields starting with underscore
+    var expr = FieldPathExpression.of("_id");
+
+    expr.render(context);
+
+    assertThat(context.toSql()).isEqualTo("data.\"_id\"");
+  }
+
+  @Test
+  void shouldRenderUnderscoreFieldWithBaseAlias() {
+    var contextWithAlias = new DefaultSqlGenerationContext(false, null, "base");
+
+    var expr = FieldPathExpression.of("_id");
+    expr.render(contextWithAlias);
+
+    assertThat(contextWithAlias.toSql()).isEqualTo("base.data.\"_id\"");
+  }
+
+  @Test
+  void shouldRenderUnderscoreFieldWithReturnType() {
+    var expr = FieldPathExpression.of("_id", JsonReturnType.NUMBER);
+
+    expr.render(context);
+
+    assertThat(context.toSql()).isEqualTo("CAST(data.\"_id\" AS NUMBER)");
+  }
 }

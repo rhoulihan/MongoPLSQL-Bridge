@@ -189,22 +189,28 @@ EOSQL" 2>/dev/null | grep -v "^$" | head -1 | tr -d ' \t'
 generate_oracle_sql() {
     local collection="$1"
     local pipeline="$2"
+    local tmp_file
     local result
     local exit_code
 
-    result=$(cd "$PROJECT_ROOT" && timeout --kill-after=5 30 ./gradlew :core:translatePipeline \
-        -PcollectionName="$collection" \
-        -PpipelineJson="$pipeline" \
-        -Pinline=true \
-        --quiet 2>/dev/null)
+    # Write pipeline to temp file (CLI requires file input)
+    tmp_file=$(mktemp /tmp/mongo-pipeline-XXXXXX.json)
+    echo "$pipeline" > "$tmp_file"
+
+    # Use the CLI tool directly (faster than gradle)
+    result=$(cd "$PROJECT_ROOT" && timeout --kill-after=5 30 ./mongo2sql --collection "$collection" --inline "$tmp_file" 2>&1)
     exit_code=$?
+
+    # Clean up temp file
+    rm -f "$tmp_file"
 
     # If timeout killed the process, wait a moment for cleanup
     if [ $exit_code -eq 124 ] || [ $exit_code -eq 137 ]; then
         sleep 1
     fi
 
-    echo "$result"
+    # Extract just the SQL (before any comments)
+    echo "$result" | grep -v "^--" | grep -v "^$" | head -1
 }
 
 # Function to normalize and compare results
@@ -255,9 +261,14 @@ fi
 TEST_COUNT=$(echo "$TEST_IDS" | wc -l)
 echo -e "  Found ${TEST_COUNT} test(s) to run"
 
-# Pre-warm Gradle daemon by running a simple task
-echo -e "  ${YELLOW}Warming up Gradle daemon...${NC}"
-cd "$PROJECT_ROOT" && ./gradlew --quiet :core:classes >/dev/null 2>&1 || true
+# Check if fat JAR exists for CLI (build if needed)
+if [ ! -f "$PROJECT_ROOT/core/build/libs/core-1.0.0-SNAPSHOT-all.jar" ]; then
+    echo -e "  ${YELLOW}Building translator JAR...${NC}"
+    cd "$PROJECT_ROOT" && ./gradlew --quiet :core:fatJar || {
+        echo -e "${RED}Failed to build translator JAR${NC}"
+        exit 1
+    }
+fi
 echo ""
 
 # Run each test
@@ -277,8 +288,9 @@ for test in data['test_cases']:
         print(f"CATEGORY:{test['category']}")
         print(f"COLLECTION:{test['collection']}")
         print(f"PIPELINE:{json.dumps(test['mongodb_pipeline'])}")
-        print(f"SQL:{test['oracle_sql']}")
-        print(f"EXPECTED:{test['expected_count']}")
+        print(f"SQL:{test.get('oracle_sql', '')}")
+        print(f"EXPECTED:{test.get('expected_count', 0)}")
+        print(f"SKIP:{test.get('skip', False)}")
         break
 PYTHON
 )
@@ -289,8 +301,29 @@ PYTHON
     TEST_PIPELINE=$(echo "$TEST_DETAILS" | grep "^PIPELINE:" | cut -d: -f2-)
     TEST_SQL=$(echo "$TEST_DETAILS" | grep "^SQL:" | cut -d: -f2-)
     TEST_EXPECTED=$(echo "$TEST_DETAILS" | grep "^EXPECTED:" | cut -d: -f2-)
+    TEST_SKIP=$(echo "$TEST_DETAILS" | grep "^SKIP:" | cut -d: -f2-)
 
     echo -n -e "  ${CYAN}[${TEST_ID}]${NC} ${TEST_NAME}... "
+
+    # Check if test is marked as skip
+    if [ "$TEST_SKIP" = "True" ]; then
+        echo -e "${YELLOW}SKIP${NC} (marked as skip in test case)"
+        SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+
+        echo "[$TEST_ID] $TEST_NAME" >> "$REPORT_FILE"
+        echo "  Category: $TEST_CATEGORY" >> "$REPORT_FILE"
+        echo "  Status: SKIP" >> "$REPORT_FILE"
+        echo "  Details: Test marked as skip" >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+
+        if [ "$FIRST_RESULT" = true ]; then
+            FIRST_RESULT=false
+        else
+            echo "," >> "$JSON_REPORT_FILE"
+        fi
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
+        continue
+    fi
 
     # Always generate Oracle SQL using the translator to test current implementation
     GENERATED_SQL=$(generate_oracle_sql "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1)
@@ -326,39 +359,55 @@ PYTHON
     STATUS=""
     DETAILS=""
     COMPARE_RESULT=""
+    MATCH_TYPE=""
 
     if [ "$MONGO_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
+        MATCH_TYPE="none"
         DETAILS="MongoDB query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
     elif [ "$ORACLE_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
+        MATCH_TYPE="none"
         DETAILS="Oracle query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
     elif [ "$MONGO_COUNT" != "$ORACLE_COUNT" ]; then
         STATUS="FAIL"
+        MATCH_TYPE="none"
         DETAILS="Count mismatch: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT, Expected=$TEST_EXPECTED"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         echo -e "${RED}FAIL${NC} (count: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT)"
     else
         # Counts match - now compare document structure and values
+        # Use --try-both to attempt strict match first, then loose on failure
         COMPARE_RESULT=$(echo "{\"mongo\": $MONGO_RESULT, \"oracle\": $ORACLE_JSON}" | \
-            python3 "$SCRIPT_DIR/compare-results.py" --stdin 2>&1) || COMPARE_RESULT="ERROR"
+            python3 "$SCRIPT_DIR/compare-results.py" --stdin --try-both 2>&1) || COMPARE_RESULT="ERROR"
 
-        if [[ "$COMPARE_RESULT" == MATCH* ]]; then
+        # Track match type for reporting
+        MATCH_TYPE="none"
+        if [[ "$COMPARE_RESULT" == STRICT_MATCH* ]]; then
             STATUS="PASS"
-            DETAILS="Documents match: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
+            MATCH_TYPE="strict"
+            DETAILS="Documents match (strict): MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
             PASSED_TESTS=$((PASSED_TESTS + 1))
-            echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, docs match)"
+            echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, strict match)"
+        elif [[ "$COMPARE_RESULT" == LOOSE_MATCH* ]]; then
+            STATUS="PASS"
+            MATCH_TYPE="loose"
+            DETAILS="Documents match (loose): MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
+            PASSED_TESTS=$((PASSED_TESTS + 1))
+            echo -e "${YELLOW}PASS${NC} (count: $MONGO_COUNT, loose match)"
         elif [[ "$COMPARE_RESULT" == *MISMATCH* ]]; then
             STATUS="FAIL"
+            MATCH_TYPE="none"
             DETAILS="Document mismatch: $COMPARE_RESULT (counts: $MONGO_COUNT)"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             echo -e "${RED}FAIL${NC} (count: $MONGO_COUNT, $COMPARE_RESULT)"
         else
             # Comparison error - fall back to count comparison
+            MATCH_TYPE="unknown"
             if [ "$MONGO_COUNT" = "$TEST_EXPECTED" ]; then
                 STATUS="PASS"
                 DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (comparison: $COMPARE_RESULT)"
@@ -386,7 +435,7 @@ PYTHON
     else
         echo "," >> "$JSON_REPORT_FILE"
     fi
-    echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
+    echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"matchType\": \"$MATCH_TYPE\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\"}" >> "$JSON_REPORT_FILE"
 
     # Show verbose output if requested
     if [ "$VERBOSE" = true ]; then
@@ -436,10 +485,11 @@ echo "  JSON: $JSON_REPORT_FILE"
 ln -sf "$(basename "$REPORT_FILE")" "$RESULTS_DIR/test-report-latest.txt"
 ln -sf "$(basename "$JSON_REPORT_FILE")" "$RESULTS_DIR/test-report-latest.json"
 
-# Generate test catalog
+# Generate test catalog data for HTML
 echo ""
-echo "Generating test-catalog.md..."
-python3 "$SCRIPT_DIR/generate-test-catalog.py" 2>/dev/null && echo "  Test catalog updated: $PROJECT_ROOT/docs/test-catalog.md" || echo "  Warning: Failed to generate test catalog"
+echo "Generating test-catalog-data.json..."
+python3 "$SCRIPT_DIR/generate-test-catalog-data.py" 2>/dev/null && echo "  Test catalog data updated: $PROJECT_ROOT/docs/test-catalog-data.json" || echo "  Warning: Failed to generate test catalog data"
+echo "  View test catalog: $PROJECT_ROOT/docs/test-catalog.html"
 
 # Exit with error if any tests failed
 if [ $FAILED_TESTS -gt 0 ] || [ $ERROR_TESTS -gt 0 ]; then

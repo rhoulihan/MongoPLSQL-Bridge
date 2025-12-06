@@ -78,31 +78,16 @@ public final class FieldPathExpression implements Expression {
   }
 
   /**
-   * Quotes a field name if it starts with underscore or contains characters that Oracle doesn't
-   * allow in unquoted identifiers. Oracle identifiers must start with a letter and contain only
-   * letters, digits, and underscores.
+   * Quotes a field name if it starts with underscore or digit, which Oracle JSON dot notation
+   * doesn't support without quoting. Oracle identifiers must start with a letter when unquoted.
    */
   private static String quoteIfNeeded(String fieldName) {
     if (fieldName.isEmpty()) {
       return fieldName;
     }
-    // Oracle requires quoting if:
-    // 1. Starts with underscore or digit
-    // 2. Contains characters other than letters, digits, underscores
+    // Oracle JSON dot notation requires quoting if field starts with underscore or digit
     char first = fieldName.charAt(0);
-    boolean needsQuoting = !Character.isLetter(first);
-
-    if (!needsQuoting) {
-      for (int i = 1; i < fieldName.length(); i++) {
-        char c = fieldName.charAt(i);
-        if (!Character.isLetterOrDigit(c) && c != '_') {
-          needsQuoting = true;
-          break;
-        }
-      }
-    }
-
-    if (needsQuoting) {
+    if (!Character.isLetter(first)) {
       return "\"" + fieldName + "\"";
     }
     return fieldName;

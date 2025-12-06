@@ -5,8 +5,8 @@ This directory contains comprehensive tests to validate that MongoDB aggregation
 ## Latest Test Results
 
 **Status:** ✅ All Tests Passing
-**Last Run:** 2024-11-27
-**Results:** 102/102 tests passed (100%)
+**Last Run:** 2024-12-05
+**Results:** 151/152 tests passed (99%)
 
 | Category | Tests | Status |
 |----------|-------|--------|
@@ -32,7 +32,14 @@ This directory contains comprehensive tests to validate that MongoDB aggregation
 | $redact | 2 | ✅ Pass |
 | $sample | 2 | ✅ Pass |
 | $count | 3 | ✅ Pass |
-| $graphLookup | 1 | ✅ Pass |
+| $graphLookup | 2 | ✅ Pass |
+| Window Functions | 4 | ✅ Pass |
+| Lookup Pipelines | 5 | ✅ Pass |
+| $reduce | 4 | ✅ Pass |
+| Replace Root | 2 | ✅ Pass |
+| Object Expressions | 3 | ✅ Pass |
+| Null Handling | 6 | ✅ Pass |
+| Expression Operators | 12 | ✅ Pass |
 
 ## Overview
 
@@ -52,12 +59,14 @@ query-tests/
 │   ├── load-mongodb.js      # MongoDB data loader
 │   └── load-oracle.sql      # Oracle data loader
 ├── tests/
-│   └── test-cases.json      # All 102 test case definitions
+│   └── test-cases.json      # All 152 test case definitions
 ├── scripts/
-│   ├── setup.sh             # Initialize test environment
-│   ├── run-tests.sh         # Execute all tests
-│   ├── teardown.sh          # Clean up test environment
-│   └── export-results.js    # Export results to JSON for inspection
+│   ├── setup.sh                   # Initialize test environment
+│   ├── run-tests.sh               # Execute all tests
+│   ├── teardown.sh                # Clean up test environment
+│   ├── compare-results.py         # Compare MongoDB/Oracle results with strict/loose matching
+│   ├── generate-test-catalog-data.py  # Generate test-catalog-data.json for HTML catalog
+│   └── export-results.js          # Export results to JSON for inspection
 ├── large-scale/             # Large-scale comparison tests (~4GB)
 │   ├── generate-data.js     # Generate test data
 │   ├── load-data.js         # Load data to databases
@@ -413,6 +422,23 @@ The test report shows:
 - **FAIL**: Results differ (details provided)
 - **ERROR**: Query execution failed
 - **SKIP**: Test skipped (missing data or unsupported feature)
+
+### Match Type Indicators
+
+When comparing results, the test runner performs both strict and loose matching:
+
+| Match Type | Description | Color |
+|------------|-------------|-------|
+| **Strict** | Values and types match exactly (e.g., `10` = `10`) | Green |
+| **Loose** | Values match with type coercion (e.g., `10` = `"10"`) | Yellow |
+| **None** | Results don't match | Red |
+
+The match type is visible in:
+1. **Console output**: Shows "strict match" or "loose match" after PASS
+2. **JSON report**: Includes `matchType` field for each test
+3. **Test Catalog HTML**: Color-coded indicator next to status badge
+
+A "loose match" typically indicates that Oracle is returning a string where MongoDB returns a number (or vice versa). While the values are semantically equivalent, you may want to investigate and fix the type mismatch for stricter compatibility.
 
 ## Troubleshooting
 

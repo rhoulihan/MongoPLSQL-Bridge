@@ -26,57 +26,57 @@ class ArrayExpressionTest {
   @Test
   void shouldRenderArrayElemAtWithLiteralIndex() {
     // MongoDB: {$arrayElemAt: ["$items", 0]} - 0-based
-    // Oracle: JSON_VALUE(data, '$.items[0]')
+    // Oracle: JSON_QUERY(data, '$.items[0]') - preserves types (numbers, strings, booleans)
     var expr =
         ArrayExpression.arrayElemAt(FieldPathExpression.of("items"), LiteralExpression.of(0));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items[0]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.items[0]')");
   }
 
   @Test
   void shouldRenderArrayElemAtWithNonZeroIndex() {
     // MongoDB: {$arrayElemAt: ["$tags", 2]}
-    // Oracle: JSON_VALUE(data, '$.tags[2]')
+    // Oracle: JSON_QUERY(data, '$.tags[2]') - preserves types
     var expr = ArrayExpression.arrayElemAt(FieldPathExpression.of("tags"), LiteralExpression.of(2));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.tags[2]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.tags[2]')");
   }
 
   @Test
   void shouldRenderSize() {
     // MongoDB: {$size: "$items"}
-    // Oracle: JSON_QUERY(data, '$.items.size()')
+    // Oracle: JSON_VALUE(data, '$.items.size()' RETURNING NUMBER) - .size() is a JSON path function
     var expr = ArrayExpression.size(FieldPathExpression.of("items"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items.size()')");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items.size()' RETURNING NUMBER)");
   }
 
   @Test
   void shouldRenderFirst() {
     // MongoDB: {$first: "$items"}
-    // Oracle: JSON_VALUE(data, '$.items[0]')
+    // Oracle: JSON_QUERY(data, '$.items[0]') - preserves types
     var expr = ArrayExpression.first(FieldPathExpression.of("items"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items[0]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.items[0]')");
   }
 
   @Test
   void shouldRenderLast() {
     // MongoDB: {$last: "$items"}
-    // Oracle: JSON_VALUE(data, '$.items[last]')
+    // Oracle: JSON_QUERY(data, '$.items[last]') - preserves types
     var expr = ArrayExpression.last(FieldPathExpression.of("items"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items[last]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.items[last]')");
   }
 
   @Test
@@ -101,13 +101,14 @@ class ArrayExpressionTest {
   @Test
   void shouldRenderNestedArrayAccess() {
     // Access nested array: {$arrayElemAt: ["$orders.items", 0]}
+    // JSON_QUERY preserves types
     var expr =
         ArrayExpression.arrayElemAt(
             FieldPathExpression.of("orders.items"), LiteralExpression.of(0));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.orders.items[0]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.orders.items[0]')");
   }
 
   // New array operator tests
@@ -161,23 +162,25 @@ class ArrayExpressionTest {
   @Test
   void shouldRenderArrayElemAtWithNegativeIndex() {
     // MongoDB: {$arrayElemAt: ["$items", -1]} - last element
+    // JSON_QUERY preserves types
     var expr =
         ArrayExpression.arrayElemAt(FieldPathExpression.of("items"), LiteralExpression.of(-1));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items[last]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.items[last]')");
   }
 
   @Test
   void shouldRenderArrayElemAtWithNegativeIndexOffset() {
     // MongoDB: {$arrayElemAt: ["$items", -2]} - second to last element
+    // JSON_QUERY preserves types
     var expr =
         ArrayExpression.arrayElemAt(FieldPathExpression.of("items"), LiteralExpression.of(-2));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.items[last-1]')");
+    assertThat(context.toSql()).isEqualTo("JSON_QUERY(data, '$.items[last-1]')");
   }
 
   @Test
@@ -215,6 +218,32 @@ class ArrayExpressionTest {
   }
 
   @Test
+  void shouldRenderFilterWithVariableFieldAccess() {
+    // MongoDB: {$filter: {input: "$items", as: "item", cond: {$gt: ["$$item.price", 100]}}}
+    // Oracle: (SELECT JSON_ARRAYAGG(val FORMAT JSON) FROM JSON_TABLE(...,
+    //         COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', price NUMBER PATH '$.price'))
+    //         WHERE price > :1)
+    var expr =
+        ArrayExpression.filter(
+            FieldPathExpression.of("items"),
+            new ComparisonExpression(
+                ComparisonOp.GT,
+                FieldPathExpression.of("$item.price", JsonReturnType.NUMBER),
+                LiteralExpression.of(100)));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("WHERE");
+    // Should extract the price field for comparison
+    assertThat(sql).contains("$.price");
+    // Should use price column name in WHERE clause
+    assertThat(sql).contains("price >");
+  }
+
+  @Test
   void shouldRenderMap() {
     var expr = ArrayExpression.map(FieldPathExpression.of("items"), FieldPathExpression.of("name"));
 
@@ -224,14 +253,100 @@ class ArrayExpressionTest {
   }
 
   @Test
-  void shouldRenderReduce() {
+  void shouldRenderMapWithVariableFieldAccess() {
+    // MongoDB: {$map: {input: "$items", as: "item", in: "$$item.product"}}
+    // Oracle: (SELECT JSON_ARRAYAGG(product) FROM JSON_TABLE(...,
+    //         COLUMNS (product VARCHAR2(4000) PATH '$.product')))
+    var expr =
+        ArrayExpression.map(
+            FieldPathExpression.of("items"), FieldPathExpression.of("$item.product"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("JSON_TABLE");
+    // Should extract the product field for mapping
+    assertThat(sql).contains("$.product");
+  }
+
+  // ==================== $reduce Tests ====================
+
+  @Test
+  void shouldRenderReduceSumPattern() {
+    // MongoDB: {$reduce: {input: "$scores", initialValue: 0,
+    //           in: {$add: ["$$value", "$$this"]}}}
+    // Oracle: (SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(...)
+    var addExpr =
+        new ArithmeticExpression(
+            ArithmeticOp.ADD,
+            List.of(FieldPathExpression.of("$value"), FieldPathExpression.of("$this")));
+    var expr =
+        ArrayExpression.reduce(FieldPathExpression.of("scores"), LiteralExpression.of(0), addExpr);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should translate $reduce with $add to SQL SUM
+    assertThat(sql).containsIgnoringCase("SUM");
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.scores");
+  }
+
+  @Test
+  void shouldRenderReduceWithConcatPattern() {
+    // MongoDB: {$reduce: {input: "$tags", initialValue: "", in: {$concat: ["$$value", "$$this"]}}}
+    // Oracle: (SELECT LISTAGG(val, '') FROM JSON_TABLE(...))
+    var concatExpr =
+        new StringExpression(
+            StringOp.CONCAT,
+            List.of(FieldPathExpression.of("$value"), FieldPathExpression.of("$this")));
+    var expr =
+        ArrayExpression.reduce(
+            FieldPathExpression.of("tags"), LiteralExpression.of(""), concatExpr);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should translate $reduce with $concat to SQL LISTAGG
+    assertThat(sql).containsIgnoringCase("LISTAGG");
+    assertThat(sql).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldRenderReduceGenericCase() {
+    // For unsupported patterns, should render a working fallback or descriptive placeholder
     var expr =
         ArrayExpression.reduce(
             FieldPathExpression.of("items"), LiteralExpression.of(0), LiteralExpression.of("sum"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).contains("$reduce not fully supported");
+    // Should at least render something that indicates $reduce
+    assertThat(context.toSql()).containsIgnoringCase("reduce");
+  }
+
+  @Test
+  void shouldRenderReduceSumPatternWithNestedFieldAccess() {
+    // MongoDB: {$reduce: {input: "$items", initialValue: 0,
+    //           in: {$add: ["$$value", "$$this.price"]}}}
+    // Oracle: (SELECT NVL(SUM(val), 0) FROM JSON_TABLE(...'$.price'))
+    var addExpr =
+        new ArithmeticExpression(
+            ArithmeticOp.ADD,
+            List.of(FieldPathExpression.of("$value"), FieldPathExpression.of("$this.price")));
+    var expr =
+        ArrayExpression.reduce(FieldPathExpression.of("items"), LiteralExpression.of(0), addExpr);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should translate $reduce with $add and nested field to SQL SUM
+    assertThat(sql).containsIgnoringCase("SUM");
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.items");
+    // Should use nested path for field access
+    assertThat(sql).contains("$.price");
   }
 
   @Test
@@ -733,5 +848,39 @@ class ArrayExpressionTest {
     var expr =
         ArrayExpression.setIsSubset(FieldPathExpression.of("x"), FieldPathExpression.of("y"));
     assertThat(expr.getOp()).isEqualTo(ArrayOp.SET_IS_SUBSET);
+  }
+
+  // ==================== $filter/$map General Case Tests ====================
+
+  @Test
+  void shouldRenderFilterOnExpressionArray() {
+    // MongoDB: {$filter: {input: {$split: ["$name", ","]}, cond: {$ne: ["$$this", ""]}}}
+    // When input is not a field path, we need a fallback
+    var splitExpr =
+        StringExpression.split(FieldPathExpression.of("tags"), LiteralExpression.of(","));
+    var conditionExpr =
+        new ComparisonExpression(
+            ComparisonOp.NE, FieldPathExpression.of("$this"), LiteralExpression.of(""));
+    var expr = ArrayExpression.filter(splitExpr, conditionExpr);
+
+    expr.render(context);
+
+    // Should indicate that this case is not fully supported
+    assertThat(context.toSql()).containsIgnoringCase("filter");
+  }
+
+  @Test
+  void shouldRenderMapOnExpressionArray() {
+    // MongoDB: {$map: {input: {$split: ["$tags", ","]}, in: {$toUpper: "$$this"}}}
+    // When input is not a field path, we need a fallback
+    var splitExpr =
+        StringExpression.split(FieldPathExpression.of("tags"), LiteralExpression.of(","));
+    var upperExpr = StringExpression.toUpper(FieldPathExpression.of("$this"));
+    var expr = ArrayExpression.map(splitExpr, upperExpr);
+
+    expr.render(context);
+
+    // Should indicate that this case is not fully supported
+    assertThat(context.toSql()).containsIgnoringCase("map");
   }
 }

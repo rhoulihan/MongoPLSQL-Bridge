@@ -224,9 +224,14 @@ Test with larger datasets (100MB - 4GB) and complex pipelines:
 
 ### Test Documentation
 
-See [docs/test-catalog.md](docs/test-catalog.md) for a complete catalog of all 152 tests with their MongoDB pipelines, generated SQL, and test results.
+Open [docs/test-catalog.html](docs/test-catalog.html) in a browser for an interactive test catalog with:
+- Searchable/filterable test list
+- Category tabs for quick navigation
+- MongoDB pipeline and generated SQL for each test
+- Side-by-side comparison of MongoDB vs Oracle results
+- Live test execution (requires Docker containers running)
 
-> **Note:** The test catalog is automatically regenerated after each test run, ensuring it always contains the latest SQL output and test results.
+> **Note:** The test catalog data is automatically regenerated after each test run via `docs/test-catalog-data.json`.
 
 ### Test Coverage Report
 
@@ -265,7 +270,8 @@ mongo-oracle-translator/
 │   └── scripts/             # Test runner scripts
 ├── benchmarks/              # JMH performance benchmarks
 ├── docs/                    # Documentation
-│   ├── test-catalog.md      # Complete test catalog with SQL
+│   ├── test-catalog.html    # Interactive test catalog (open in browser)
+│   ├── test-catalog-data.json # Test data for HTML catalog
 │   └── IMPL-*.md            # Implementation notes
 ├── scripts/                 # Environment management
 ├── mongo2sql                # CLI wrapper script
@@ -339,5 +345,5 @@ This project is licensed under the Universal Permissive License (UPL), Version 1
 ## Support
 
 - [Documentation](docs/)
-- [Test Catalog](docs/test-catalog.md)
+- [Test Catalog](docs/test-catalog.html) (open in browser)
 - [Issue Tracker](https://github.com/rhoulihan/MongoPLSQL-Bridge/issues)

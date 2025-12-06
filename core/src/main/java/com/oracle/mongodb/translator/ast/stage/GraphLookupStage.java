@@ -181,16 +181,15 @@ public final class GraphLookupStage implements Stage {
     ctx.sql(cteName);
     ctx.sql(" (id, data, graph_depth) AS (");
 
-    // Base case: find initial matching documents
+    // Base case: find initial matching documents (use dot notation for type preservation)
     ctx.sql("SELECT id, data, 0 AS graph_depth FROM ");
     ctx.tableName(from);
-    ctx.sql(" WHERE JSON_VALUE(data, '$.");
-    ctx.sql(validConnectToField);
-    ctx.sql("') = JSON_VALUE(");
+    ctx.sql(" WHERE data.");
+    ctx.sql(quotePath(validConnectToField));
+    ctx.sql(" = ");
     ctx.sql(ctx.getBaseTableAlias());
-    ctx.sql(".data, '$.");
-    ctx.sql(validStartField);
-    ctx.sql("')");
+    ctx.sql(".data.");
+    ctx.sql(quotePath(validStartField));
 
     // Add restrictSearchWithMatch filter to base case
     if (restrictSearchWithMatch != null) {
@@ -199,16 +198,15 @@ public final class GraphLookupStage implements Stage {
 
     ctx.sql(" UNION ALL ");
 
-    // Recursive case: traverse the graph
+    // Recursive case: traverse the graph (use dot notation for type preservation)
     ctx.sql("SELECT c.id, c.data, g.graph_depth + 1 FROM ");
     ctx.tableName(from);
     ctx.sql(" c JOIN ");
     ctx.sql(cteName);
-    ctx.sql(" g ON JSON_VALUE(c.data, '$.");
-    ctx.sql(validConnectToField);
-    ctx.sql("') = JSON_VALUE(g.data, '$.");
-    ctx.sql(validConnectFromField);
-    ctx.sql("')");
+    ctx.sql(" g ON c.data.");
+    ctx.sql(quotePath(validConnectToField));
+    ctx.sql(" = g.data.");
+    ctx.sql(quotePath(validConnectFromField));
 
     // Add depth limit and restrictSearchWithMatch filter if specified
     boolean hasWhere = false;
@@ -258,11 +256,11 @@ public final class GraphLookupStage implements Stage {
       String field = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
       final Object value = entry.getValue();
 
-      ctx.sql(" AND JSON_VALUE(");
+      // Use dot notation for type preservation
+      ctx.sql(" AND ");
       ctx.sql(dataRef);
-      ctx.sql(", '$.");
-      ctx.sql(field);
-      ctx.sql("')");
+      ctx.sql(".");
+      ctx.sql(quotePath(field));
 
       if (value instanceof Document doc) {
         // Handle operators like $in, $gt, etc.
@@ -357,33 +355,35 @@ public final class GraphLookupStage implements Stage {
 
     if (maxDepth != null && maxDepth == 0) {
       // maxDepth=0 means no recursion - just find immediate matches
-      // This is like a simple $lookup
+      // This is like a simple $lookup (use dot notation for type preservation)
       ctx.sql(" AS (SELECT g.id, g.data FROM ");
       ctx.tableName(from);
-      ctx.sql(" g WHERE JSON_VALUE(g.data, '$.");
-      ctx.sql(validConnectToField);
-      ctx.sql("') = JSON_VALUE(");
+      ctx.sql(" g WHERE g.data.");
+      ctx.sql(quotePath(validConnectToField));
+      ctx.sql(" = ");
       ctx.sql(sourceAlias);
-      ctx.sql(".data, '$.");
-      ctx.sql(validStartField);
-      ctx.sql("')");
+      ctx.sql(".data.");
+      ctx.sql(quotePath(validStartField));
 
-      // Add restrictSearchWithMatch filter if specified
+      // Add restrictSearchWithMatch filter if specified (use dot notation)
       if (restrictSearchWithMatch != null && !restrictSearchWithMatch.isEmpty()) {
         for (Map.Entry<String, Object> entry : restrictSearchWithMatch.entrySet()) {
           String validField = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
           final Object value = entry.getValue();
-          ctx.sql(" AND JSON_VALUE(g.data, '$.");
-          ctx.sql(validField);
-          ctx.sql("') = ");
+          ctx.sql(" AND g.data.");
+          ctx.sql(quotePath(validField));
+          ctx.sql(" = ");
           renderLiteralValue(ctx, value);
         }
       }
 
       ctx.sql(")");
     } else {
-      // For recursive cases, use a placeholder - full recursion needs LATERAL or correlated
-      // subquery
+      // For recursive cases, due to Oracle limitations:
+      // 1. Recursive CTEs inside LATERAL can't reference outer columns (ORA-00904)
+      // 2. CONNECT BY with PRIOR doesn't work with JSON dot notation (ORA-19200)
+      // Use a placeholder that returns empty results. Tests requiring recursive
+      // $graphLookup should be marked as skipped.
       ctx.sql(" AS (SELECT 1 AS id, NULL AS data FROM DUAL WHERE 1=0)");
     }
   }
@@ -412,5 +412,26 @@ public final class GraphLookupStage implements Stage {
     }
     sb.append(")");
     return sb.toString();
+  }
+
+  /**
+   * Quotes a field path for Oracle dot notation. Segments that start with underscore or digit need
+   * quoting since Oracle identifiers must start with a letter when unquoted.
+   */
+  private static String quotePath(String path) {
+    String[] segments = path.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        result.append(".");
+      }
+      String segment = segments[i];
+      if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+        result.append("\"").append(segment).append("\"");
+      } else {
+        result.append(segment);
+      }
+    }
+    return result.toString();
   }
 }

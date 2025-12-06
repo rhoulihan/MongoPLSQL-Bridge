@@ -359,10 +359,12 @@ public final class ArrayExpression implements Expression {
   }
 
   private void renderArrayElemAt(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(alias.data, '$.items[index]')
+    // Use JSON_QUERY with array subscript to preserve types (numbers, strings, booleans)
+    // Unlike JSON_VALUE which returns VARCHAR2, JSON_QUERY returns native JSON types
+    // Oracle dot notation doesn't support array subscripts like data.items[0]
     if (indexExpression instanceof LiteralExpression lit && lit.getValue() instanceof Number num) {
       final int idx = num.intValue();
-      ctx.sql("JSON_VALUE(");
+      ctx.sql("JSON_QUERY(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
       ctx.sql(path);
@@ -393,17 +395,19 @@ public final class ArrayExpression implements Expression {
       return;
     }
 
-    // JSON_VALUE(alias.data, '$.items.size()')
+    // Note: .size() is a JSON path function, not available in simple dot notation.
+    // We must use JSON_VALUE here. The result is NUMBER since it's an array size.
     ctx.sql("JSON_VALUE(");
     renderDataColumn(ctx);
     ctx.sql(", '$.");
     ctx.sql(path);
-    ctx.sql(".size()')");
+    ctx.sql(".size()' RETURNING NUMBER)");
   }
 
   private void renderFirst(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(alias.data, '$.items[0]')
-    ctx.sql("JSON_VALUE(");
+    // Use JSON_QUERY: JSON_QUERY(data, '$.items[0]') - preserves types
+    // Oracle dot notation doesn't support array subscripts
+    ctx.sql("JSON_QUERY(");
     renderDataColumn(ctx);
     ctx.sql(", '$.");
     ctx.sql(path);
@@ -411,8 +415,9 @@ public final class ArrayExpression implements Expression {
   }
 
   private void renderLast(SqlGenerationContext ctx, String path) {
-    // JSON_VALUE(alias.data, '$.items[last]')
-    ctx.sql("JSON_VALUE(");
+    // Use JSON_QUERY: JSON_QUERY(data, '$.items[last]') - preserves types
+    // Oracle dot notation doesn't support array subscripts
+    ctx.sql("JSON_QUERY(");
     renderDataColumn(ctx);
     ctx.sql(", '$.");
     ctx.sql(path);
@@ -544,29 +549,267 @@ public final class ArrayExpression implements Expression {
       case FILTER -> {
         // Oracle doesn't have direct filter, use JSON_TABLE with conditions
         if (arrayExpression instanceof FieldPathExpression fieldPath) {
-          ctx.sql("(SELECT JSON_ARRAYAGG(val) FROM JSON_TABLE(data, '$.");
-          ctx.sql(fieldPath.getPath());
-          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE ");
-          ctx.visit(indexExpression); // condition
-          ctx.sql(")");
+          // Check if condition uses variable field access (e.g., $$item.price)
+          String varField = extractVariableFieldFromCondition(indexExpression);
+          if (varField != null) {
+            // Generate JSON_TABLE with additional column for the variable field
+            // Use COALESCE to return empty array instead of NULL when no matches
+            ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val FORMAT JSON), JSON_ARRAY())");
+            ctx.sql(" FROM JSON_TABLE(");
+            ctx.sql(ctx.getBaseTableAlias());
+            ctx.sql(".data, '$.");
+            ctx.sql(fieldPath.getPath());
+            ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
+            ctx.sql(varField);
+            ctx.sql(" NUMBER PATH '$.");
+            ctx.sql(varField);
+            ctx.sql("')) WHERE ");
+            // Render condition, replacing variable field reference with column name
+            renderConditionWithFieldSubstitution(ctx, indexExpression, varField);
+            ctx.sql(")");
+          } else {
+            // Use COALESCE to return empty array instead of NULL when no matches
+            ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val), JSON_ARRAY()) FROM JSON_TABLE(");
+            ctx.sql(ctx.getBaseTableAlias());
+            ctx.sql(".data, '$.");
+            ctx.sql(fieldPath.getPath());
+            ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE ");
+            ctx.visit(indexExpression); // condition
+            ctx.sql(")");
+          }
+        } else {
+          // For non-field-path arrays (e.g., expression results), render fallback
+          ctx.sql("/* $filter on expression arrays not supported */ NULL");
         }
       }
       case MAP -> {
         // Map is complex, would need to apply expression to each element
         if (arrayExpression instanceof FieldPathExpression fieldPath) {
-          ctx.sql("(SELECT JSON_ARRAYAGG(");
-          ctx.visit(indexExpression); // mapping expression
-          ctx.sql(") FROM JSON_TABLE(data, '$.");
-          ctx.sql(fieldPath.getPath());
-          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+          // Check if mapping expression uses variable field access (e.g., $$item.product)
+          String varField = extractVariableField(indexExpression);
+          if (varField != null) {
+            // Generate JSON_TABLE with column for the extracted field
+            // Use COALESCE to return empty array instead of NULL for empty input
+            ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
+            ctx.sql(varField);
+            ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
+            ctx.sql(ctx.getBaseTableAlias());
+            ctx.sql(".data, '$.");
+            ctx.sql(fieldPath.getPath());
+            ctx.sql("[*]' COLUMNS (");
+            ctx.sql(varField);
+            ctx.sql(" VARCHAR2(4000) PATH '$.");
+            ctx.sql(varField);
+            ctx.sql("')))");
+          } else {
+            // Use COALESCE to return empty array instead of NULL for empty input
+            ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
+            ctx.visit(indexExpression); // mapping expression
+            ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
+            ctx.sql(ctx.getBaseTableAlias());
+            ctx.sql(".data, '$.");
+            ctx.sql(fieldPath.getPath());
+            ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+          }
+        } else {
+          // For non-field-path arrays (e.g., expression results), render fallback
+          ctx.sql("/* $map on expression arrays not supported */ NULL");
         }
       }
       case REDUCE -> {
-        // Reduce requires accumulator handling - complex in SQL
-        // For now, render a placeholder
-        ctx.sql("/* $reduce not fully supported */ NULL");
+        // $reduce: {input: <array>, initialValue: <expr>, in: <expr>}
+        // - arrayExpression = input array
+        // - indexExpression = initialValue
+        // - arguments.get(0) = in expression
+        renderReduceOperation(ctx);
       }
       default -> throw new IllegalStateException("Unexpected complex array operator: " + op);
+    }
+  }
+
+  /**
+   * Renders the $reduce operation by detecting common reduction patterns and translating to SQL
+   * aggregates. Supports sum pattern (ADD -> SUM) and concat pattern (CONCAT -> LISTAGG).
+   */
+  private void renderReduceOperation(SqlGenerationContext ctx) {
+    // Get the "in" expression from additionalArgs
+    Expression inExpr =
+        (additionalArgs != null && !additionalArgs.isEmpty()) ? additionalArgs.get(0) : null;
+
+    // Check if input is a field path (most common case)
+    if (!(arrayExpression instanceof FieldPathExpression fieldPath)) {
+      // For non-field-path arrays, render a fallback
+      ctx.sql("/* $reduce on expression arrays not supported */ NULL");
+      return;
+    }
+
+    String path = fieldPath.getPath();
+
+    // Detect sum pattern: {$add: ["$$value", "$$this"]}
+    if (inExpr instanceof ArithmeticExpression arithExpr
+        && arithExpr.getOp() == ArithmeticOp.ADD
+        && isValueAndThisPattern(arithExpr.getOperands())) {
+      // Translate to SUM aggregate
+      ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), ");
+      ctx.visit(indexExpression); // initialValue
+      ctx.sql(") FROM JSON_TABLE(");
+      ctx.sql(ctx.getBaseTableAlias());
+      ctx.sql(".data, '$.");
+      ctx.sql(path);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+      return;
+    }
+
+    // Detect sum pattern with nested field: {$add: ["$$value", "$$this.field"]}
+    if (inExpr instanceof ArithmeticExpression arithExpr
+        && arithExpr.getOp() == ArithmeticOp.ADD) {
+      String nestedField = extractThisFieldPattern(arithExpr.getOperands());
+      if (nestedField != null) {
+        // Translate to SUM aggregate with nested field path
+        ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), ");
+        ctx.visit(indexExpression); // initialValue
+        ctx.sql(") FROM JSON_TABLE(");
+        ctx.sql(ctx.getBaseTableAlias());
+        ctx.sql(".data, '$.");
+        ctx.sql(path);
+        ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+        ctx.sql(nestedField);
+        ctx.sql("')))");
+        return;
+      }
+    }
+
+    // Detect concat pattern: {$concat: ["$$value", "$$this"]}
+    if (inExpr instanceof StringExpression strExpr
+        && strExpr.getOp() == StringOp.CONCAT
+        && isValueAndThisPattern(strExpr.getArguments())) {
+      // Translate to LISTAGG aggregate
+      ctx.sql("(SELECT LISTAGG(val, '') WITHIN GROUP (ORDER BY ROWNUM) FROM JSON_TABLE(");
+      ctx.sql(ctx.getBaseTableAlias());
+      ctx.sql(".data, '$.");
+      ctx.sql(path);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+      return;
+    }
+
+    // For other patterns, render a descriptive placeholder
+    ctx.sql("/* $reduce with custom expression not supported */ NULL");
+  }
+
+  /**
+   * Checks if the operands list contains references to $$value and $$this (in either order). These
+   * are represented as FieldPathExpression with paths "$value" and "$this".
+   */
+  private boolean isValueAndThisPattern(List<Expression> operands) {
+    if (operands == null || operands.size() != 2) {
+      return false;
+    }
+    boolean hasValue = false;
+    boolean hasThis = false;
+    for (Expression expr : operands) {
+      if (expr instanceof FieldPathExpression fp) {
+        String exprPath = fp.getPath();
+        if ("$value".equals(exprPath)) {
+          hasValue = true;
+        } else if ("$this".equals(exprPath)) {
+          hasThis = true;
+        }
+      }
+    }
+    return hasValue && hasThis;
+  }
+
+  /**
+   * Checks if the operands list contains references to $$value and $$this.field pattern (in either
+   * order). Returns the nested field path (e.g., "price" from "$$this.price") or null if not
+   * matched. These are represented as FieldPathExpression with paths "$value" and "$this.field".
+   */
+  private String extractThisFieldPattern(List<Expression> operands) {
+    if (operands == null || operands.size() != 2) {
+      return null;
+    }
+    boolean hasValue = false;
+    String thisFieldPath = null;
+    for (Expression expr : operands) {
+      if (expr instanceof FieldPathExpression fp) {
+        String exprPath = fp.getPath();
+        if ("$value".equals(exprPath)) {
+          hasValue = true;
+        } else if (exprPath != null && exprPath.startsWith("$this.")) {
+          // Extract the field path after "$this."
+          thisFieldPath = exprPath.substring(6); // Remove "$this."
+        }
+      }
+    }
+    return (hasValue && thisFieldPath != null) ? thisFieldPath : null;
+  }
+
+  /**
+   * Extracts variable field access pattern from a condition expression. For example, if the
+   * condition is {$gt: ["$$item.price", 100]}, returns "price". Handles common variable names like
+   * $item, $elem, etc. Returns null if no variable field access is found.
+   */
+  private String extractVariableFieldFromCondition(Expression condition) {
+    if (condition instanceof ComparisonExpression compExpr) {
+      // Check left operand for variable field access
+      String field = extractVariableField(compExpr.getLeft());
+      if (field != null) {
+        return field;
+      }
+      // Check right operand
+      return extractVariableField(compExpr.getRight());
+    }
+    return null;
+  }
+
+  /**
+   * Extracts field name from a variable field access like $$item.price. Returns the field name
+   * ("price") or null if not a variable field access.
+   */
+  private String extractVariableField(Expression expr) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      // Check for patterns like $item.field, $elem.field, $this.field
+      if (path != null && path.startsWith("$") && path.contains(".")) {
+        int dotIndex = path.indexOf('.');
+        return path.substring(dotIndex + 1);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Renders a condition expression, substituting variable field references with the column name.
+   * For example, {$gt: ["$$item.price", 100]} becomes "price > 100".
+   */
+  private void renderConditionWithFieldSubstitution(
+      SqlGenerationContext ctx, Expression condition, String fieldName) {
+    if (condition instanceof ComparisonExpression compExpr) {
+      // Check if left side has the variable field reference
+      final String leftField = extractVariableField(compExpr.getLeft());
+      if (leftField != null) {
+        // Left side is the variable reference, render as column name
+        ctx.sql(fieldName);
+      } else {
+        ctx.visit(compExpr.getLeft());
+      }
+
+      // Render the comparison operator
+      ctx.sql(" ");
+      ctx.sql(compExpr.getOp().getSqlOperator());
+      ctx.sql(" ");
+
+      // Check if right side has the variable field reference
+      final String rightField = extractVariableField(compExpr.getRight());
+      if (rightField != null) {
+        // Right side is the variable reference, render as column name
+        ctx.sql(fieldName);
+      } else {
+        ctx.visit(compExpr.getRight());
+      }
+    } else {
+      // Fallback: just visit the expression normally
+      ctx.visit(condition);
     }
   }
 
@@ -1123,6 +1366,27 @@ public final class ArrayExpression implements Expression {
       ctx.visit(arr);
       ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))");
     }
+  }
+
+  /**
+   * Quotes a field path for Oracle dot notation. Segments that start with underscore or digit need
+   * quoting since Oracle identifiers must start with a letter when unquoted.
+   */
+  private static String quotePath(String path) {
+    String[] segments = path.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        result.append(".");
+      }
+      String segment = segments[i];
+      if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+        result.append("\"").append(segment).append("\"");
+      } else {
+        result.append(segment);
+      }
+    }
+    return result.toString();
   }
 
   @Override
