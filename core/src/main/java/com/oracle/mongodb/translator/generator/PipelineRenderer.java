@@ -157,6 +157,24 @@ public final class PipelineRenderer {
 
   /** Renders the standard query without post-group $addFields wrapping. */
   private void renderStandardQuery(PipelineComponents components, SqlGenerationContext ctx) {
+    // Check if we need the subquery pattern for $project with type-preserving JSON output
+    // This is needed when there's a $project because JSON_ARRAYAGG aggregates all rows,
+    // but FETCH FIRST / OFFSET must apply BEFORE aggregation
+    // Note: UNION queries and nested pipelines need separate handling since they require
+    // row-by-row output, not aggregated JSON
+    if (components.projectStage != null
+        && components.groupStage == null
+        && components.facetStage == null
+        && components.countStage == null
+        && components.bucketStage == null
+        && components.bucketAutoStage == null
+        && components.replaceRootStage == null
+        && components.unionWithStages.isEmpty()
+        && !ctx.isNestedPipeline()) {
+      renderProjectWithSubquery(components, ctx);
+      return;
+    }
+
     // Render SELECT clause
     renderSelectClause(components, ctx);
 
@@ -188,6 +206,130 @@ public final class PipelineRenderer {
 
     // Render FETCH clause
     renderFetchClause(components, ctx);
+  }
+
+  /**
+   * Renders a $project query using the subquery pattern for type-preserving JSON output. This
+   * pattern ensures that FETCH FIRST / OFFSET apply to rows before aggregation:
+   *
+   * <pre>
+   * SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)
+   * FROM (
+   *   SELECT JSON_QUERY(base.data, '$._id') AS "_id", ...
+   *   FROM table base
+   *   WHERE ...
+   *   ORDER BY base.data.field
+   *   FETCH FIRST n ROWS ONLY
+   * ) sub
+   * </pre>
+   */
+  private void renderProjectWithSubquery(PipelineComponents components, SqlGenerationContext ctx) {
+    final ProjectStage project = components.projectStage;
+
+    // Outer query: wrap everything with JSON_ARRAYAGG(JSON_OBJECT(*))
+    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (");
+
+    // Inner query: SELECT with JSON_QUERY for each projected field
+    ctx.sql("SELECT ");
+    ctx.setJsonOutputMode(true);
+
+    // Collect computed field names from $addFields and $setWindowFields
+    Set<String> computedFieldNames = new HashSet<>();
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      computedFieldNames.addAll(addFields.getFields().keySet());
+    }
+    for (SetWindowFieldsStage swf : components.setWindowFieldsStages) {
+      computedFieldNames.addAll(swf.getOutput().keySet());
+    }
+
+    boolean first = true;
+    for (var entry : project.getProjections().entrySet()) {
+      final String alias = entry.getKey();
+      ProjectStage.ProjectionField field = entry.getValue();
+
+      if (field.isExcluded()) {
+        continue;
+      }
+
+      // Skip fields computed by $addFields/$setWindowFields
+      if (computedFieldNames.contains(alias) && isSimpleFieldInclusion(field, alias)) {
+        continue;
+      }
+
+      if (!first) {
+        ctx.sql(", ");
+      }
+
+      // Render the expression (JSON_QUERY for field paths in JSON output mode)
+      if (field.getExpression() != null) {
+        ctx.visit(field.getExpression());
+      }
+      ctx.sql(" AS ");
+      ctx.identifier(alias);
+      first = false;
+    }
+
+    if (first) {
+      ctx.sql("NULL AS dummy");
+    }
+
+    ctx.setJsonOutputMode(false);
+
+    // Render $addFields computed columns
+    for (AddFieldsStage addFields : components.addFieldsStages) {
+      if (!addFields.getFields().isEmpty()) {
+        ctx.sql(", ");
+        ctx.visit(addFields);
+      }
+    }
+
+    // Render $setWindowFields window function columns
+    for (SetWindowFieldsStage setWindowFields : components.setWindowFieldsStages) {
+      ctx.sql(", ");
+      ctx.visit(setWindowFields);
+    }
+
+    // Render $graphLookup result columns
+    for (GraphLookupStage graphLookup : components.graphLookupStages) {
+      ctx.sql(", ");
+      ctx.identifier(graphLookup.getAs() + "_cte");
+      ctx.sql(".");
+      ctx.identifier(graphLookup.getAs());
+      ctx.sql(" AS ");
+      ctx.identifier(graphLookup.getAs());
+      if (graphLookup.getDepthField() != null) {
+        ctx.sql(", ");
+        ctx.identifier(graphLookup.getAs() + "_cte");
+        ctx.sql(".");
+        ctx.identifier(graphLookup.getDepthField());
+        ctx.sql(" AS ");
+        ctx.identifier(graphLookup.getDepthField());
+      }
+    }
+
+    // FROM clause
+    renderFromClause(components, ctx);
+
+    // JOIN clauses ($lookup stages)
+    renderJoinClauses(components, ctx);
+
+    // $graphLookup joins
+    renderGraphLookupJoins(components, ctx);
+
+    // WHERE clause
+    renderWhereClause(components, ctx);
+
+    // ORDER BY clause
+    renderOrderByClause(components, ctx);
+
+    // OFFSET clause
+    renderOffsetClause(components, ctx);
+
+    // FETCH clause
+    renderFetchClause(components, ctx);
+
+    // Close subquery
+    ctx.sql(") sub");
   }
 
   /**
@@ -1348,8 +1490,6 @@ public final class PipelineRenderer {
 
   private void renderProjectSelectClause(
       ProjectStage project, PipelineComponents components, SqlGenerationContext ctx) {
-    boolean first = true;
-
     // Collect computed field names from $addFields and $setWindowFields
     // These will be rendered separately by renderAddFieldsClauses, so skip them in $project
     Set<String> computedFieldNames = new HashSet<>();
@@ -1360,6 +1500,21 @@ public final class PipelineRenderer {
       computedFieldNames.addAll(swf.getOutput().keySet());
     }
 
+    // Determine if we need row-by-row output (for UNIONs or nested pipelines)
+    boolean needsRowByRow = ctx.isNestedPipeline() || !components.unionWithStages.isEmpty();
+
+    if (needsRowByRow) {
+      // Row-by-row output: SELECT col1 AS alias1, col2 AS alias2, ...
+      renderProjectSelectClauseRowByRow(project, computedFieldNames, ctx);
+    } else {
+      // Aggregated JSON output: JSON_ARRAYAGG(JSON_OBJECT(...))
+      renderProjectSelectClauseJsonAgg(project, computedFieldNames, ctx);
+    }
+  }
+
+  private void renderProjectSelectClauseRowByRow(
+      ProjectStage project, Set<String> computedFieldNames, SqlGenerationContext ctx) {
+    boolean first = true;
     for (var entry : project.getProjections().entrySet()) {
       final String alias = entry.getKey();
       ProjectStage.ProjectionField field = entry.getValue();
@@ -1368,10 +1523,7 @@ public final class PipelineRenderer {
         continue;
       }
 
-      // Skip fields that are computed by $addFields or $setWindowFields
-      // These are rendered separately by renderAddFieldsClauses
-      // A field is a "reference to computed" if it's a simple inclusion (expression is
-      // FieldPathExpression matching a computed field name) or the alias matches computed name
+      // Skip fields computed by $addFields/$setWindowFields
       if (computedFieldNames.contains(alias) && isSimpleFieldInclusion(field, alias)) {
         continue;
       }
@@ -1380,6 +1532,7 @@ public final class PipelineRenderer {
         ctx.sql(", ");
       }
 
+      // Render expression with alias
       if (field.getExpression() != null) {
         ctx.visit(field.getExpression());
       }
@@ -1391,6 +1544,49 @@ public final class PipelineRenderer {
     if (first) {
       ctx.sql("NULL AS dummy");
     }
+  }
+
+  private void renderProjectSelectClauseJsonAgg(
+      ProjectStage project, Set<String> computedFieldNames, SqlGenerationContext ctx) {
+    // Start JSON_ARRAYAGG wrapper for type-preserving output
+    ctx.sql("JSON_ARRAYAGG(JSON_OBJECT(");
+    ctx.setJsonOutputMode(true);
+
+    boolean first = true;
+    for (var entry : project.getProjections().entrySet()) {
+      final String alias = entry.getKey();
+      ProjectStage.ProjectionField field = entry.getValue();
+
+      if (field.isExcluded()) {
+        continue;
+      }
+
+      // Skip fields that are computed by $addFields or $setWindowFields
+      if (computedFieldNames.contains(alias) && isSimpleFieldInclusion(field, alias)) {
+        continue;
+      }
+
+      if (!first) {
+        ctx.sql(", ");
+      }
+
+      // Render as KEY 'alias' VALUE expr for JSON_OBJECT
+      ctx.sql("KEY '");
+      ctx.sql(alias);
+      ctx.sql("' VALUE ");
+
+      if (field.getExpression() != null) {
+        ctx.visit(field.getExpression());
+      }
+      first = false;
+    }
+
+    if (first) {
+      ctx.sql("KEY 'dummy' VALUE NULL");
+    }
+
+    ctx.sql(") RETURNING CLOB)");
+    ctx.setJsonOutputMode(false);
   }
 
   /**
@@ -1981,8 +2177,12 @@ public final class PipelineRenderer {
       // If the unionWith has a pipeline, we need to render it as a subquery
       if (unionWith.hasPipeline()) {
         // Create a new Pipeline for the union collection and render it
+        // Mark as nested pipeline so it doesn't use JSON_ARRAYAGG pattern
         Pipeline unionPipeline = Pipeline.of(unionWith.getCollection(), unionWith.getPipeline());
+        boolean wasNested = ctx.isNestedPipeline();
+        ctx.setNestedPipeline(true);
         render(unionPipeline, ctx);
+        ctx.setNestedPipeline(wasNested);
       } else {
         // Simple union - just select from the collection
         ctx.sql("SELECT ");

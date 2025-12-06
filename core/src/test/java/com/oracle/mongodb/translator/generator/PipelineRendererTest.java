@@ -2353,8 +2353,8 @@ class PipelineRendererTest {
   }
 
   @Test
-  void shouldUseDotNotationForScalarAccess() {
-    // Scalar field access should use Oracle dot notation (base.data.field)
+  void shouldUseJsonQueryForTypePreservingOutput() {
+    // For type-preserving output, JSON_QUERY is used with JSON_ARRAYAGG pattern
     var projections = new LinkedHashMap<String, ProjectionField>();
     projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
 
@@ -2363,10 +2363,11 @@ class PipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Oracle dot notation is efficient for scalar access
-    assertThat(sql).contains("base.data.name");
-    // JSON_QUERY is for objects/arrays - should not be used for simple scalar
-    assertThat(sql).doesNotContain("JSON_QUERY");
+    // Type-preserving output uses JSON_ARRAYAGG with JSON_OBJECT
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("JSON_OBJECT");
+    // JSON_QUERY is used to preserve JSON types in output
+    assertThat(sql).contains("JSON_QUERY");
   }
 
   @Test

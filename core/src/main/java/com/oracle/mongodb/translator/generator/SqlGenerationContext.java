@@ -173,4 +173,38 @@ public interface SqlGenerationContext {
 
   /** Information about an unwound field path. */
   record UnwindInfo(String tableAlias, String remainingPath) {}
+
+  /**
+   * Sets whether the context is in JSON output mode. In JSON mode, field path expressions render as
+   * JSON_QUERY(...) to preserve native JSON types, instead of dot notation which loses type
+   * information when wrapped in JSON_OBJECT.
+   *
+   * @param jsonMode true to enable JSON output mode
+   */
+  void setJsonOutputMode(boolean jsonMode);
+
+  /**
+   * Returns whether the context is in JSON output mode. When true, FieldPathExpression should
+   * render using JSON_QUERY to preserve types for JSON_OBJECT output.
+   *
+   * @return true if in JSON output mode
+   */
+  boolean isJsonOutputMode();
+
+  /**
+   * Sets whether the context is rendering a nested pipeline (e.g., inside $unionWith). Nested
+   * pipelines should produce row-by-row output, not aggregated JSON output, since they're part of
+   * a larger query structure.
+   *
+   * @param nested true if rendering a nested pipeline
+   */
+  void setNestedPipeline(boolean nested);
+
+  /**
+   * Returns whether the context is rendering a nested pipeline. When true, the renderer should not
+   * use JSON_ARRAYAGG patterns since the output must be row-by-row for UNION ALL or similar.
+   *
+   * @return true if rendering a nested pipeline
+   */
+  boolean isNestedPipeline();
 }

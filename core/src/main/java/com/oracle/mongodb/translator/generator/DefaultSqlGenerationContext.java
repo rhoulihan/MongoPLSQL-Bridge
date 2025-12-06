@@ -152,6 +152,8 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final boolean inlineValues;
   private final OracleDialect dialect;
   private final String baseTableAlias;
+  private boolean jsonOutputMode = false;
+  private boolean nestedPipeline = false;
 
   /** Stores metadata about a $lookup field for generating correlated subqueries. */
   private record LookupFieldInfo(String foreignTable, String localField, String foreignField) {}
@@ -268,6 +270,8 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     nested.lookupsConsumedBySize.addAll(this.lookupsConsumedBySize);
     nested.lookupTableAliases.putAll(this.lookupTableAliases);
     nested.unwoundPaths.putAll(this.unwoundPaths);
+    nested.jsonOutputMode = this.jsonOutputMode;
+    nested.nestedPipeline = this.nestedPipeline;
     return nested;
   }
 
@@ -361,5 +365,25 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
       return value.toString();
     }
     return "'" + value.toString().replace("'", "''") + "'";
+  }
+
+  @Override
+  public void setJsonOutputMode(boolean jsonMode) {
+    this.jsonOutputMode = jsonMode;
+  }
+
+  @Override
+  public boolean isJsonOutputMode() {
+    return jsonOutputMode;
+  }
+
+  @Override
+  public void setNestedPipeline(boolean nested) {
+    this.nestedPipeline = nested;
+  }
+
+  @Override
+  public boolean isNestedPipeline() {
+    return nestedPipeline;
   }
 }

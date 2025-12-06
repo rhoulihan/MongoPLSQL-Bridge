@@ -111,9 +111,15 @@ public final class ConditionalExpression implements Expression {
 
     // With Oracle dot notation, the field returns JSON type which is incompatible with scalar
     // types in NVL. We need to cast FieldPathExpression to match the type of the replacement.
+    // IMPORTANT: We must disable JSON output mode when rendering the field, since NVL requires
+    // a scalar value and JSON_QUERY returns a JSON fragment that cannot be cast to scalar types.
     if (thenExpr instanceof FieldPathExpression && elseExpr instanceof LiteralExpression) {
       LiteralExpression replacement = (LiteralExpression) elseExpr;
       Object value = replacement.getValue();
+
+      // Temporarily disable JSON output mode to use dot notation instead of JSON_QUERY
+      boolean wasJsonMode = ctx.isJsonOutputMode();
+      ctx.setJsonOutputMode(false);
 
       if (value instanceof Number) {
         ctx.sql("CAST(");
@@ -131,6 +137,9 @@ public final class ConditionalExpression implements Expression {
         // For other types, let Oracle handle it
         ctx.visit(thenExpr);
       }
+
+      // Restore JSON output mode
+      ctx.setJsonOutputMode(wasJsonMode);
     } else {
       ctx.visit(thenExpr);
     }

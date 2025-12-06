@@ -135,6 +135,12 @@ public final class FieldPathExpression implements Expression {
       return;
     }
 
+    // In JSON output mode, use JSON_QUERY to preserve native JSON types
+    if (ctx.isJsonOutputMode() && returnType == null) {
+      renderAsJsonQuery(ctx, normalizedPath);
+      return;
+    }
+
     // Use Oracle dot notation: alias.data.field instead of JSON_VALUE(alias.data, '$.field')
     String baseAlias = ctx.getBaseTableAlias();
     String dotPath = getDotNotationPath();
@@ -156,6 +162,41 @@ public final class FieldPathExpression implements Expression {
     } else {
       ctx.sql(dotExpr.toString());
     }
+  }
+
+  /**
+   * Renders the field path as JSON_QUERY to preserve native JSON types. Used when rendering values
+   * for JSON_OBJECT output, where dot notation would lose type information.
+   */
+  private void renderAsJsonQuery(SqlGenerationContext ctx, String normalizedPath) {
+    String baseAlias = ctx.getBaseTableAlias();
+
+    // Build JSON_QUERY expression: JSON_QUERY(base.data, '$.field')
+    ctx.sql("JSON_QUERY(");
+    if (baseAlias != null && !baseAlias.isEmpty() && "data".equals(dataColumn)) {
+      ctx.sql(baseAlias);
+      ctx.sql(".");
+    }
+    ctx.sql(dataColumn);
+    ctx.sql(", '$.");
+
+    // Quote field names that need quoting in JSON path
+    String[] segments = normalizedPath.split("\\.");
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        ctx.sql(".");
+      }
+      String segment = segments[i];
+      // Quote if starts with underscore or digit, or contains special chars
+      if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+        ctx.sql("\"");
+        ctx.sql(segment);
+        ctx.sql("\"");
+      } else {
+        ctx.sql(segment);
+      }
+    }
+    ctx.sql("')");
   }
 
   /**
