@@ -8,6 +8,8 @@ package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
+import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
+import com.oracle.mongodb.translator.ast.expression.ArrayOp;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
@@ -1290,6 +1292,7 @@ public final class PipelineRenderer {
     boolean sawGroupStage = false;
     boolean sawSetWindowFields = false;
     boolean sawUnionWith = false;
+    boolean sawFacetStage = false;
 
     for (Stage stage : pipeline.getStages()) {
       if (stage instanceof MatchStage match) {
@@ -1310,7 +1313,12 @@ public final class PipelineRenderer {
         }
         sawGroupStage = true;
       } else if (stage instanceof ProjectStage project) {
-        components.projectStage = project;
+        if (sawFacetStage) {
+          // $project after $facet reshapes facet output
+          components.postFacetProjectStage = project;
+        } else {
+          components.projectStage = project;
+        }
       } else if (stage instanceof SortStage sort) {
         if (sawUnionWith) {
           // $sort after $unionWith applies to the whole union result
@@ -1352,6 +1360,7 @@ public final class PipelineRenderer {
         sawGroupStage = true; // $bucketAuto also produces grouped results
       } else if (stage instanceof FacetStage facet) {
         components.facetStage = facet;
+        sawFacetStage = true;
       } else if (stage instanceof GraphLookupStage graphLookup) {
         components.graphLookupStages.add(graphLookup);
       } else if (stage instanceof SetWindowFieldsStage setWindowFields) {
@@ -1668,6 +1677,12 @@ public final class PipelineRenderer {
     FacetStage facet = components.facetStage;
     String collectionName = components.collectionName;
 
+    // If there's a post-facet $project, use its field names and transformations
+    if (components.postFacetProjectStage != null) {
+      renderPostFacetProjectSelectClause(components, ctx);
+      return;
+    }
+
     ctx.sql("JSON_OBJECT(");
     boolean first = true;
 
@@ -1688,6 +1703,148 @@ public final class PipelineRenderer {
 
     ctx.sql(") AS ");
     ctx.sql(config.dataColumnName());
+  }
+
+  /**
+   * Renders a facet SELECT clause with post-facet $project transformations.
+   * This handles patterns like:
+   * - {"$arrayElemAt": ["$summary.count", 0]} → extracts scalar from count facet
+   * - "$results" → renames facet output
+   */
+  private void renderPostFacetProjectSelectClause(
+      PipelineComponents components, SqlGenerationContext ctx) {
+    FacetStage facet = components.facetStage;
+    ProjectStage postProject = components.postFacetProjectStage;
+    String collectionName = components.collectionName;
+
+    ctx.sql("JSON_OBJECT(");
+    boolean first = true;
+
+    for (var entry : postProject.getProjections().entrySet()) {
+      String outputFieldName = entry.getKey();
+      ProjectStage.ProjectionField projField = entry.getValue();
+
+      if (projField.isExcluded()) {
+        continue;
+      }
+
+      if (!first) {
+        ctx.sql(", ");
+      }
+
+      ctx.sql("'");
+      ctx.sql(outputFieldName);
+      ctx.sql("' VALUE ");
+
+      Expression expr = projField.getExpression();
+      renderPostFacetFieldExpression(expr, facet, collectionName, components, ctx);
+
+      first = false;
+    }
+
+    ctx.sql(") AS ");
+    ctx.sql(config.dataColumnName());
+  }
+
+  /**
+   * Renders a post-facet field expression, handling:
+   * - FieldPathExpression (e.g., "$results") → render the referenced facet pipeline
+   * - ArrayExpression with ARRAY_ELEM_AT (e.g., {"$arrayElemAt": ["$summary.count", 0]})
+   *   → extract scalar value from facet result
+   */
+  private void renderPostFacetFieldExpression(
+      Expression expr,
+      FacetStage facet,
+      String collectionName,
+      PipelineComponents components,
+      SqlGenerationContext ctx) {
+
+    if (expr instanceof FieldPathExpression fieldPath) {
+      // Simple facet reference like "$results"
+      String facetName = fieldPath.getPath();
+      List<Stage> pipeline = facet.getFacets().get(facetName);
+      if (pipeline != null) {
+        ctx.sql("(");
+        renderFacetPipeline(collectionName, pipeline, components, ctx);
+        ctx.sql(")");
+      } else {
+        // Fallback: render the expression normally
+        ctx.sql("(");
+        ctx.visit(expr);
+        ctx.sql(")");
+      }
+    } else if (expr instanceof ArrayExpression arrExpr
+        && arrExpr.getOp() == ArrayOp.ARRAY_ELEM_AT) {
+      // $arrayElemAt expression like {"$arrayElemAt": ["$summary.count", 0]}
+      renderArrayElemAtFacetExtraction(arrExpr, facet, collectionName, components, ctx);
+    } else {
+      // Fallback: render the expression normally
+      ctx.sql("(");
+      ctx.visit(expr);
+      ctx.sql(")");
+    }
+  }
+
+  /**
+   * Renders an $arrayElemAt extraction from a facet result.
+   * Pattern: {"$arrayElemAt": ["$summary.count", 0]}
+   * → JSON_VALUE((SELECT ... FROM summary facet), '$[0].count')
+   */
+  private void renderArrayElemAtFacetExtraction(
+      ArrayExpression arrExpr,
+      FacetStage facet,
+      String collectionName,
+      PipelineComponents components,
+      SqlGenerationContext ctx) {
+
+    Expression arrayExpr = arrExpr.getArrayExpression();
+    Expression indexExpr = arrExpr.getIndexExpression();
+
+    // Determine index value (typically 0 for first element)
+    int index = 0;
+    if (indexExpr instanceof LiteralExpression lit && lit.getValue() instanceof Number num) {
+      index = num.intValue();
+    }
+
+    if (arrayExpr instanceof FieldPathExpression fieldPath) {
+      // Parse the field path: e.g., "summary.count" → facet="summary", field="count"
+      String fullPath = fieldPath.getPath();
+      String[] parts = fullPath.split("\\.", 2);
+      String facetName = parts[0];
+      String fieldName = parts.length > 1 ? parts[1] : null;
+
+      List<Stage> pipeline = facet.getFacets().get(facetName);
+      if (pipeline != null) {
+        // Check if this is a count facet (contains $count stage)
+        boolean isCountFacet = pipeline.stream().anyMatch(s -> s instanceof CountStage);
+
+        if (isCountFacet && fieldName != null) {
+          // For count facet: extract the scalar value directly
+          // The count subquery returns JSON_ARRAYAGG([{count: N}])
+          // We need JSON_VALUE(..., '$[0].count')
+          ctx.sql("JSON_VALUE((");
+          renderFacetPipeline(collectionName, pipeline, components, ctx);
+          ctx.sql("), '$[");
+          ctx.sql(String.valueOf(index));
+          ctx.sql("].");
+          ctx.sql(fieldName);
+          ctx.sql("')");
+        } else {
+          // Generic case: extract element at index
+          ctx.sql("JSON_QUERY((");
+          renderFacetPipeline(collectionName, pipeline, components, ctx);
+          ctx.sql("), '$[");
+          ctx.sql(String.valueOf(index));
+          ctx.sql("]')");
+        }
+        return;
+      }
+    }
+
+    // Fallback: render the expression normally
+    ctx.sql("(");
+    ctx.visit(arrExpr);
+    ctx.sql(")");
   }
 
   /**
@@ -2049,6 +2206,9 @@ public final class PipelineRenderer {
       }
     }
 
+    // Close JSON_OBJECT before ORDER BY
+    ctx.sql(")");
+
     // Add ORDER BY inside JSON_ARRAYAGG if there's a sort
     if (sortStage != null && !sortStage.getSortFields().isEmpty()) {
       ctx.sql(" ORDER BY ");
@@ -2066,7 +2226,8 @@ public final class PipelineRenderer {
       }
     }
 
-    ctx.sql(")) FROM (");
+    // Close JSON_ARRAYAGG and start FROM clause
+    ctx.sql(") FROM (");
 
     // Inner query: the grouped data with pagination
     renderPreFacetGroupQuery(collectionName, parentComponents, ctx);
@@ -2527,6 +2688,7 @@ public final class PipelineRenderer {
     ReplaceRootStage replaceRootStage;
     OutStage outStage; // Terminal $out stage that writes results to another collection
     MergeStage mergeStage; // Terminal $merge stage that merges results into another collection
+    ProjectStage postFacetProjectStage; // $project after $facet that reshapes facet output
     boolean hasPostGroupAddFields = false; // Track if $addFields comes after $group
     boolean hasPostWindowMatch = false; // Track if $match comes after $setWindowFields
     boolean hasPostUnionSortOrLimit = false; // Track if $sort/$limit come after $unionWith

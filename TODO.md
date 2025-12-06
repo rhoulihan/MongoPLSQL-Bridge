@@ -68,6 +68,17 @@ Last updated: 2025-12-05
   - Tests: FACET_PAGINATION001, FACET_PAGINATION002 passing
   - Data: `query-tests/scripts/generate-purchase-orders.js` for test data generation
 
+- [x] **$facet with Post-Facet $project Transformations** (completed: 2025-12-05)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:1674-1846`
+  - Issue: $project stage after $facet that reshapes facet output wasn't being processed
+  - Fix: Added `postFacetProjectStage` tracking in PipelineComponents and new rendering methods
+  - Added: `sawFacetStage` flag in `analyzePipeline()` to detect post-facet stages
+  - Added: `renderPostFacetProjectSelectClause()` for custom field names from $project
+  - Added: `renderPostFacetFieldExpression()` for facet field renaming (e.g., `topLocations: "$results"`)
+  - Added: `renderArrayElemAtFacetExtraction()` for scalar extraction (e.g., `$arrayElemAt: ["$summary.count", 0]`)
+  - Supports: Complex patterns like `{locationCount: {$arrayElemAt: ["$summary.count", 0]}, topLocations: "$results"}`
+  - Tests: FACET_PAGINATION003 passing
+
 ## Stub/Incomplete Implementations
 
 - [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-05)
@@ -81,13 +92,6 @@ Last updated: 2025-12-05
   - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
 
 ## Improvements
-
-- [ ] **$facet with Aggregation Accumulators + Post-Facet $project** (discovered: 2025-12-05)
-  - File: `query-tests/tests/test-cases.json` - FACET_PAGINATION003
-  - Issue: Complex $facet patterns with $group accumulators (totalAmount, orderCount) and post-facet $project stage
-  - Current: Basic pagination patterns work; complex accumulator + sort + reshape patterns need enhancement
-  - Required: Handle $project stage after $facet that reshapes facet output (e.g., `$arrayElemAt`, field renames)
-  - Complexity: Medium-High (requires proper handling of facet output as intermediate result)
 
 - [ ] **PipelineRenderer Empty Result Handling** (discovered: 2025-12-04)
   - Files: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:537`, `PipelineRenderer.java:1054`

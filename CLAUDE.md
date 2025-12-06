@@ -175,6 +175,39 @@ core/src/main/java/com/oracle/mongodb/translator/
 cd query-tests/large-scale && ./run-comparison.sh --size small
 ```
 
+### CLI Tool (mongo2sql)
+The project includes a command-line tool for quick pipeline translation without writing Java code.
+
+```bash
+# Basic usage - translate a pipeline file
+./mongo2sql -c <collection_name> <pipeline-file.json>
+
+# With pretty-printed SQL output
+./mongo2sql -c <collection_name> --pretty <pipeline-file.json>
+
+# Examples:
+./mongo2sql -c purchase_orders /tmp/pipeline.json
+./mongo2sql -c sales --pretty /tmp/complex-pipeline.json
+```
+
+**Pipeline file format** - A JSON array of aggregation stages:
+```json
+[
+  {"$match": {"status": "active"}},
+  {"$group": {"_id": "$category", "total": {"$sum": "$amount"}}}
+]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-c, --collection <name>` | Collection/table name (required) |
+| `-p, --pretty` | Pretty-print the SQL output |
+
+**Troubleshooting:**
+- If `./mongo2sql` doesn't work, ensure the JAR is built: `./gradlew build`
+- The tool reads from stdin if no file is provided: `echo '[{"$match":{}}]' | ./mongo2sql -c test`
+
 ### Performance Benchmarks (JMH)
 ```bash
 # Run all benchmarks
