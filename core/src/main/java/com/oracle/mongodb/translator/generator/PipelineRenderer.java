@@ -1760,13 +1760,31 @@ public final class PipelineRenderer {
       SqlGenerationContext ctx) {
 
     if (expr instanceof FieldPathExpression fieldPath) {
-      // Simple facet reference like "$results"
-      String facetName = fieldPath.getPath();
-      List<Stage> pipeline = facet.getFacets().get(facetName);
+      String fullPath = fieldPath.getPath();
+      List<Stage> pipeline = facet.getFacets().get(fullPath);
+
       if (pipeline != null) {
+        // Simple facet reference like "$results" - render the facet pipeline
         ctx.sql("(");
         renderFacetPipeline(collectionName, pipeline, components, ctx);
         ctx.sql(")");
+      } else if (fullPath.contains(".")) {
+        // Nested field access like "$data._id" - facet="data", field="_id"
+        // This extracts a field from each element in the facet array
+        String[] parts = fullPath.split("\\.", 2);
+        String facetName = parts[0];
+        String nestedField = parts[1];
+        List<Stage> facetPipeline = facet.getFacets().get(facetName);
+
+        if (facetPipeline != null) {
+          renderFacetNestedFieldExtraction(
+              facetPipeline, nestedField, collectionName, components, ctx);
+        } else {
+          // Fallback: render the expression normally
+          ctx.sql("(");
+          ctx.visit(expr);
+          ctx.sql(")");
+        }
       } else {
         // Fallback: render the expression normally
         ctx.sql("(");
@@ -1783,6 +1801,34 @@ public final class PipelineRenderer {
       ctx.visit(expr);
       ctx.sql(")");
     }
+  }
+
+  /**
+   * Renders extraction of a nested field from each element in a facet array.
+   * Pattern: "$data._id" → extracts _id from each element in data facet array
+   *
+   * <p>This produces SQL like:
+   * <pre>
+   * SELECT JSON_ARRAYAGG(jt.field_val FORMAT JSON)
+   * FROM JSON_TABLE((facet_subquery), '$[*]'
+   *   COLUMNS (field_val VARCHAR2(4000) FORMAT JSON PATH '$._id')) jt
+   * </pre>
+   */
+  private void renderFacetNestedFieldExtraction(
+      List<Stage> facetPipeline,
+      String nestedField,
+      String collectionName,
+      PipelineComponents components,
+      SqlGenerationContext ctx) {
+
+    // Build the JSON path for the nested field
+    String jsonPath = "$." + nestedField;
+
+    ctx.sql("(SELECT JSON_ARRAYAGG(jt_nested.field_val FORMAT JSON) FROM JSON_TABLE((");
+    renderFacetPipeline(collectionName, facetPipeline, components, ctx);
+    ctx.sql("), '$[*]' COLUMNS (field_val VARCHAR2(4000) FORMAT JSON PATH '");
+    ctx.sql(jsonPath);
+    ctx.sql("')) jt_nested)");
   }
 
   /**
