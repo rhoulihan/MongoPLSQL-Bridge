@@ -229,6 +229,7 @@ Open [docs/test-catalog.html](docs/test-catalog.html) in a browser for an intera
 - Category tabs for quick navigation
 - MongoDB pipeline and generated SQL for each test
 - Side-by-side comparison of MongoDB vs Oracle results
+- Match type summary KPIs (Strict Match, Loose Match, Mismatch)
 - Live test execution (requires Docker containers running)
 
 > **Note:** The test catalog data is automatically regenerated after each test run via `docs/test-catalog-data.json`.

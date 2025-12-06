@@ -235,6 +235,55 @@ def load_query_test_results() -> dict:
     return results
 
 
+def build_comparison_message(comparison: dict) -> str:
+    """Build a human-readable comparison message from comparison data."""
+    if not comparison:
+        return ''
+
+    # Handle both query test format (message field) and large-scale format (identical field)
+    if 'message' in comparison:
+        return comparison['message']
+
+    identical = comparison.get('identical', False)
+    mongo_count = comparison.get('mongoCount', 0)
+    oracle_count = comparison.get('oracleCount', 0)
+    compared_count = comparison.get('comparedCount', 0)
+    differences = comparison.get('differences', [])
+
+    if identical:
+        return f"EXACT MATCH: {compared_count} documents compared"
+    elif mongo_count != oracle_count:
+        return f"COUNT MISMATCH: MongoDB={mongo_count}, Oracle={oracle_count}"
+    elif differences:
+        return f"MISMATCH: {len(differences)} differences found"
+    else:
+        return "PARTIAL MATCH"
+
+
+def get_match_type(comparison: dict) -> str:
+    """Derive matchType from comparison data for the match indicator."""
+    if not comparison:
+        return ''
+
+    # If matchType is already in the data, use it
+    if 'matchType' in comparison:
+        return comparison['matchType']
+
+    identical = comparison.get('identical', False)
+    mongo_count = comparison.get('mongoCount', 0)
+    oracle_count = comparison.get('oracleCount', 0)
+    differences = comparison.get('differences', [])
+
+    if identical:
+        return 'strict'
+    elif mongo_count == oracle_count and not differences:
+        return 'loose'
+    elif mongo_count != oracle_count:
+        return 'mismatch'
+    else:
+        return 'mismatch'
+
+
 def load_large_scale_results() -> dict:
     """Load latest large-scale comparison report."""
     results = {}
@@ -506,10 +555,11 @@ def process_large_scale_tests(run_queries: bool = False) -> tuple:
             "sqlError": sql_error,
 
             "status": status,
+            "matchType": get_match_type(result.get('comparison', {})) if result else '',
             "mongodbCount": str(mongo_count),
             "oracleCount": str(oracle_count),
             "expectedCount": 0,
-            "comparisonResult": result.get('comparison', {}).get('message', '') if result else '',
+            "comparisonResult": build_comparison_message(result.get('comparison', {})) if result else '',
 
             "mongodbResults": mongo_results,
             "oracleResults": oracle_results,

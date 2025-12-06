@@ -142,7 +142,16 @@ EOSQL" 2>/dev/null
 run_oracle_query_json() {
     local sql="$1"
     local json_sql
-    json_sql=$(wrap_sql_as_json_array "$sql")
+
+    # Check if SQL already outputs JSON_ARRAYAGG (type-preserving format from translator)
+    # If so, use it directly; otherwise wrap with JSON_OBJECT(*) (loses types)
+    if [[ "$sql" =~ ^[[:space:]]*SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
+        # SQL already produces JSON array - use directly
+        json_sql="${sql%;}"
+    else
+        # Legacy SQL - wrap with JSON_OBJECT(*) (may lose type information)
+        json_sql=$(wrap_sql_as_json_array "$sql")
+    fi
 
     local result
     result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
