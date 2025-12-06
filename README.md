@@ -98,7 +98,7 @@ The built JAR will be at `core/build/libs/core.jar`.
 
 ### Command-Line Interface
 
-The translator includes a CLI for quick pipeline translation:
+The translator includes a CLI for quick pipeline translation. See the [CLI Guide](docs/CLI.md) for detailed documentation.
 
 ```bash
 # Build the CLI (creates standalone JAR)
@@ -347,5 +347,6 @@ This project is licensed under the Universal Permissive License (UPL), Version 1
 ## Support
 
 - [Documentation](docs/)
+- [CLI Guide](docs/CLI.md)
 - [Test Catalog](docs/test-catalog.html) (open in browser)
 - [Issue Tracker](https://github.com/rhoulihan/MongoPLSQL-Bridge/issues)
