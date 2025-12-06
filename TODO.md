@@ -59,6 +59,15 @@ Last updated: 2025-12-05
   - Applied to: $filter (lines 551-552, 565-566), $map (lines 587-589, 600-602)
   - Test: ARR015 ($filter on field path array) now shows "docs match" with empty arrays
 
+- [x] **$facet with Pre-Facet $match + $group Stages** (completed: 2025-12-05)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:1977-2158`
+  - Issue: Customer query with $match + $group before $facet wasn't processing preceding stages
+  - Fix: Added `renderFacetCountQuery`, `renderFacetPaginationQuery`, `renderPreFacetGroupQuery` methods
+  - Supports: Pagination patterns like `{recordCount: [{$count}], data: [{$skip}, {$limit}]}`
+  - Supports: Proper $match + $group processing before $facet sub-pipelines
+  - Tests: FACET_PAGINATION001, FACET_PAGINATION002 passing
+  - Data: `query-tests/scripts/generate-purchase-orders.js` for test data generation
+
 ## Stub/Incomplete Implementations
 
 - [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-05)
@@ -72,6 +81,13 @@ Last updated: 2025-12-05
   - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
 
 ## Improvements
+
+- [ ] **$facet with Aggregation Accumulators + Post-Facet $project** (discovered: 2025-12-05)
+  - File: `query-tests/tests/test-cases.json` - FACET_PAGINATION003
+  - Issue: Complex $facet patterns with $group accumulators (totalAmount, orderCount) and post-facet $project stage
+  - Current: Basic pagination patterns work; complex accumulator + sort + reshape patterns need enhancement
+  - Required: Handle $project stage after $facet that reshapes facet output (e.g., `$arrayElemAt`, field renames)
+  - Complexity: Medium-High (requires proper handling of facet output as intermediate result)
 
 - [ ] **PipelineRenderer Empty Result Handling** (discovered: 2025-12-04)
   - Files: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:537`, `PipelineRenderer.java:1054`

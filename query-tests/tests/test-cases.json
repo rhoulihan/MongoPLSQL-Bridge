@@ -4890,6 +4890,136 @@
       ],
       "expected_count": 10,
       "sort_by": "_id"
+    },
+    {
+      "id": "FACET_PAGINATION001",
+      "name": "$facet - pagination with count and data",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet for pagination pattern: filters by location and date range, groups by composite key, returns total count and paginated results. Based on real customer query pattern.",
+      "collection": "purchase_orders",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "locationNumber": "LOC001",
+            "orderedDate": {
+              "$gt": {"$date": "2024-03-01T00:00:00.000Z"},
+              "$lt": {"$date": "2026-01-01T00:00:00.000Z"}
+            }
+          }
+        },
+        {
+          "$group": {
+            "_id": {
+              "docRefNumber": "$docRefNumber",
+              "customerPONumber": "$customerPONumber",
+              "orderedDate": "$orderedDate"
+            }
+          }
+        },
+        {
+          "$facet": {
+            "recordCount": [
+              {"$count": "count"}
+            ],
+            "data": [
+              {"$skip": 0},
+              {"$limit": 5}
+            ]
+          }
+        },
+        {
+          "$project": {
+            "elements": "$data._id",
+            "metadata": {"$arrayElemAt": ["$recordCount", 0]}
+          }
+        }
+      ],
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "FACET_PAGINATION002",
+      "name": "$facet - pagination with offset",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet pagination with $skip offset for page 2. Groups orders and returns count with offset data.",
+      "collection": "purchase_orders",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "locationNumber": "LOC001"
+          }
+        },
+        {
+          "$group": {
+            "_id": {
+              "docRefNumber": "$docRefNumber",
+              "customerPONumber": "$customerPONumber"
+            }
+          }
+        },
+        {
+          "$facet": {
+            "recordCount": [
+              {"$count": "count"}
+            ],
+            "data": [
+              {"$skip": 3},
+              {"$limit": 3}
+            ]
+          }
+        },
+        {
+          "$project": {
+            "totalRecords": {"$arrayElemAt": ["$recordCount.count", 0]},
+            "pageData": "$data._id"
+          }
+        }
+      ],
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "FACET_PAGINATION003",
+      "name": "$facet - sorted pagination with aggregation",
+      "category": "facet",
+      "operator": "$facet",
+      "description": "Tests $facet pagination with sorting and aggregation in the data branch. Includes $sum accumulator in group stage.",
+      "collection": "purchase_orders",
+      "mongodb_pipeline": [
+        {
+          "$match": {
+            "status": {"$in": ["completed", "shipped"]}
+          }
+        },
+        {
+          "$group": {
+            "_id": "$locationNumber",
+            "totalAmount": {"$sum": "$amount"},
+            "orderCount": {"$sum": 1}
+          }
+        },
+        {
+          "$facet": {
+            "summary": [
+              {"$count": "count"}
+            ],
+            "results": [
+              {"$sort": {"totalAmount": -1}},
+              {"$limit": 10}
+            ]
+          }
+        },
+        {
+          "$project": {
+            "locationCount": {"$arrayElemAt": ["$summary.count", 0]},
+            "topLocations": "$results"
+          }
+        }
+      ],
+      "expected_count": 1,
+      "sort_by": null
     }
   ]
 }

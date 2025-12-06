@@ -1703,7 +1703,9 @@ public final class PipelineRenderer {
     GroupStage groupStage = null;
     SortStage sortStage = null;
     LimitStage limitStage = null;
+    SkipStage skipStage = null;
     ProjectStage projectStage = null;
+    CountStage countStage = null;
     List<MatchStage> matchStages = new ArrayList<>();
 
     for (Stage stage : pipeline) {
@@ -1713,11 +1715,33 @@ public final class PipelineRenderer {
         sortStage = s;
       } else if (stage instanceof LimitStage l) {
         limitStage = l;
+      } else if (stage instanceof SkipStage sk) {
+        skipStage = sk;
       } else if (stage instanceof ProjectStage p) {
         projectStage = p;
       } else if (stage instanceof MatchStage m) {
         matchStages.add(m);
+      } else if (stage instanceof CountStage c) {
+        countStage = c;
       }
+    }
+
+    // Special case: $count stage in facet sub-pipeline (e.g., recordCount: [{$count: "count"}])
+    if (countStage != null) {
+      renderFacetCountQuery(
+          collectionName, countStage, matchStages, parentComponents, ctx);
+      return;
+    }
+
+    // Special case: pagination over pre-facet grouped data
+    // When parent has $group and facet just has $skip/$limit, paginate the grouped results
+    if (parentComponents.groupStage != null
+        && groupStage == null
+        && projectStage == null
+        && (skipStage != null || limitStage != null)) {
+      renderFacetPaginationQuery(
+          collectionName, skipStage, limitStage, sortStage, matchStages, parentComponents, ctx);
+      return;
     }
 
     // Outer query: JSON_ARRAYAGG around inner subquery
@@ -1749,9 +1773,13 @@ public final class PipelineRenderer {
       renderFacetProjectQuery(
           collectionName, projectStage, matchStages, sortStage, limitStage, parentComponents, ctx);
     } else {
-      // Simple select
-      ctx.sql("SELECT * FROM ");
-      ctx.tableName(collectionName);
+      // Simple select - include parent's group if present
+      if (parentComponents.groupStage != null) {
+        renderPreFacetGroupQuery(collectionName, parentComponents, ctx);
+      } else {
+        ctx.sql("SELECT * FROM ");
+        ctx.tableName(collectionName);
+      }
     }
 
     ctx.sql(")");
@@ -1943,6 +1971,190 @@ public final class PipelineRenderer {
       ctx.sql(" FETCH FIRST ");
       ctx.sql(String.valueOf(limitStage.getLimit()));
       ctx.sql(" ROWS ONLY");
+    }
+  }
+
+  /**
+   * Renders a facet sub-pipeline that contains a $count stage.
+   * Used for patterns like: recordCount: [{$count: "count"}]
+   * When there's a pre-facet $group, this counts the grouped rows.
+   */
+  private void renderFacetCountQuery(
+      String collectionName,
+      CountStage countStage,
+      List<MatchStage> matchStages,
+      PipelineComponents parentComponents,
+      SqlGenerationContext ctx) {
+    // Return JSON_ARRAYAGG with a single JSON_OBJECT containing the count
+    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT('");
+    ctx.sql(countStage.getFieldName());
+    ctx.sql("' VALUE cnt)) FROM (SELECT COUNT(*) AS cnt FROM (");
+
+    // Inner query: the data to count
+    if (parentComponents.groupStage != null) {
+      // Count the grouped rows
+      renderPreFacetGroupQuery(collectionName, parentComponents, ctx);
+    } else {
+      // Count raw collection rows (with any match filters)
+      ctx.sql("SELECT 1 FROM ");
+      ctx.tableName(collectionName);
+      ctx.sql(" ");
+      ctx.sql(ctx.getBaseTableAlias());
+
+      // Apply parent match stages
+      List<MatchStage> allMatches = new ArrayList<>(parentComponents.matchStages);
+      allMatches.addAll(matchStages);
+
+      if (!allMatches.isEmpty()) {
+        ctx.sql(" WHERE ");
+        boolean firstMatch = true;
+        for (MatchStage match : allMatches) {
+          if (!firstMatch) {
+            ctx.sql(" AND ");
+          }
+          ctx.visit(match.getFilter());
+          firstMatch = false;
+        }
+      }
+    }
+
+    ctx.sql("))");
+  }
+
+  /**
+   * Renders a facet sub-pipeline that paginates over pre-facet grouped data.
+   * Used for patterns like: data: [{$skip: 0}, {$limit: 5}]
+   * when there's a $group stage before the $facet.
+   */
+  private void renderFacetPaginationQuery(
+      String collectionName,
+      SkipStage skipStage,
+      LimitStage limitStage,
+      SortStage sortStage,
+      List<MatchStage> matchStages,
+      PipelineComponents parentComponents,
+      SqlGenerationContext ctx) {
+    GroupStage parentGroup = parentComponents.groupStage;
+
+    // Return JSON_ARRAYAGG of JSON_OBJECT with all fields from the grouped data
+    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\"");
+
+    // Include all accumulator fields in the JSON_OBJECT
+    if (parentGroup != null) {
+      for (String accName : parentGroup.getAccumulators().keySet()) {
+        ctx.sql(", '");
+        ctx.sql(accName);
+        ctx.sql("' VALUE ");
+        ctx.identifier(accName);
+      }
+    }
+
+    // Add ORDER BY inside JSON_ARRAYAGG if there's a sort
+    if (sortStage != null && !sortStage.getSortFields().isEmpty()) {
+      ctx.sql(" ORDER BY ");
+      boolean firstSort = true;
+      for (SortStage.SortField field : sortStage.getSortFields()) {
+        if (!firstSort) {
+          ctx.sql(", ");
+        }
+        // Reference by column identifier, not base.data path
+        ctx.identifier(field.getFieldPath().getPath());
+        if (field.getDirection() == SortStage.SortDirection.DESC) {
+          ctx.sql(" DESC");
+        }
+        firstSort = false;
+      }
+    }
+
+    ctx.sql(")) FROM (");
+
+    // Inner query: the grouped data with pagination
+    renderPreFacetGroupQuery(collectionName, parentComponents, ctx);
+
+    // Add ORDER BY for pagination if specified - use column identifiers
+    if (sortStage != null && !sortStage.getSortFields().isEmpty()) {
+      ctx.sql(" ORDER BY ");
+      boolean firstSort = true;
+      for (SortStage.SortField field : sortStage.getSortFields()) {
+        if (!firstSort) {
+          ctx.sql(", ");
+        }
+        // Reference by column identifier, not base.data path
+        ctx.identifier(field.getFieldPath().getPath());
+        if (field.getDirection() == SortStage.SortDirection.DESC) {
+          ctx.sql(" DESC");
+        }
+        firstSort = false;
+      }
+    }
+
+    // Apply OFFSET/FETCH
+    if (skipStage != null && skipStage.getSkip() > 0) {
+      ctx.sql(" OFFSET ");
+      ctx.sql(String.valueOf(skipStage.getSkip()));
+      ctx.sql(" ROWS");
+    }
+    if (limitStage != null) {
+      ctx.sql(" FETCH FIRST ");
+      ctx.sql(String.valueOf(limitStage.getLimit()));
+      ctx.sql(" ROWS ONLY");
+    }
+
+    ctx.sql(")");
+  }
+
+  /**
+   * Renders the pre-facet grouped data as a subquery.
+   * This represents the result of applying $match and $group before $facet.
+   */
+  private void renderPreFacetGroupQuery(
+      String collectionName,
+      PipelineComponents parentComponents,
+      SqlGenerationContext ctx) {
+    GroupStage groupStage = parentComponents.groupStage;
+
+    ctx.sql("SELECT ");
+
+    // Render the _id expression
+    if (groupStage.getIdExpression() != null) {
+      ctx.visit(groupStage.getIdExpression());
+      ctx.sql(" AS ");
+      ctx.identifier("_id");
+    } else {
+      ctx.sql("NULL AS ");
+      ctx.identifier("_id");
+    }
+
+    // Render any accumulators from the group stage
+    for (var entry : groupStage.getAccumulators().entrySet()) {
+      ctx.sql(", ");
+      ctx.visit(entry.getValue());
+      ctx.sql(" AS ");
+      ctx.identifier(entry.getKey());
+    }
+
+    ctx.sql(" FROM ");
+    ctx.tableName(collectionName);
+    ctx.sql(" ");
+    ctx.sql(ctx.getBaseTableAlias());
+
+    // Apply parent match stages
+    if (!parentComponents.matchStages.isEmpty()) {
+      ctx.sql(" WHERE ");
+      boolean firstMatch = true;
+      for (MatchStage match : parentComponents.matchStages) {
+        if (!firstMatch) {
+          ctx.sql(" AND ");
+        }
+        ctx.visit(match.getFilter());
+        firstMatch = false;
+      }
+    }
+
+    // GROUP BY clause
+    if (groupStage.getIdExpression() != null) {
+      ctx.sql(" GROUP BY ");
+      ctx.visit(groupStage.getIdExpression());
     }
   }
 

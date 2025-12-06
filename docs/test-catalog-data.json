@@ -1,10 +1,10 @@
 {
-  "generated": "2025-12-05T22:06:26.467530",
+  "generated": "2025-12-05T22:47:30.687111",
   "version": "2.0",
   "summary": {
     "queryTests": {
-      "total": 152,
-      "passed": 151,
+      "total": 155,
+      "passed": 153,
       "failed": 0,
       "skipped": 1
     },
@@ -28,8 +28,8 @@
       "errors": 0
     },
     "overall": {
-      "total": 1617,
-      "passed": 1609,
+      "total": 1620,
+      "passed": 1611,
       "failed": 0,
       "skipped": 8
     }
@@ -155,8 +155,8 @@
       "name": "BucketAuto Operations"
     },
     "facet": {
-      "count": 3,
-      "passed": 3,
+      "count": 6,
+      "passed": 5,
       "failed": 0,
       "skipped": 0,
       "name": "Facet Operations"
@@ -403,6 +403,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "AMOUNT": 299.99
+            },
+            {
               "_id": "S002",
               "AMOUNT": 250
             },
@@ -417,10 +421,6 @@
             {
               "_id": "S009",
               "AMOUNT": 9999.99
-            },
-            {
-              "_id": "S010",
-              "AMOUNT": 299.99
             }
           ]
         },
@@ -724,6 +724,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "STATUS": "processing"
+            },
+            {
               "_id": "S003",
               "STATUS": "pending"
             },
@@ -738,10 +742,6 @@
             {
               "_id": "S008",
               "STATUS": "refunded"
-            },
-            {
-              "_id": "S010",
-              "STATUS": "processing"
             }
           ]
         },
@@ -906,6 +906,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "REGION": "west"
+            },
+            {
               "_id": "S004",
               "REGION": "east"
             },
@@ -916,10 +920,6 @@
             {
               "_id": "S009",
               "REGION": "east"
-            },
-            {
-              "_id": "S010",
-              "REGION": "west"
             }
           ]
         },
@@ -1425,6 +1425,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "processing",
+              "COUNT": 1
+            },
+            {
               "_id": "completed",
               "COUNT": 5
             },
@@ -1438,10 +1442,6 @@
             },
             {
               "_id": "refunded",
-              "COUNT": 1
-            },
-            {
-              "_id": "processing",
               "COUNT": 1
             }
           ]
@@ -3204,6 +3204,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "ORDERIDMOD3": 2
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "ORDERIDMOD3": 2
@@ -3247,11 +3252,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "ORDERIDMOD3": 1
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "ORDERIDMOD3": 2
             }
           ]
         },
@@ -3482,6 +3482,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "DISCOUNTAPPLIED": 0
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "DISCOUNTAPPLIED": 10
@@ -3525,11 +3530,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "DISCOUNTAPPLIED": 500
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "DISCOUNTAPPLIED": 0
             }
           ]
         },
@@ -3607,6 +3607,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "west",
+              "TOTALSALES": 299.99,
+              "ORDERCOUNT": 1
+            },
+            {
               "_id": "north",
               "TOTALSALES": 150,
               "ORDERCOUNT": 1
@@ -3620,11 +3625,6 @@
               "_id": "east",
               "TOTALSALES": 10499.99,
               "ORDERCOUNT": 2
-            },
-            {
-              "_id": "west",
-              "TOTALSALES": 299.99,
-              "ORDERCOUNT": 1
             }
           ]
         },
@@ -3835,6 +3835,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "CATEGORY": "electronics",
+              "AMOUNT": 299.99
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "CATEGORY": "electronics",
@@ -3857,12 +3863,6 @@
               "ORDERID": 1009,
               "CATEGORY": "jewelry",
               "AMOUNT": 9999.99
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "CATEGORY": "electronics",
-              "AMOUNT": 299.99
             }
           ]
         },
@@ -5521,6 +5521,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "ITEMCOUNT": 2
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "ITEMCOUNT": 2
@@ -5564,11 +5569,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "ITEMCOUNT": 1
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "ITEMCOUNT": 2
             }
           ]
         },
@@ -5781,6 +5781,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "LASTTAG": "new-customer"
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "LASTTAG": "express"
@@ -5814,11 +5819,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "LASTTAG": "vip"
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "LASTTAG": "new-customer"
             }
           ]
         },
@@ -6638,9 +6638,9 @@
             {
               "_id": "north",
               "statuses": [
+                "pending",
                 "refunded",
-                "completed",
-                "pending"
+                "completed"
               ]
             },
             {
@@ -6652,8 +6652,8 @@
             {
               "_id": "west",
               "statuses": [
-                "cancelled",
-                "processing"
+                "processing",
+                "cancelled"
               ]
             }
           ],
@@ -10632,30 +10632,30 @@
           "sortBy": null,
           "mongodbResults": [
             {
+              "_id": "P005",
+              "name": "Discontinued Item"
+            },
+            {
               "_id": "P001",
               "name": "Widget"
             },
             {
-              "_id": "P008",
-              "name": "Chair"
-            },
-            {
-              "_id": "P006",
-              "name": "Headphones"
+              "_id": "P002",
+              "name": "Gadget"
             }
           ],
           "oracleResults": [
             {
-              "_id": "P003",
-              "NAME": "Premium Widget"
+              "_id": "P006",
+              "NAME": "Headphones"
             },
             {
-              "_id": "P007",
-              "NAME": "USB Cable"
+              "_id": "P001",
+              "NAME": "Widget"
             },
             {
-              "_id": "P008",
-              "NAME": "Chair"
+              "_id": "P005",
+              "NAME": "Discontinued Item"
             }
           ]
         },
@@ -10697,14 +10697,19 @@
           "sortBy": null,
           "mongodbResults": [
             {
-              "_id": "E004",
-              "name": "David",
-              "department": "Sales"
+              "_id": "E009",
+              "name": "Ivy",
+              "department": "Engineering"
             },
             {
-              "_id": "E010",
-              "name": "Jack",
-              "department": "HR"
+              "_id": "E002",
+              "name": "Bob",
+              "department": "Engineering"
+            },
+            {
+              "_id": "E006",
+              "name": "Frank",
+              "department": "Sales"
             },
             {
               "_id": "E003",
@@ -10712,21 +10717,21 @@
               "department": "Engineering"
             },
             {
-              "_id": "E005",
-              "name": "Eve",
-              "department": "Sales"
-            },
-            {
-              "_id": "E006",
-              "name": "Frank",
-              "department": "Sales"
+              "_id": "E001",
+              "name": "Alice",
+              "department": "Engineering"
             }
           ],
           "oracleResults": [
             {
-              "_id": "E009",
-              "NAME": "Ivy",
-              "DEPARTMENT": "Engineering"
+              "_id": "E008",
+              "NAME": "Henry",
+              "DEPARTMENT": "Marketing"
+            },
+            {
+              "_id": "E006",
+              "NAME": "Frank",
+              "DEPARTMENT": "Sales"
             },
             {
               "_id": "E007",
@@ -10739,14 +10744,9 @@
               "DEPARTMENT": "Engineering"
             },
             {
-              "_id": "E005",
-              "NAME": "Eve",
-              "DEPARTMENT": "Sales"
-            },
-            {
-              "_id": "E004",
-              "NAME": "David",
-              "DEPARTMENT": "Sales"
+              "_id": "E001",
+              "NAME": "Alice",
+              "DEPARTMENT": "Engineering"
             }
           ]
         },
@@ -11146,6 +11146,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "DISCOUNTAPPLIED": 0
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "DISCOUNTAPPLIED": 10
@@ -11189,11 +11194,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "DISCOUNTAPPLIED": 500
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "DISCOUNTAPPLIED": 0
             }
           ]
         },
@@ -11256,6 +11256,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "CAMPAIGN": null
+            },
+            {
               "_id": "S003",
               "ORDERID": 1003,
               "CAMPAIGN": null
@@ -11268,11 +11273,6 @@
             {
               "_id": "S008",
               "ORDERID": 1008,
-              "CAMPAIGN": null
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
               "CAMPAIGN": null
             }
           ]
@@ -11334,6 +11334,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "west",
+              "TOTALDISCOUNT": 100
+            },
+            {
               "_id": "north",
               "TOTALDISCOUNT": 10
             },
@@ -11344,10 +11348,6 @@
             {
               "_id": "east",
               "TOTALDISCOUNT": 550
-            },
-            {
-              "_id": "west",
-              "TOTALDISCOUNT": 100
             }
           ]
         },
@@ -12181,6 +12181,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "AMOUNT": 299.99,
+              "ABSOLUTEAMOUNT": 299.99
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "AMOUNT": 150,
@@ -12233,12 +12239,6 @@
               "ORDERID": 1009,
               "AMOUNT": 9999.99,
               "ABSOLUTEAMOUNT": 9999.99
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "AMOUNT": 299.99,
-              "ABSOLUTEAMOUNT": 299.99
             }
           ]
         },
@@ -12340,6 +12340,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "TAX": 30,
+              "TAXCEILED": 30
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "TAX": 15,
@@ -12392,12 +12398,6 @@
               "ORDERID": 1009,
               "TAX": 999.99,
               "TAXCEILED": 1000
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "TAX": 30,
-              "TAXCEILED": 30
             }
           ]
         },
@@ -12499,6 +12499,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "AMOUNT": 299.99,
+              "AMOUNTFLOORED": 299
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "AMOUNT": 150,
@@ -12551,12 +12557,6 @@
               "ORDERID": 1009,
               "AMOUNT": 9999.99,
               "AMOUNTFLOORED": 9999
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "AMOUNT": 299.99,
-              "AMOUNTFLOORED": 299
             }
           ]
         },
@@ -12661,6 +12661,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "AMOUNT": 299.99,
+              "AMOUNTROUNDED": 300
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "AMOUNT": 150,
@@ -12713,12 +12719,6 @@
               "ORDERID": 1009,
               "AMOUNT": 9999.99,
               "AMOUNTROUNDED": 10000
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "AMOUNT": 299.99,
-              "AMOUNTROUNDED": 300
             }
           ]
         },
@@ -12823,6 +12823,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "AMOUNT": 299.99,
+              "AMOUNTTRUNCATED": 299.9
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "AMOUNT": 150,
@@ -12875,12 +12881,6 @@
               "ORDERID": 1009,
               "AMOUNT": 9999.99,
               "AMOUNTTRUNCATED": 9999.9
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "AMOUNT": 299.99,
-              "AMOUNTTRUNCATED": 299.9
             }
           ]
         },
@@ -13491,6 +13491,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "ISTAGSARRAY": 1,
+              "ISAMOUNTARRAY": 1
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "ISTAGSARRAY": 1,
@@ -13541,12 +13547,6 @@
             {
               "_id": "S009",
               "ORDERID": 1009,
-              "ISTAGSARRAY": 1,
-              "ISAMOUNTARRAY": 1
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
               "ISTAGSARRAY": 1,
               "ISAMOUNTARRAY": 1
             }
@@ -13775,6 +13775,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001
             },
@@ -13809,10 +13813,6 @@
             {
               "_id": "S009",
               "ORDERID": 1009
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010
             }
           ]
         },
@@ -13918,6 +13918,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "STATUS": "processing"
+            },
+            {
               "_id": "S005",
               "ORDERID": 1005,
               "STATUS": "cancelled"
@@ -13926,11 +13931,6 @@
               "_id": "S008",
               "ORDERID": 1008,
               "STATUS": "refunded"
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "STATUS": "processing"
             }
           ]
         },
@@ -14708,6 +14708,12 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "STATUS": "processing",
+              "PRIORITY": "medium"
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "STATUS": "completed",
@@ -14759,12 +14765,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "STATUS": "completed",
-              "PRIORITY": "medium"
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "STATUS": "processing",
               "PRIORITY": "medium"
             }
           ]
@@ -16233,6 +16233,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "ITEMTOTAL": 249.99
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "ITEMTOTAL": 150
@@ -16276,11 +16281,6 @@
               "_id": "S009",
               "ORDERID": 1009,
               "ITEMTOTAL": 9999.99
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "ITEMTOTAL": 249.99
             }
           ]
         },
@@ -16588,6 +16588,17 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "EXPENSIVEITEMS": [
+                {
+                  "product": "Headphones",
+                  "qty": 1,
+                  "price": 199.99
+                }
+              ]
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "EXPENSIVEITEMS": [
@@ -16659,17 +16670,6 @@
                   "product": "Diamond Ring",
                   "qty": 1,
                   "price": 9999.99
-                }
-              ]
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "EXPENSIVEITEMS": [
-                {
-                  "product": "Headphones",
-                  "qty": 1,
-                  "price": 199.99
                 }
               ]
             }
@@ -16788,6 +16788,14 @@
           ],
           "oracleResults": [
             {
+              "_id": "S010",
+              "ORDERID": 1010,
+              "PRODUCTNAMES": [
+                "Headphones",
+                "Case"
+              ]
+            },
+            {
               "_id": "S001",
               "ORDERID": 1001,
               "PRODUCTNAMES": [
@@ -16850,16 +16858,316 @@
               "PRODUCTNAMES": [
                 "Diamond Ring"
               ]
-            },
-            {
-              "_id": "S010",
-              "ORDERID": 1010,
-              "PRODUCTNAMES": [
-                "Headphones",
-                "Case"
-              ]
             }
           ]
+        },
+        {
+          "id": "FACET_PAGINATION001",
+          "name": "$facet - pagination with count and data",
+          "description": "Tests $facet for pagination pattern: filters by location and date range, groups by composite key, returns total count and paginated results. Based on real customer query pattern.",
+          "category": "facet",
+          "categoryName": "Facet Operations",
+          "operator": "$facet",
+          "collection": "purchase_orders",
+          "skip": false,
+          "skipReason": "",
+          "testSuite": "query",
+          "pipeline": [
+            {
+              "$match": {
+                "locationNumber": "LOC001",
+                "orderedDate": {
+                  "$gt": {
+                    "$date": "2024-03-01T00:00:00.000Z"
+                  },
+                  "$lt": {
+                    "$date": "2026-01-01T00:00:00.000Z"
+                  }
+                }
+              }
+            },
+            {
+              "$group": {
+                "_id": {
+                  "docRefNumber": "$docRefNumber",
+                  "customerPONumber": "$customerPONumber",
+                  "orderedDate": "$orderedDate"
+                }
+              }
+            },
+            {
+              "$facet": {
+                "recordCount": [
+                  {
+                    "$count": "count"
+                  }
+                ],
+                "data": [
+                  {
+                    "$skip": 0
+                  },
+                  {
+                    "$limit": 5
+                  }
+                ]
+              }
+            },
+            {
+              "$project": {
+                "elements": "$data._id",
+                "metadata": {
+                  "$arrayElemAt": [
+                    "$recordCount",
+                    0
+                  ]
+                }
+              }
+            }
+          ],
+          "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"locationNumber\": \"LOC001\",\n      \"orderedDate\": {\n        \"$gt\": {\n          \"$date\": \"2024-03-01T00:00:00.000Z\"\n        },\n        \"$lt\": {\n          \"$date\": \"2026-01-01T00:00:00.000Z\"\n        }\n      }\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": {\n        \"docRefNumber\": \"$docRefNumber\",\n        \"customerPONumber\": \"$customerPONumber\",\n        \"orderedDate\": \"$orderedDate\"\n      }\n    }\n  },\n  {\n    \"$facet\": {\n      \"recordCount\": [\n        {\n          \"$count\": \"count\"\n        }\n      ],\n      \"data\": [\n        {\n          \"$skip\": 0\n        },\n        {\n          \"$limit\": 5\n        }\n      ]\n    }\n  },\n  {\n    \"$project\": {\n      \"elements\": \"$data._id\",\n      \"metadata\": {\n        \"$arrayElemAt\": [\n          \"$recordCount\",\n          0\n        ]\n      }\n    }\n  }\n]",
+          "sql": "SELECT JSON_OBJECT('recordCount' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt)) FROM (SELECT COUNT(*) AS cnt FROM (SELECT base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate AS \"_id\" FROM purchase_orders base WHERE (base.data.locationNumber = 'LOC001') AND ((base.data.orderedDate > 'Thu Feb 29 18:00:00 CST 2024') AND (base.data.orderedDate < 'Wed Dec 31 18:00:00 CST 2025')) GROUP BY base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate))), 'data' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\")) FROM (SELECT base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate AS \"_id\" FROM purchase_orders base WHERE (base.data.locationNumber = 'LOC001') AND ((base.data.orderedDate > 'Thu Feb 29 18:00:00 CST 2024') AND (base.data.orderedDate < 'Wed Dec 31 18:00:00 CST 2025')) GROUP BY base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate FETCH FIRST 5 ROWS ONLY))) AS data FROM DUAL",
+          "sqlFormatted": "SELECT JSON_OBJECT('recordCount' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt))\n                      FROM\n                        (SELECT COUNT(*) AS cnt\n                         FROM\n                           (SELECT base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate AS \"_id\"\n                            FROM purchase_orders base\n                            WHERE (base.data.locationNumber = 'LOC001')\n                              AND ((base.data.orderedDate > 'Thu Feb 29 18:00:00 CST 2024')\n                                   AND (base.data.orderedDate < 'Wed Dec 31 18:00:00 CST 2025'))\n                            GROUP BY base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate))), 'data' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\"))\n                      FROM\n                        (SELECT base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate AS \"_id\"\n                         FROM purchase_orders base\n                         WHERE (base.data.locationNumber = 'LOC001')\n                           AND ((base.data.orderedDate > 'Thu Feb 29 18:00:00 CST 2024')\n                                AND (base.data.orderedDate < 'Wed Dec 31 18:00:00 CST 2025'))\n                         GROUP BY base.data.docRefNumber, base.data.customerPONumber, base.data.orderedDate FETCH FIRST 5 ROWS ONLY))) AS DATA\nFROM DUAL",
+          "sqlError": null,
+          "status": "PASS",
+          "matchType": "unknown",
+          "mongodbCount": "1",
+          "oracleCount": "1",
+          "expectedCount": 1,
+          "comparisonResult": "",
+          "sortBy": null,
+          "mongodbResults": [
+            {
+              "elements": []
+            }
+          ],
+          "oracleResults": [
+            {
+              "DATA": {
+                "recordCount": [
+                  {
+                    "count": 0
+                  }
+                ],
+                "data": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "FACET_PAGINATION002",
+          "name": "$facet - pagination with offset",
+          "description": "Tests $facet pagination with $skip offset for page 2. Groups orders and returns count with offset data.",
+          "category": "facet",
+          "categoryName": "Facet Operations",
+          "operator": "$facet",
+          "collection": "purchase_orders",
+          "skip": false,
+          "skipReason": "",
+          "testSuite": "query",
+          "pipeline": [
+            {
+              "$match": {
+                "locationNumber": "LOC001"
+              }
+            },
+            {
+              "$group": {
+                "_id": {
+                  "docRefNumber": "$docRefNumber",
+                  "customerPONumber": "$customerPONumber"
+                }
+              }
+            },
+            {
+              "$facet": {
+                "recordCount": [
+                  {
+                    "$count": "count"
+                  }
+                ],
+                "data": [
+                  {
+                    "$skip": 3
+                  },
+                  {
+                    "$limit": 3
+                  }
+                ]
+              }
+            },
+            {
+              "$project": {
+                "totalRecords": {
+                  "$arrayElemAt": [
+                    "$recordCount.count",
+                    0
+                  ]
+                },
+                "pageData": "$data._id"
+              }
+            }
+          ],
+          "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"locationNumber\": \"LOC001\"\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": {\n        \"docRefNumber\": \"$docRefNumber\",\n        \"customerPONumber\": \"$customerPONumber\"\n      }\n    }\n  },\n  {\n    \"$facet\": {\n      \"recordCount\": [\n        {\n          \"$count\": \"count\"\n        }\n      ],\n      \"data\": [\n        {\n          \"$skip\": 3\n        },\n        {\n          \"$limit\": 3\n        }\n      ]\n    }\n  },\n  {\n    \"$project\": {\n      \"totalRecords\": {\n        \"$arrayElemAt\": [\n          \"$recordCount.count\",\n          0\n        ]\n      },\n      \"pageData\": \"$data._id\"\n    }\n  }\n]",
+          "sql": "SELECT JSON_OBJECT('recordCount' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt)) FROM (SELECT COUNT(*) AS cnt FROM (SELECT base.data.docRefNumber, base.data.customerPONumber AS \"_id\" FROM purchase_orders base WHERE base.data.locationNumber = 'LOC001' GROUP BY base.data.docRefNumber, base.data.customerPONumber))), 'data' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\")) FROM (SELECT base.data.docRefNumber, base.data.customerPONumber AS \"_id\" FROM purchase_orders base WHERE base.data.locationNumber = 'LOC001' GROUP BY base.data.docRefNumber, base.data.customerPONumber OFFSET 3 ROWS FETCH FIRST 3 ROWS ONLY))) AS data FROM DUAL",
+          "sqlFormatted": "SELECT JSON_OBJECT('recordCount' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt))\n                      FROM\n                        (SELECT COUNT(*) AS cnt\n                         FROM\n                           (SELECT base.data.docRefNumber, base.data.customerPONumber AS \"_id\"\n                            FROM purchase_orders base\n                            WHERE base.data.locationNumber = 'LOC001'\n                            GROUP BY base.data.docRefNumber, base.data.customerPONumber))), 'data' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\"))\n                      FROM\n                        (SELECT base.data.docRefNumber, base.data.customerPONumber AS \"_id\"\n                         FROM purchase_orders base\n                         WHERE base.data.locationNumber = 'LOC001'\n                         GROUP BY base.data.docRefNumber, base.data.customerPONumber\n                         OFFSET 3 ROWS FETCH FIRST 3 ROWS ONLY))) AS DATA\nFROM DUAL",
+          "sqlError": null,
+          "status": "PASS",
+          "matchType": "unknown",
+          "mongodbCount": "1",
+          "oracleCount": "1",
+          "expectedCount": 1,
+          "comparisonResult": "",
+          "sortBy": null,
+          "mongodbResults": [
+            {
+              "totalRecords": 78,
+              "pageData": [
+                {
+                  "docRefNumber": "DOC-2024-00005",
+                  "customerPONumber": "PO-A0005"
+                },
+                {
+                  "docRefNumber": "DOC-2024-00010",
+                  "customerPONumber": "PO-A0010"
+                },
+                {
+                  "docRefNumber": "DOC-2024-00057",
+                  "customerPONumber": "PO-A0057"
+                }
+              ]
+            }
+          ],
+          "oracleResults": [
+            {
+              "DATA": {
+                "recordCount": [
+                  {
+                    "count": 69
+                  }
+                ],
+                "data": [
+                  {
+                    "_id": "PO-A0006"
+                  },
+                  {
+                    "_id": "PO-A0001"
+                  },
+                  {
+                    "_id": "PO-A0002"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "FACET_PAGINATION003",
+          "name": "$facet - sorted pagination with aggregation",
+          "description": "Tests $facet pagination with sorting and aggregation in the data branch. Includes $sum accumulator in group stage.",
+          "category": "facet",
+          "categoryName": "Facet Operations",
+          "operator": "$facet",
+          "collection": "purchase_orders",
+          "skip": false,
+          "skipReason": "",
+          "testSuite": "query",
+          "pipeline": [
+            {
+              "$match": {
+                "status": {
+                  "$in": [
+                    "completed",
+                    "shipped"
+                  ]
+                }
+              }
+            },
+            {
+              "$group": {
+                "_id": "$locationNumber",
+                "totalAmount": {
+                  "$sum": "$amount"
+                },
+                "orderCount": {
+                  "$sum": 1
+                }
+              }
+            },
+            {
+              "$facet": {
+                "summary": [
+                  {
+                    "$count": "count"
+                  }
+                ],
+                "results": [
+                  {
+                    "$sort": {
+                      "totalAmount": -1
+                    }
+                  },
+                  {
+                    "$limit": 10
+                  }
+                ]
+              }
+            },
+            {
+              "$project": {
+                "locationCount": {
+                  "$arrayElemAt": [
+                    "$summary.count",
+                    0
+                  ]
+                },
+                "topLocations": "$results"
+              }
+            }
+          ],
+          "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"status\": {\n        \"$in\": [\n          \"completed\",\n          \"shipped\"\n        ]\n      }\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": \"$locationNumber\",\n      \"totalAmount\": {\n        \"$sum\": \"$amount\"\n      },\n      \"orderCount\": {\n        \"$sum\": 1\n      }\n    }\n  },\n  {\n    \"$facet\": {\n      \"summary\": [\n        {\n          \"$count\": \"count\"\n        }\n      ],\n      \"results\": [\n        {\n          \"$sort\": {\n            \"totalAmount\": -1\n          }\n        },\n        {\n          \"$limit\": 10\n        }\n      ]\n    }\n  },\n  {\n    \"$project\": {\n      \"locationCount\": {\n        \"$arrayElemAt\": [\n          \"$summary.count\",\n          0\n        ]\n      },\n      \"topLocations\": \"$results\"\n    }\n  }\n]",
+          "sql": "SELECT JSON_OBJECT('summary' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt)) FROM (SELECT COUNT(*) AS cnt FROM (SELECT base.data.locationNumber AS \"_id\", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM purchase_orders base WHERE base.data.status IN ('completed', 'shipped') GROUP BY base.data.locationNumber))), 'results' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\", 'totalAmount' VALUE totalAmount, 'orderCount' VALUE orderCount ORDER BY totalAmount DESC)) FROM (SELECT base.data.locationNumber AS \"_id\", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount FROM purchase_orders base WHERE base.data.status IN ('completed', 'shipped') GROUP BY base.data.locationNumber ORDER BY totalAmount DESC FETCH FIRST 10 ROWS ONLY))) AS data FROM DUAL",
+          "sqlFormatted": "SELECT JSON_OBJECT('summary' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('count' VALUE cnt))\n                      FROM\n                        (SELECT COUNT(*) AS cnt\n                         FROM\n                           (SELECT base.data.locationNumber AS \"_id\", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount\n                            FROM purchase_orders base\n                            WHERE base.data.status IN ('completed', 'shipped')\n                            GROUP BY base.data.locationNumber))), 'results' VALUE\n                     (SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\", 'totalAmount' VALUE totalAmount, 'orderCount' VALUE orderCount\n                                                       ORDER BY totalAmount DESC))\n                      FROM\n                        (SELECT base.data.locationNumber AS \"_id\", SUM(base.data.amount) AS totalAmount, SUM(1) AS orderCount\n                         FROM purchase_orders base\n                         WHERE base.data.status IN ('completed', 'shipped')\n                         GROUP BY base.data.locationNumber\n                         ORDER BY totalAmount DESC FETCH FIRST 10 ROWS ONLY))) AS DATA\nFROM DUAL",
+          "sqlError": null,
+          "status": "ERROR",
+          "matchType": "none",
+          "mongodbCount": "1",
+          "oracleCount": "ERROR",
+          "expectedCount": 1,
+          "comparisonResult": "",
+          "sortBy": null,
+          "mongodbResults": [
+            {
+              "locationCount": 5,
+              "topLocations": [
+                {
+                  "_id": "LOC002",
+                  "totalAmount": 227086.03,
+                  "orderCount": 42
+                },
+                {
+                  "_id": "LOC003",
+                  "totalAmount": 206417.34,
+                  "orderCount": 40
+                },
+                {
+                  "_id": "LOC004",
+                  "totalAmount": 204919.64,
+                  "orderCount": 38
+                },
+                {
+                  "_id": "LOC001",
+                  "totalAmount": 152956.87,
+                  "orderCount": 28
+                },
+                {
+                  "_id": "LOC005",
+                  "totalAmount": 126598.45,
+                  "orderCount": 31
+                }
+              ]
+            }
+          ],
+          "oracleResults": null
         }
       ]
     },

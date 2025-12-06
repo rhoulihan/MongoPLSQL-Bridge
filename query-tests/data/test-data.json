@@ -268,6 +268,26 @@
         {"_id": "INV011", "productId": "P008", "warehouse": "WH-EAST", "quantity": 15, "lastRestocked": "2024-01-14"},
         {"_id": "INV012", "productId": "P008", "warehouse": "WH-WEST", "quantity": 10, "lastRestocked": "2024-01-16"}
       ]
+    },
+    "purchase_orders": {
+      "description": "Purchase orders with composite keys for $facet pagination tests (modeled from customer query pattern)",
+      "documents": [
+        {"_id": "PO001", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-001", "customerPONumber": "PO-A001", "orderedDate": {"$date": "2024-03-15T10:00:00.000Z"}, "amount": 1500.00, "status": "completed"},
+        {"_id": "PO002", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-002", "customerPONumber": "PO-A002", "orderedDate": {"$date": "2024-04-10T14:30:00.000Z"}, "amount": 2500.00, "status": "completed"},
+        {"_id": "PO003", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-003", "customerPONumber": "PO-A003", "orderedDate": {"$date": "2024-05-20T09:15:00.000Z"}, "amount": 750.00, "status": "pending"},
+        {"_id": "PO004", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-004", "customerPONumber": "PO-A004", "orderedDate": {"$date": "2024-06-05T11:45:00.000Z"}, "amount": 3200.00, "status": "completed"},
+        {"_id": "PO005", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-005", "customerPONumber": "PO-A005", "orderedDate": {"$date": "2024-07-12T16:00:00.000Z"}, "amount": 890.00, "status": "pending"},
+        {"_id": "PO006", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-001", "customerPONumber": "PO-A001", "orderedDate": {"$date": "2024-03-15T10:00:00.000Z"}, "amount": 500.00, "status": "completed"},
+        {"_id": "PO007", "locationNumber": "LOC002", "docRefNumber": "DOC-2024-006", "customerPONumber": "PO-B001", "orderedDate": {"$date": "2024-04-22T13:00:00.000Z"}, "amount": 4100.00, "status": "completed"},
+        {"_id": "PO008", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-007", "customerPONumber": "PO-A006", "orderedDate": {"$date": "2024-08-01T08:30:00.000Z"}, "amount": 1750.00, "status": "shipped"},
+        {"_id": "PO009", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-008", "customerPONumber": "PO-A007", "orderedDate": {"$date": "2024-09-18T15:20:00.000Z"}, "amount": 620.00, "status": "pending"},
+        {"_id": "PO010", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-009", "customerPONumber": "PO-A008", "orderedDate": {"$date": "2024-10-25T10:45:00.000Z"}, "amount": 2100.00, "status": "completed"},
+        {"_id": "PO011", "locationNumber": "LOC003", "docRefNumber": "DOC-2024-010", "customerPONumber": "PO-C001", "orderedDate": {"$date": "2024-11-05T12:00:00.000Z"}, "amount": 5500.00, "status": "completed"},
+        {"_id": "PO012", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-010", "customerPONumber": "PO-A009", "orderedDate": {"$date": "2024-11-20T09:00:00.000Z"}, "amount": 980.00, "status": "pending"},
+        {"_id": "PO013", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-011", "customerPONumber": "PO-A010", "orderedDate": {"$date": "2025-01-08T14:15:00.000Z"}, "amount": 3400.00, "status": "completed"},
+        {"_id": "PO014", "locationNumber": "LOC001", "docRefNumber": "DOC-2024-012", "customerPONumber": "PO-A011", "orderedDate": {"$date": "2025-02-14T11:30:00.000Z"}, "amount": 1200.00, "status": "shipped"},
+        {"_id": "PO015", "locationNumber": "LOC002", "docRefNumber": "DOC-2024-013", "customerPONumber": "PO-B002", "orderedDate": {"$date": "2025-03-01T16:45:00.000Z"}, "amount": 7800.00, "status": "completed"}
+      ]
     }
   }
 }
