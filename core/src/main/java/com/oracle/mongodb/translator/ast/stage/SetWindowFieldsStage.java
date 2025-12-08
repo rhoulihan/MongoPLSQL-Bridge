@@ -189,7 +189,28 @@ public final class SetWindowFieldsStage implements Stage {
     ctx.sql(" OVER (");
     renderOverClause(ctx, field.window());
     ctx.sql(") AS ");
-    ctx.sql(alias);
+    // Only quote aliases that conflict with Oracle reserved words (like ROWNUM)
+    // to avoid requiring quotes in all subsequent references
+    if (needsQuoting(alias)) {
+      ctx.sql("\"");
+      ctx.sql(alias);
+      ctx.sql("\"");
+    } else {
+      ctx.sql(alias);
+    }
+  }
+
+  /**
+   * Checks if an alias needs quoting to avoid Oracle reserved word conflicts. Oracle's ROWNUM is a
+   * pseudocolumn that conflicts with unquoted "rownum" or "rowNum" aliases.
+   */
+  private boolean needsQuoting(String alias) {
+    if (alias == null) {
+      return false;
+    }
+    String upper = alias.toUpperCase();
+    // ROWNUM is the main conflict - Oracle treats unquoted rownum as the ROWNUM pseudocolumn
+    return "ROWNUM".equals(upper);
   }
 
   private void renderFieldPath(SqlGenerationContext ctx, String fieldPath) {
@@ -203,13 +224,31 @@ public final class SetWindowFieldsStage implements Stage {
   }
 
   private void renderDotNotationField(SqlGenerationContext ctx, String fieldPath) {
+    renderDotNotationField(ctx, fieldPath, false);
+  }
+
+  private void renderDotNotationField(
+      SqlGenerationContext ctx, String fieldPath, boolean castAsNumber) {
     String alias = ctx.getBaseTableAlias();
-    if (alias != null && !alias.isEmpty()) {
-      ctx.sql(alias);
-      ctx.sql(".");
+    if (castAsNumber) {
+      // Use JSON_VALUE with RETURNING NUMBER for proper numeric casting
+      // CAST doesn't work with Oracle JSON dot notation
+      ctx.sql("JSON_VALUE(");
+      if (alias != null && !alias.isEmpty()) {
+        ctx.sql(alias);
+        ctx.sql(".");
+      }
+      ctx.sql("data, '$.");
+      ctx.sql(fieldPath);
+      ctx.sql("' RETURNING NUMBER)");
+    } else {
+      if (alias != null && !alias.isEmpty()) {
+        ctx.sql(alias);
+        ctx.sql(".");
+      }
+      ctx.sql("data.");
+      ctx.sql(fieldPath);
     }
-    ctx.sql("data.");
-    ctx.sql(fieldPath);
   }
 
   private void renderOverClause(SqlGenerationContext ctx, WindowSpec window) {
@@ -223,7 +262,8 @@ public final class SetWindowFieldsStage implements Stage {
       hasClause = true;
     }
 
-    // ORDER BY clause
+    // ORDER BY clause - use CAST AS NUMBER for fields likely to be numeric
+    // (salary, price, amount, etc.) since JSON dot notation on CLOB returns VARCHAR2
     if (!sortBy.isEmpty()) {
       if (hasClause) {
         ctx.sql(" ");
@@ -235,7 +275,9 @@ public final class SetWindowFieldsStage implements Stage {
           ctx.sql(", ");
         }
         final String sortField = sortEntry.getKey();
-        renderDotNotationField(ctx, sortField);
+        // Only cast numeric-looking fields to preserve date/string sorting
+        boolean isLikelyNumeric = isLikelyNumericField(sortField);
+        renderDotNotationField(ctx, sortField, isLikelyNumeric);
         if (sortEntry.getValue() < 0) {
           ctx.sql(" DESC");
         }
@@ -306,6 +348,38 @@ public final class SetWindowFieldsStage implements Stage {
         ctx.sql("UNBOUNDED PRECEDING");
       }
     }
+  }
+
+  /**
+   * Heuristic to detect field names that are likely numeric. Used to apply CAST AS NUMBER for
+   * proper numeric sorting in window functions, since JSON dot notation returns VARCHAR2.
+   */
+  private static boolean isLikelyNumericField(String fieldName) {
+    if (fieldName == null) {
+      return false;
+    }
+    String lower = fieldName.toLowerCase();
+    // Common numeric field patterns
+    return lower.contains("salary")
+        || lower.contains("price")
+        || lower.contains("amount")
+        || lower.contains("cost")
+        || lower.contains("quantity")
+        || lower.contains("count")
+        || lower.contains("total")
+        || lower.contains("score")
+        || lower.contains("rating")
+        || lower.contains("rank")
+        || lower.contains("age")
+        || lower.contains("size")
+        || lower.contains("weight")
+        || lower.contains("height")
+        || lower.contains("balance")
+        || lower.contains("value")
+        || lower.contains("number")
+        || lower.contains("num")
+        || lower.equals("id")
+        || lower.endsWith("_id");
   }
 
   @Override

@@ -69,7 +69,7 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("CAST(data.amount AS NUMBER)");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.amount' RETURNING NUMBER)");
   }
 
   @Test
@@ -164,7 +164,7 @@ class FieldPathExpressionTest {
     var expr = FieldPathExpression.of("inventory.quantity", JsonReturnType.NUMBER);
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("CAST(inv_1.data.quantity AS NUMBER)");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(inv_1.data, '$.quantity' RETURNING NUMBER)");
   }
 
   @Test
@@ -258,6 +258,6 @@ class FieldPathExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("CAST(data.\"_id\" AS NUMBER)");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.\"_id\"' RETURNING NUMBER)");
   }
 }

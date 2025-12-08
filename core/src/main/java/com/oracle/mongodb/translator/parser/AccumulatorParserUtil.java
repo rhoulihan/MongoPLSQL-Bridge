@@ -10,6 +10,7 @@ import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import java.util.LinkedHashMap;
@@ -75,7 +76,7 @@ public final class AccumulatorParserUtil {
     }
 
     AccumulatorOp accOp = AccumulatorOp.fromMongo(operator);
-    Expression argumentExpr = parseAccumulatorArgument(argument, expressionParser);
+    Expression argumentExpr = parseAccumulatorArgument(argument, expressionParser, accOp);
 
     return new AccumulatorExpression(accOp, argumentExpr);
   }
@@ -85,11 +86,12 @@ public final class AccumulatorParserUtil {
    *
    * @param argument the argument value (field path, literal, or complex expression)
    * @param expressionParser parser for complex expressions
+   * @param accOp the accumulator operator (used to determine return type for numeric ops)
    * @return the parsed Expression
    * @throws IllegalArgumentException if the argument type is not supported
    */
   public static Expression parseAccumulatorArgument(
-      Object argument, ExpressionParser expressionParser) {
+      Object argument, ExpressionParser expressionParser, AccumulatorOp accOp) {
     if (argument == null) {
       return null;
     }
@@ -101,8 +103,10 @@ public final class AccumulatorParserUtil {
 
     if (argument instanceof String strVal) {
       if (strVal.startsWith("$")) {
-        // Field reference
-        return FieldPathExpression.of(strVal.substring(1));
+        // Field reference - use NUMBER return type for numeric accumulators
+        // to ensure proper numeric comparison/aggregation
+        JsonReturnType returnType = isNumericAccumulator(accOp) ? JsonReturnType.NUMBER : null;
+        return FieldPathExpression.of(strVal.substring(1), returnType);
       }
       return LiteralExpression.of(strVal);
     }
@@ -118,5 +122,16 @@ public final class AccumulatorParserUtil {
     }
 
     throw new IllegalArgumentException("Unsupported accumulator argument: " + argument);
+  }
+
+  /**
+   * Determines if the accumulator operator requires numeric values.
+   * These operators need CAST AS NUMBER for proper aggregation.
+   */
+  private static boolean isNumericAccumulator(AccumulatorOp op) {
+    return op == AccumulatorOp.SUM
+        || op == AccumulatorOp.AVG
+        || op == AccumulatorOp.MIN
+        || op == AccumulatorOp.MAX;
   }
 }

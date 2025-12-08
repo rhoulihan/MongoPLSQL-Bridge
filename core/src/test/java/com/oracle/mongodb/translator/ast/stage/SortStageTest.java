@@ -74,7 +74,7 @@ class SortStageTest {
 
     stage.render(context);
 
-    assertThat(context.toSql()).contains("AS NUMBER").contains("DESC");
+    assertThat(context.toSql()).contains("RETURNING NUMBER").contains("DESC");
   }
 
   @Test

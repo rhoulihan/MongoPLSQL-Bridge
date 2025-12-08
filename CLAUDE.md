@@ -169,11 +169,32 @@ core/src/main/java/com/oracle/mongodb/translator/
 # Report at: core/build/reports/jacoco/test/html/index.html
 
 # Run cross-database validation tests (requires Docker)
-./query-tests/scripts/setup.sh && ./query-tests/scripts/run-tests.sh
+./query-tests/scripts/run-tests.sh
+
+# Run a specific test
+./query-tests/scripts/run-tests.sh --test CMP001
+
+# Run tests matching a pattern
+./query-tests/scripts/run-tests.sh --test "FACET_*"
 
 # Run large-scale comparison tests (requires Docker)
 cd query-tests/large-scale && ./run-comparison.sh --size small
 ```
+
+### Regenerating Test Catalog
+The test catalog (`docs/test-catalog.html`) shows pass/fail status for all cross-database validation tests. Running `run-tests.sh` automatically regenerates the catalog:
+
+```bash
+# Run full test suite - this automatically updates the test catalog
+./query-tests/scripts/run-tests.sh
+
+# Files generated/updated:
+# - query-tests/results/test-report-latest.json  (test results)
+# - docs/test-catalog-data.json                   (catalog data)
+# - docs/test-catalog.html                        (embeds the JSON)
+```
+
+**Important:** The test catalog will show `passed: 0` for categories if you haven't run the full test suite recently. The catalog data is automatically regenerated at the end of each `run-tests.sh` execution.
 
 ### CLI Tool (mongo2sql)
 The project includes a command-line tool for quick pipeline translation without writing Java code.
@@ -309,7 +330,7 @@ Both databases contain matching test data:
 
 **Test Coverage:**
 - Unit Tests: 90% line coverage, 78% branch coverage
-- Cross-Database Validation: 102 tests (MongoDB 8.0 ↔ Oracle 23.6)
+- Cross-Database Validation: 175 tests (MongoDB 8.0 ↔ Oracle 23.6)
 - Large-Scale Tests: 10 complex pipelines with deeply nested documents (~4GB data)
 
 ## Development Guidelines

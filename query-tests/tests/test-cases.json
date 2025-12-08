@@ -5020,6 +5020,295 @@
       ],
       "expected_count": 1,
       "sort_by": null
+    },
+    {
+      "id": "ECOM001",
+      "name": "Customer order count and total spent",
+      "category": "ecommerce",
+      "operator": "$lookup/$group",
+      "description": "Calculate customer metrics by joining orders_detailed",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {"$lookup": {"from": "orders_detailed", "localField": "_id", "foreignField": "customerId", "as": "orders"}},
+        {"$project": {"_id": 1, "name": 1, "tier": 1, "orderCount": {"$size": "$orders"}, "totalSpent": {"$sum": "$orders.payment.amount"}}}
+      ],
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ECOM002",
+      "name": "Revenue by product category from line items",
+      "category": "ecommerce",
+      "operator": "$unwind/$group",
+      "description": "Unwind line items and aggregate by category",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$match": {"status": {"$in": ["delivered", "shipped"]}}},
+        {"$unwind": "$lineItems"},
+        {"$group": {"_id": "$lineItems.category", "revenue": {"$sum": {"$multiply": ["$lineItems.quantity", "$lineItems.unitPrice"]}}, "itemCount": {"$sum": "$lineItems.quantity"}}},
+        {"$sort": {"revenue": -1}}
+      ],
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ECOM003",
+      "name": "Orders by warehouse with fulfillment count",
+      "category": "ecommerce",
+      "operator": "$group",
+      "description": "Count orders by fulfillment warehouse",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$match": {"fulfillment": {"$ne": null}}},
+        {"$group": {"_id": "$fulfillment.warehouse", "orderCount": {"$sum": 1}, "totalAmount": {"$sum": "$payment.amount"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ECOM004",
+      "name": "Orders by payment method",
+      "category": "ecommerce",
+      "operator": "$group",
+      "description": "Group orders by payment method",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$payment.method", "count": {"$sum": 1}, "totalAmount": {"$sum": "$payment.amount"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "ECOM005",
+      "name": "Orders by status with average amount",
+      "category": "ecommerce",
+      "operator": "$group/$avg",
+      "description": "Calculate average order amount by status",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}, "avgAmount": {"$avg": "$payment.amount"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "WINDOW007",
+      "name": "Running total by category",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields/$sum",
+      "description": "Calculate running sum within category partition",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$setWindowFields": {"partitionBy": "$category", "sortBy": {"orderDate": 1}, "output": {"runningTotal": {"$sum": "$amount", "window": {"documents": ["unbounded", "current"]}}}}},
+        {"$project": {"_id": 1, "category": 1, "orderDate": 1, "amount": 1, "runningTotal": 1}}
+      ],
+      "expected_count": 5,
+      "sort_by": "_id"
+    },
+    {
+      "id": "WINDOW008",
+      "name": "Employee rank by salary within department",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields/$rank",
+      "description": "Rank employees by salary within each department",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$setWindowFields": {"partitionBy": "$department", "sortBy": {"salary": -1}, "output": {"salaryRank": {"$rank": {}}}}},
+        {"$project": {"_id": 1, "name": 1, "department": 1, "salary": 1, "salaryRank": 1}},
+        {"$sort": {"department": 1, "salaryRank": 1}}
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "WINDOW009",
+      "name": "Dense rank for employees",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields/$denseRank",
+      "description": "Dense rank employees by years of service",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$setWindowFields": {"sortBy": {"yearsOfService": -1}, "output": {"serviceRank": {"$denseRank": {}}}}},
+        {"$project": {"_id": 1, "name": 1, "yearsOfService": 1, "serviceRank": 1}}
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "WINDOW010",
+      "name": "Row number for sorting",
+      "category": "setWindowFields",
+      "operator": "$setWindowFields/$documentNumber",
+      "description": "Assign row numbers by amount descending",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"amount": {"$gt": 0}}},
+        {"$setWindowFields": {"sortBy": {"amount": -1}, "output": {"rowNum": {"$documentNumber": {}}}}},
+        {"$project": {"_id": 1, "orderId": 1, "amount": 1, "rowNum": 1}}
+      ],
+      "expected_count": 8,
+      "sort_by": "_id"
+    },
+    {
+      "id": "UNWIND003",
+      "name": "Unwind nested line items",
+      "category": "unwind",
+      "operator": "$unwind",
+      "description": "Unwind order line items to individual rows",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$unwind": "$lineItems"},
+        {"$project": {"_id": 1, "orderNumber": 1, "sku": "$lineItems.sku", "productName": "$lineItems.productName", "quantity": "$lineItems.quantity"}}
+      ],
+      "expected_count": 16,
+      "sort_by": "_id"
+    },
+    {
+      "id": "UNWIND004",
+      "name": "Unwind with array index",
+      "category": "unwind",
+      "operator": "$unwind/includeArrayIndex",
+      "description": "Unwind tags with position index",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$unwind": {"path": "$tags", "includeArrayIndex": "tagIndex"}},
+        {"$project": {"_id": 1, "name": 1, "tag": "$tags", "tagPosition": "$tagIndex"}},
+        {"$sort": {"_id": 1, "tagPosition": 1}}
+      ],
+      "expected_count": 12,
+      "sort_by": null
+    },
+    {
+      "id": "UNWIND005",
+      "name": "Unwind with preserveNullAndEmptyArrays",
+      "category": "unwind",
+      "operator": "$unwind/preserveNull",
+      "description": "Unwind preserving documents with empty arrays",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$unwind": {"path": "$lineItems", "preserveNullAndEmptyArrays": true}},
+        {"$project": {"_id": 1, "orderNumber": 1, "status": 1, "lineItemSku": "$lineItems.sku"}}
+      ],
+      "expected_count": 16,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX009",
+      "name": "Dashboard metrics with facet",
+      "category": "complex",
+      "operator": "$facet",
+      "description": "Multiple aggregations in single query",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$facet": {"byRegion": [{"$group": {"_id": "$region", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}], "byCategory": [{"$group": {"_id": "$category", "count": {"$sum": 1}}}]}}
+      ],
+      "expected_count": 1,
+      "sort_by": null
+    },
+    {
+      "id": "COMPLEX010",
+      "name": "Product inventory lookup with pipeline",
+      "category": "complex",
+      "operator": "$lookup/pipeline",
+      "description": "Lookup with custom pipeline filtering",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$lookup": {"from": "inventory", "let": {"productId": "$_id"}, "pipeline": [{"$match": {"$expr": {"$eq": ["$productId", "$$productId"]}}}, {"$group": {"_id": null, "totalStock": {"$sum": "$quantity"}}}], "as": "inventoryData"}},
+        {"$project": {"_id": 1, "name": 1, "category": 1, "totalInventory": {"$ifNull": [{"$arrayElemAt": ["$inventoryData.totalStock", 0]}, 0]}}}
+      ],
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX011",
+      "name": "Customer with order summary",
+      "category": "complex",
+      "operator": "$lookup/$addFields",
+      "description": "Lookup orders and compute summary fields",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {"$lookup": {"from": "orders_detailed", "localField": "_id", "foreignField": "customerId", "as": "orders"}},
+        {"$addFields": {"orderCount": {"$size": "$orders"}, "hasOrders": {"$gt": [{"$size": "$orders"}, 0]}}},
+        {"$project": {"_id": 1, "name": 1, "tier": 1, "orderCount": 1, "hasOrders": 1}}
+      ],
+      "expected_count": 7,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX012",
+      "name": "Conditional status grouping",
+      "category": "complex",
+      "operator": "$cond/$group",
+      "description": "Group with conditional categorization",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$addFields": {"statusCategory": {"$cond": {"if": {"$in": ["$status", ["delivered", "shipped"]]}, "then": "fulfilled", "else": "unfulfilled"}}}},
+        {"$group": {"_id": "$statusCategory", "count": {"$sum": 1}, "totalValue": {"$sum": "$payment.amount"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 2,
+      "sort_by": "_id"
+    },
+    {
+      "id": "OBJ002",
+      "name": "Access nested shipping address fields",
+      "category": "object",
+      "operator": "nested object",
+      "description": "Project nested object fields",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$project": {"_id": 1, "orderNumber": 1, "city": "$shippingAddress.city", "state": "$shippingAddress.state"}}
+      ],
+      "expected_count": 10,
+      "sort_by": "_id"
+    },
+    {
+      "id": "OBJ003",
+      "name": "Nested device type from page views",
+      "category": "object",
+      "operator": "nested object",
+      "description": "Access deeply nested device info",
+      "collection": "page_views",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$device.type", "count": {"$sum": 1}, "avgDuration": {"$avg": "$duration"}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 3,
+      "sort_by": "_id"
+    },
+    {
+      "id": "REPLACEROOT002",
+      "name": "Replace root with shipping address",
+      "category": "replaceRoot",
+      "operator": "$replaceRoot",
+      "description": "Promote nested address to root",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$replaceRoot": {"newRoot": {"$mergeObjects": [{"orderId": "$_id"}, "$shippingAddress"]}}},
+        {"$project": {"orderId": 1, "city": 1, "state": 1}}
+      ],
+      "expected_count": 10,
+      "sort_by": "orderId"
+    },
+    {
+      "id": "TICKETS001",
+      "name": "Support tickets by priority",
+      "category": "support",
+      "operator": "$group",
+      "description": "Count and analyze tickets by priority level",
+      "collection": "support_tickets",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$priority", "count": {"$sum": 1}, "resolvedCount": {"$sum": {"$cond": [{"$eq": ["$status", "resolved"]}, 1, 0]}}}},
+        {"$sort": {"_id": 1}}
+      ],
+      "expected_count": 4,
+      "sort_by": "_id"
     }
   ]
 }

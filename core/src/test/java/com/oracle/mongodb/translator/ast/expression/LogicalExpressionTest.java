@@ -41,7 +41,7 @@ class LogicalExpressionTest {
     expr.render(context);
 
     assertThat(context.toSql())
-        .isEqualTo("(data.status = :1) AND (CAST(data.age AS NUMBER) > :2)");
+        .isEqualTo("(data.status = :1) AND (JSON_VALUE(data, '$.age' RETURNING NUMBER) > :2)");
   }
 
   @Test

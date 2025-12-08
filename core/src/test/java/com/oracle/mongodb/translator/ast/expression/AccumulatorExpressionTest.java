@@ -27,7 +27,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("SUM(CAST(data.amount AS NUMBER))");
+    assertThat(context.toSql()).isEqualTo("SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER))");
   }
 
   @Test
@@ -36,7 +36,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("AVG(CAST(data.price AS NUMBER))");
+    assertThat(context.toSql()).isEqualTo("AVG(JSON_VALUE(data, '$.price' RETURNING NUMBER))");
   }
 
   @Test
@@ -54,7 +54,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MIN(CAST(data.score AS NUMBER))");
+    assertThat(context.toSql()).isEqualTo("MIN(JSON_VALUE(data, '$.score' RETURNING NUMBER))");
   }
 
   @Test
@@ -63,7 +63,7 @@ class AccumulatorExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MAX(CAST(data.score AS NUMBER))");
+    assertThat(context.toSql()).isEqualTo("MAX(JSON_VALUE(data, '$.score' RETURNING NUMBER))");
   }
 
   @Test

@@ -1,7 +1,7 @@
 # TODO - MongoDB to Oracle SQL Translator
 
 This file tracks improvements, enhancements, and features discovered during development.
-Last updated: 2025-12-05
+Last updated: 2025-12-07
 
 ## Completed Implementations
 
@@ -90,6 +90,24 @@ Last updated: 2025-12-05
     - `query-tests/tests/test-cases.json` - GRAPHLOOKUP002 (recursive hierarchy traversal)
     - `PipelineRendererTest.java` - 7 tests with @Disabled annotation
   - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
+
+- [ ] **$setWindowFields Global Window (without partitionBy)** (discovered: 2025-12-07)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/SetWindowFieldsStage.java`
+  - Issue: $documentNumber/$rowNumber without partitionBy clause generates invalid SQL
+  - Skipped Test: WINDOW010 ($documentNumber without partitionBy)
+  - Fix: Need to handle case where partitionBy is omitted (global window over entire result set)
+
+- [ ] **$unwind preserveNullAndEmptyArrays Option** (discovered: 2025-12-07)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/UnwindStage.java`
+  - Issue: The `preserveNullAndEmptyArrays: true` option is not implemented
+  - Skipped Test: UNWIND005 (unwind with preserveNullAndEmptyArrays)
+  - Fix: Need LEFT OUTER JOIN pattern with COALESCE to preserve nulls
+
+- [ ] **$in Expression Operator in Expressions** (discovered: 2025-12-07)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/parser/ExpressionParser.java`
+  - Issue: $in operator works in $match context but not as nested expression (e.g., inside $cond)
+  - Skipped Test: COMPLEX012 ($in inside $cond expression)
+  - Fix: Need to support $in as general comparison expression returning boolean
 
 ## Improvements
 

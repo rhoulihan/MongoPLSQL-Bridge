@@ -92,8 +92,8 @@ class ConditionalExpressionTest {
 
     assertThat(context.toSql())
         .contains("data.status")
-        .contains("data.activePrice")
-        .contains("data.defaultPrice");
+        .contains("'$.activePrice'")
+        .contains("'$.defaultPrice'");
   }
 
   @Test

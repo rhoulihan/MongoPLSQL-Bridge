@@ -51,7 +51,7 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    assertThat(context.toSql()).contains("data.age");
+    assertThat(context.toSql()).contains("'$.age'");
     assertThat(context.toSql()).contains("> :1");
   }
 

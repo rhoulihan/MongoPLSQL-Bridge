@@ -153,10 +153,34 @@ public final class FieldPathExpression implements Expression {
     dotExpr.append(dataColumn).append(".").append(dotPath);
 
     if (returnType != null) {
-      // Use CAST for type conversion with dot notation
-      ctx.sql("CAST(");
-      ctx.sql(dotExpr.toString());
-      ctx.sql(" AS ");
+      // Use JSON_VALUE with RETURNING for type conversion
+      // CAST doesn't work with Oracle dot notation on JSON columns
+      ctx.sql("JSON_VALUE(");
+      if (baseAlias != null && !baseAlias.isEmpty() && "data".equals(dataColumn)) {
+        ctx.sql(baseAlias);
+        ctx.sql(".");
+      }
+      ctx.sql(dataColumn);
+      ctx.sql(", '$.");
+      // Quote field names that need quoting in JSON path
+      String[] segments = dotPath.split("\\.");
+      for (int i = 0; i < segments.length; i++) {
+        if (i > 0) {
+          ctx.sql(".");
+        }
+        String segment = segments[i];
+        // Remove existing quotes if any (from getDotNotationPath)
+        if (segment.startsWith("\"") && segment.endsWith("\"")) {
+          ctx.sql(segment);
+        } else if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+          ctx.sql("\"");
+          ctx.sql(segment);
+          ctx.sql("\"");
+        } else {
+          ctx.sql(segment);
+        }
+      }
+      ctx.sql("' RETURNING ");
       ctx.sql(returnType.getOracleSyntax());
       ctx.sql(")");
     } else {
@@ -205,27 +229,51 @@ public final class FieldPathExpression implements Expression {
    */
   private void renderLookupFieldPath(SqlGenerationContext ctx, String lookupAlias, String path) {
     // path is like "customer.tier", lookupAlias is like "customers_1"
-    // We generate: customers_1.data.tier (or CAST(customers_1.data.tier AS NUMBER) for returnType)
+    // We generate: customers_1.data.tier (or JSON_VALUE(...) for returnType)
     int dotIndex = path.indexOf('.');
     final String remainingPath = dotIndex >= 0 ? path.substring(dotIndex + 1) : "";
 
-    // Build dot notation expression
-    StringBuilder dotExpr = new StringBuilder();
-    dotExpr.append(lookupAlias).append(".data");
-    if (!remainingPath.isEmpty()) {
-      // Validate the remaining path
-      FieldNameValidator.validateFieldName(remainingPath);
-      dotExpr.append(".").append(remainingPath);
-    }
-
     if (returnType != null) {
-      ctx.sql("CAST(");
-      ctx.sql(dotExpr.toString());
-      ctx.sql(" AS ");
+      // Use JSON_VALUE with RETURNING for type conversion
+      // CAST doesn't work with Oracle dot notation on JSON columns
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(lookupAlias);
+      ctx.sql(".data, '$");
+      if (!remainingPath.isEmpty()) {
+        FieldNameValidator.validateFieldName(remainingPath);
+        ctx.sql(".");
+        renderJsonPathSegments(ctx, remainingPath);
+      }
+      ctx.sql("' RETURNING ");
       ctx.sql(returnType.getOracleSyntax());
       ctx.sql(")");
     } else {
+      // Build dot notation expression
+      StringBuilder dotExpr = new StringBuilder();
+      dotExpr.append(lookupAlias).append(".data");
+      if (!remainingPath.isEmpty()) {
+        FieldNameValidator.validateFieldName(remainingPath);
+        dotExpr.append(".").append(remainingPath);
+      }
       ctx.sql(dotExpr.toString());
+    }
+  }
+
+  /** Helper method to render JSON path segments with proper quoting. */
+  private void renderJsonPathSegments(SqlGenerationContext ctx, String path) {
+    String[] segments = path.split("\\.");
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        ctx.sql(".");
+      }
+      String segment = segments[i];
+      if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+        ctx.sql("\"");
+        ctx.sql(segment);
+        ctx.sql("\"");
+      } else {
+        ctx.sql(segment);
+      }
     }
   }
 
@@ -237,22 +285,28 @@ public final class FieldPathExpression implements Expression {
    */
   private void renderUnwindFieldPath(
       SqlGenerationContext ctx, SqlGenerationContext.UnwindInfo info) {
-    // Build dot notation expression
-    StringBuilder dotExpr = new StringBuilder();
-    dotExpr.append(info.tableAlias()).append(".value");
-    if (!info.remainingPath().isEmpty()) {
-      // Validate the remaining path
-      FieldNameValidator.validateFieldName(info.remainingPath());
-      dotExpr.append(".").append(info.remainingPath());
-    }
-
     if (returnType != null) {
-      ctx.sql("CAST(");
-      ctx.sql(dotExpr.toString());
-      ctx.sql(" AS ");
+      // Use JSON_VALUE with RETURNING for type conversion
+      // CAST doesn't work with Oracle dot notation on JSON columns
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(info.tableAlias());
+      ctx.sql(".value, '$");
+      if (!info.remainingPath().isEmpty()) {
+        FieldNameValidator.validateFieldName(info.remainingPath());
+        ctx.sql(".");
+        renderJsonPathSegments(ctx, info.remainingPath());
+      }
+      ctx.sql("' RETURNING ");
       ctx.sql(returnType.getOracleSyntax());
       ctx.sql(")");
     } else {
+      // Build dot notation expression
+      StringBuilder dotExpr = new StringBuilder();
+      dotExpr.append(info.tableAlias()).append(".value");
+      if (!info.remainingPath().isEmpty()) {
+        FieldNameValidator.validateFieldName(info.remainingPath());
+        dotExpr.append(".").append(info.remainingPath());
+      }
       ctx.sql(dotExpr.toString());
     }
   }

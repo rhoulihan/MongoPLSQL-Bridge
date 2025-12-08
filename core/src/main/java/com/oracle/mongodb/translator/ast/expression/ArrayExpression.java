@@ -148,6 +148,24 @@ public final class ArrayExpression implements Expression {
   }
 
   /**
+   * Creates a $sum expression that sums all values in an array.
+   *
+   * @param array the array field path to sum
+   */
+  public static ArrayExpression sumArray(Expression array) {
+    return new ArrayExpression(ArrayOp.SUM_ARRAY, array, null);
+  }
+
+  /**
+   * Creates a $avg expression that averages all values in an array.
+   *
+   * @param array the array field path to average
+   */
+  public static ArrayExpression avgArray(Expression array) {
+    return new ArrayExpression(ArrayOp.AVG_ARRAY, array, null);
+  }
+
+  /**
    * Creates a $sortArray expression.
    *
    * @param array the array to sort
@@ -333,6 +351,8 @@ public final class ArrayExpression implements Expression {
         case FIRST -> renderFirst(ctx, path);
         case LAST -> renderLast(ctx, path);
         case SLICE -> renderSlice(ctx, path);
+        case SUM_ARRAY -> renderSumArray(ctx, path);
+        case AVG_ARRAY -> renderAvgArray(ctx, path);
         default -> throw new IllegalStateException("Unexpected array operator: " + op);
       }
     } else {
@@ -343,6 +363,8 @@ public final class ArrayExpression implements Expression {
         case FIRST -> renderFirstExpression(ctx);
         case LAST -> renderLastExpression(ctx);
         case SLICE -> renderSliceExpression(ctx);
+        case SUM_ARRAY -> renderSumArrayExpression(ctx);
+        case AVG_ARRAY -> renderAvgArrayExpression(ctx);
         default -> throw new IllegalStateException("Unexpected array operator: " + op);
       }
     }
@@ -1057,8 +1079,51 @@ public final class ArrayExpression implements Expression {
       }
 
       ctx.sql(")')");
+    } else if (arrayExpression instanceof LiteralExpression litArray
+        && litArray.getValue() instanceof List<?> list) {
+      // Array is a literal array - use SQL IN operator for efficiency
+      // {"$in": ["$status", ["delivered", "shipped"]]} -> status IN ('delivered', 'shipped')
+      if (indexExpression instanceof FieldPathExpression valueField) {
+        ctx.visit(valueField);
+        ctx.sql(" IN (");
+        boolean first = true;
+        for (Object item : list) {
+          if (!first) {
+            ctx.sql(", ");
+          }
+          if (item instanceof String s) {
+            ctx.sql("'");
+            ctx.sql(s.replace("'", "''"));
+            ctx.sql("'");
+          } else if (item instanceof Number) {
+            ctx.sql(item.toString());
+          } else if (item instanceof Boolean) {
+            ctx.sql(item.toString());
+          } else {
+            ctx.sql("NULL");
+          }
+          first = false;
+        }
+        ctx.sql(")");
+      } else {
+        // Value is a literal - use JSON_EXISTS
+        ctx.sql("JSON_EXISTS('");
+        ctx.sql(toJsonArray(list));
+        ctx.sql("', '$[*]?(@ == ");
+        if (indexExpression instanceof LiteralExpression lit) {
+          Object val = lit.getValue();
+          if (val instanceof String s) {
+            ctx.sql("\"");
+            ctx.sql(s.replace("\"", "\\\""));
+            ctx.sql("\"");
+          } else {
+            ctx.sql(val != null ? val.toString() : "null");
+          }
+        }
+        ctx.sql(")')");
+      }
     } else {
-      // Array is an expression
+      // Array is some other expression
       ctx.sql("JSON_EXISTS(");
       ctx.visit(arrayExpression);
       ctx.sql(", '$[*]?(@ == ");
@@ -1071,6 +1136,13 @@ public final class ArrayExpression implements Expression {
         } else {
           ctx.sql(val != null ? val.toString() : "null");
         }
+      } else if (indexExpression instanceof FieldPathExpression valueField) {
+        // Compare with another field - use variable binding
+        ctx.sql("$val)' PASSING ");
+        ctx.visit(valueField);
+        ctx.sql(" AS \"val\"");
+        ctx.sql(")");
+        return;
       }
       ctx.sql(")')");
     }
@@ -1351,6 +1423,83 @@ public final class ArrayExpression implements Expression {
     }
 
     ctx.sql(")) = 0 THEN 1 ELSE 0 END");
+  }
+
+  /**
+   * Renders $sum as an array expression operator. MongoDB: {$sum: "$orders.payment.amount"} - sums
+   * all numeric values in the array path. Oracle: Uses JSON_TABLE with SUM aggregate.
+   */
+  private void renderSumArray(SqlGenerationContext ctx, String path) {
+    // Handle nested field paths like "orders.payment.amount"
+    // We need to extract the array portion and the nested field path
+    int firstDot = path.indexOf('.');
+    if (firstDot > 0) {
+      // Nested path: split into array path and nested field
+      final String arrayPath = path.substring(0, firstDot);
+      final String nestedPath = path.substring(firstDot + 1);
+
+      ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(arrayPath);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+      ctx.sql(nestedPath);
+      ctx.sql("')))");
+    } else {
+      // Simple array path: sum all elements directly
+      ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(path);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+    }
+  }
+
+  /**
+   * Renders $avg as an array expression operator. MongoDB: {$avg: "$scores"} - averages all numeric
+   * values in the array. Oracle: Uses JSON_TABLE with AVG aggregate.
+   */
+  private void renderAvgArray(SqlGenerationContext ctx, String path) {
+    // Handle nested field paths similar to renderSumArray
+    int firstDot = path.indexOf('.');
+    if (firstDot > 0) {
+      final String arrayPath = path.substring(0, firstDot);
+      final String nestedPath = path.substring(firstDot + 1);
+
+      ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(arrayPath);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+      ctx.sql(nestedPath);
+      ctx.sql("')))");
+    } else {
+      ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(path);
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+    }
+  }
+
+  /**
+   * Renders $sum when the array is an expression (not a field path). Uses JSON_TABLE to iterate and
+   * sum values.
+   */
+  private void renderSumArrayExpression(SqlGenerationContext ctx) {
+    ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+  }
+
+  /**
+   * Renders $avg when the array is an expression (not a field path). Uses JSON_TABLE to iterate and
+   * average values.
+   */
+  private void renderAvgArrayExpression(SqlGenerationContext ctx) {
+    ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
+    ctx.visit(arrayExpression);
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
   }
 
   /** Helper method to render an array expression as a SELECT statement. */

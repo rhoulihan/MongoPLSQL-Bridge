@@ -57,7 +57,7 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("CAST(data.age AS NUMBER) > :1");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.age' RETURNING NUMBER) > :1");
     assertThat(context.getBindVariables()).containsExactly(21);
   }
 
@@ -133,7 +133,7 @@ class ComparisonExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("CAST(data.price AS NUMBER) <= :1");
+    assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.price' RETURNING NUMBER) <= :1");
   }
 
   @Test

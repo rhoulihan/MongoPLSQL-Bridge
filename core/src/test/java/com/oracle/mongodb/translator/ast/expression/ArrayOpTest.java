@@ -68,7 +68,7 @@ class ArrayOpTest {
   @Test
   void shouldReturnFalseForNonArrayOp() {
     assertThat(ArrayOp.isArrayOp("$eq")).isFalse();
-    assertThat(ArrayOp.isArrayOp("$sum")).isFalse();
+    // Note: $sum and $avg are now array operators (for summing/averaging array elements)
     assertThat(ArrayOp.isArrayOp("$concat")).isFalse();
   }
 

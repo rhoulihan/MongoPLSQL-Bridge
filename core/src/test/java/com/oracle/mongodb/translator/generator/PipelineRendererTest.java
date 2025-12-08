@@ -139,7 +139,7 @@ class PipelineRendererTest {
         .contains("WHERE")
         .contains("AND")
         .contains("base.data.status")
-        .contains("base.data.amount");
+        .contains("'$.amount'");
   }
 
   @Test
@@ -173,7 +173,7 @@ class PipelineRendererTest {
     assertThat(context.toSql())
         .contains("ORDER BY")
         .contains("base.data.status")
-        .contains("base.data.amount")
+        .contains("'$.amount'")
         .contains("DESC");
   }
 

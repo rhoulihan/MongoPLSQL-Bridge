@@ -8,10 +8,10 @@ package com.oracle.mongodb.translator.generator;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
-import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
-import com.oracle.mongodb.translator.ast.expression.ArrayOp;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
+import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
+import com.oracle.mongodb.translator.ast.expression.ArrayOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
@@ -1721,7 +1721,7 @@ public final class PipelineRenderer {
     boolean first = true;
 
     for (var entry : postProject.getProjections().entrySet()) {
-      String outputFieldName = entry.getKey();
+      final String outputFieldName = entry.getKey();
       ProjectStage.ProjectionField projField = entry.getValue();
 
       if (projField.isExcluded()) {
@@ -1822,7 +1822,7 @@ public final class PipelineRenderer {
       SqlGenerationContext ctx) {
 
     // Build the JSON path for the nested field
-    String jsonPath = "$." + nestedField;
+    final String jsonPath = "$." + nestedField;
 
     ctx.sql("(SELECT JSON_ARRAYAGG(jt_nested.field_val FORMAT JSON) FROM JSON_TABLE((");
     renderFacetPipeline(collectionName, facetPipeline, components, ctx);

@@ -63,7 +63,7 @@ class MatchStageTest {
         .startsWith("WHERE ")
         .contains("AND")
         .contains("data.status")
-        .contains("data.amount");
+        .contains("'$.amount'");
   }
 
   @Test

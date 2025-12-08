@@ -34,7 +34,9 @@ public enum ArrayOp {
   SET_EQUALS("$setEquals"),
   SET_IS_SUBSET("$setIsSubset"),
   ANY_ELEMENT_TRUE("$anyElementTrue"),
-  ALL_ELEMENTS_TRUE("$allElementsTrue");
+  ALL_ELEMENTS_TRUE("$allElementsTrue"),
+  SUM_ARRAY("$sum"),
+  AVG_ARRAY("$avg");
 
   private static final Map<String, ArrayOp> MONGO_LOOKUP;
 
@@ -63,7 +65,9 @@ public enum ArrayOp {
             Map.entry("$setEquals", SET_EQUALS),
             Map.entry("$setIsSubset", SET_IS_SUBSET),
             Map.entry("$anyElementTrue", ANY_ELEMENT_TRUE),
-            Map.entry("$allElementsTrue", ALL_ELEMENTS_TRUE));
+            Map.entry("$allElementsTrue", ALL_ELEMENTS_TRUE),
+            Map.entry("$sum", SUM_ARRAY),
+            Map.entry("$avg", AVG_ARRAY));
   }
 
   private final String mongoOperator;

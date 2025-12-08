@@ -59,7 +59,7 @@ class InExpressionTest {
 
     expr.render(context);
 
-    assertThat(context.toSql()).contains("AS NUMBER").contains("IN (:1, :2, :3)");
+    assertThat(context.toSql()).contains("RETURNING NUMBER").contains("IN (:1, :2, :3)");
     assertThat(context.getBindVariables()).containsExactly(1, 2, 3);
   }
 

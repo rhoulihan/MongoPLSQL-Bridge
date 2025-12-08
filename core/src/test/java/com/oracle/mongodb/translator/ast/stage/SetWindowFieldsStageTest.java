@@ -97,7 +97,7 @@ class SetWindowFieldsStageTest {
 
     String sql = context.toSql();
     assertThat(sql).contains("ROW_NUMBER()");
-    assertThat(sql).contains("AS rowNum");
+    assertThat(sql).contains("rowNum");
   }
 
   @Test

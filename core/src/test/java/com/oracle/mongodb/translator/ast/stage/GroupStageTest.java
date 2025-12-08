@@ -52,7 +52,7 @@ class GroupStageTest {
     assertThat(context.toSql())
         .contains("SELECT")
         .contains("data.status AS \"_id\"")
-        .contains("SUM(CAST(data.amount AS NUMBER)) AS totalAmount")
+        .contains("SUM(JSON_VALUE(data, '$.amount' RETURNING NUMBER)) AS totalAmount")
         .contains("GROUP BY data.status");
   }
 

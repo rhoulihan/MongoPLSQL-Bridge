@@ -719,6 +719,9 @@ public final class ExpressionParser {
       case SET_IS_SUBSET -> parseSetIsSubset(operand);
       case OBJECT_TO_ARRAY -> ObjectExpression.objectToArray(parseValue(operand));
       case ARRAY_TO_OBJECT -> ObjectExpression.arrayToObject(parseValue(operand));
+      case SUM_ARRAY -> ArrayExpression.sumArray(parseValue(operand));
+      case AVG_ARRAY -> ArrayExpression.avgArray(parseValue(operand));
+      case ANY_ELEMENT_TRUE, ALL_ELEMENTS_TRUE -> throw new UnsupportedOperatorException(op);
       default -> throw new UnsupportedOperatorException(op);
     };
   }
