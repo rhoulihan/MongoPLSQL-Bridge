@@ -1,5 +1,5 @@
 {
-  "generated": "2025-12-07T21:41:54.329083",
+  "generated": "2025-12-08T16:05:27.296610",
   "version": "2.0",
   "summary": {
     "queryTests": {
@@ -1439,6 +1439,10 @@
           ],
           "oracleResults": [
             {
+              "_id": "cancelled",
+              "COUNT": 1
+            },
+            {
               "_id": "completed",
               "COUNT": 5
             },
@@ -1447,15 +1451,11 @@
               "COUNT": 2
             },
             {
-              "_id": "cancelled",
+              "_id": "processing",
               "COUNT": 1
             },
             {
               "_id": "refunded",
-              "COUNT": 1
-            },
-            {
-              "_id": "processing",
               "COUNT": 1
             }
           ]
@@ -1518,12 +1518,12 @@
           ],
           "oracleResults": [
             {
-              "_id": "electronics",
-              "TOTALAMOUNT": 900
-            },
-            {
               "_id": "clothing",
               "TOTALAMOUNT": 89.99
+            },
+            {
+              "_id": "electronics",
+              "TOTALAMOUNT": 900
             },
             {
               "_id": "jewelry",
@@ -1592,16 +1592,16 @@
               "AVGSALARY": 95750
             },
             {
-              "_id": "Sales",
-              "AVGSALARY": 73333.33333333333
+              "_id": "HR",
+              "AVGSALARY": 60000
             },
             {
               "_id": "Marketing",
               "AVGSALARY": 71000
             },
             {
-              "_id": "HR",
-              "AVGSALARY": 60000
+              "_id": "Sales",
+              "AVGSALARY": 73333.33333333333
             }
           ]
         },
@@ -1663,16 +1663,16 @@
           ],
           "oracleResults": [
             {
-              "_id": "tools",
-              "MINPRICE": 10
-            },
-            {
               "_id": "electronics",
               "MINPRICE": 9.99
             },
             {
               "_id": "furniture",
               "MINPRICE": 299.99
+            },
+            {
+              "_id": "tools",
+              "MINPRICE": 10
             }
           ]
         },
@@ -1737,16 +1737,16 @@
               "MAXSALARY": 105000
             },
             {
-              "_id": "Sales",
-              "MAXSALARY": 80000
+              "_id": "HR",
+              "MAXSALARY": 60000
             },
             {
               "_id": "Marketing",
               "MAXSALARY": 72000
             },
             {
-              "_id": "HR",
-              "MAXSALARY": 60000
+              "_id": "Sales",
+              "MAXSALARY": 80000
             }
           ]
         },
@@ -1843,12 +1843,12 @@
               "MAXSALARY": 105000
             },
             {
-              "_id": "Sales",
-              "COUNT": 3,
-              "TOTALSALARY": 220000,
-              "AVGSALARY": 73333.33333333333,
-              "MINSALARY": 65000,
-              "MAXSALARY": 80000
+              "_id": "HR",
+              "COUNT": 1,
+              "TOTALSALARY": 60000,
+              "AVGSALARY": 60000,
+              "MINSALARY": 60000,
+              "MAXSALARY": 60000
             },
             {
               "_id": "Marketing",
@@ -1859,12 +1859,12 @@
               "MAXSALARY": 72000
             },
             {
-              "_id": "HR",
-              "COUNT": 1,
-              "TOTALSALARY": 60000,
-              "AVGSALARY": 60000,
-              "MINSALARY": 60000,
-              "MAXSALARY": 60000
+              "_id": "Sales",
+              "COUNT": 3,
+              "TOTALSALARY": 220000,
+              "AVGSALARY": 73333.33333333333,
+              "MINSALARY": 65000,
+              "MAXSALARY": 80000
             }
           ]
         },
@@ -2054,7 +2054,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          JSON_QUERY(base.data, '$.price') AS price\n   FROM products base\n   ORDER BY base.data.price DESC\n   OFFSET 2 ROWS FETCH FIRST 3 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "3",
           "oracleCount": "3",
           "expectedCount": 3,
@@ -2079,14 +2079,14 @@
           ],
           "oracleResults": [
             {
+              "_id": "P006",
+              "NAME": "Headphones",
+              "PRICE": 199.99
+            },
+            {
               "_id": "P002",
               "NAME": "Gadget",
               "PRICE": 50
-            },
-            {
-              "_id": "P008",
-              "NAME": "Chair",
-              "PRICE": 299.99
             },
             {
               "_id": "P001",
@@ -3621,6 +3621,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "east",
+              "TOTALSALES": 10499.99,
+              "ORDERCOUNT": 2
+            },
+            {
               "_id": "north",
               "TOTALSALES": 150,
               "ORDERCOUNT": 1
@@ -3628,11 +3633,6 @@
             {
               "_id": "south",
               "TOTALSALES": 339.99,
-              "ORDERCOUNT": 2
-            },
-            {
-              "_id": "east",
-              "TOTALSALES": 10499.99,
               "ORDERCOUNT": 2
             },
             {
@@ -4052,7 +4052,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          (JSON_QUERY(base.data, '$.name') || ' - ' || JSON_QUERY(base.data, '$.department')) AS fullInfo\n   FROM employees base\n   ORDER BY base.data.\"_id\") sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -4103,43 +4103,43 @@
           "oracleResults": [
             {
               "_id": "E001",
-              "FULLINFO": "\"Alice\" - \"Engineering\""
+              "FULLINFO": "Alice - Engineering"
             },
             {
               "_id": "E002",
-              "FULLINFO": "\"Bob\" - \"Engineering\""
+              "FULLINFO": "Bob - Engineering"
             },
             {
               "_id": "E003",
-              "FULLINFO": "\"Carol\" - \"Engineering\""
+              "FULLINFO": "Carol - Engineering"
             },
             {
               "_id": "E004",
-              "FULLINFO": "\"David\" - \"Sales\""
+              "FULLINFO": "David - Sales"
             },
             {
               "_id": "E005",
-              "FULLINFO": "\"Eve\" - \"Sales\""
+              "FULLINFO": "Eve - Sales"
             },
             {
               "_id": "E006",
-              "FULLINFO": "\"Frank\" - \"Sales\""
+              "FULLINFO": "Frank - Sales"
             },
             {
               "_id": "E007",
-              "FULLINFO": "\"Grace\" - \"Marketing\""
+              "FULLINFO": "Grace - Marketing"
             },
             {
               "_id": "E008",
-              "FULLINFO": "\"Henry\" - \"Marketing\""
+              "FULLINFO": "Henry - Marketing"
             },
             {
               "_id": "E009",
-              "FULLINFO": "\"Ivy\" - \"Engineering\""
+              "FULLINFO": "Ivy - Engineering"
             },
             {
               "_id": "E010",
-              "FULLINFO": "\"Jack\" - \"HR\""
+              "FULLINFO": "Jack - HR"
             }
           ]
         },
@@ -4174,7 +4174,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          LOWER(JSON_QUERY(base.data, '$.department')) AS deptLower\n   FROM employees base\n   ORDER BY base.data.\"_id\") sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -4225,43 +4225,43 @@
           "oracleResults": [
             {
               "_id": "E001",
-              "DEPTLOWER": "\"engineering\""
+              "DEPTLOWER": "engineering"
             },
             {
               "_id": "E002",
-              "DEPTLOWER": "\"engineering\""
+              "DEPTLOWER": "engineering"
             },
             {
               "_id": "E003",
-              "DEPTLOWER": "\"engineering\""
+              "DEPTLOWER": "engineering"
             },
             {
               "_id": "E004",
-              "DEPTLOWER": "\"sales\""
+              "DEPTLOWER": "sales"
             },
             {
               "_id": "E005",
-              "DEPTLOWER": "\"sales\""
+              "DEPTLOWER": "sales"
             },
             {
               "_id": "E006",
-              "DEPTLOWER": "\"sales\""
+              "DEPTLOWER": "sales"
             },
             {
               "_id": "E007",
-              "DEPTLOWER": "\"marketing\""
+              "DEPTLOWER": "marketing"
             },
             {
               "_id": "E008",
-              "DEPTLOWER": "\"marketing\""
+              "DEPTLOWER": "marketing"
             },
             {
               "_id": "E009",
-              "DEPTLOWER": "\"engineering\""
+              "DEPTLOWER": "engineering"
             },
             {
               "_id": "E010",
-              "DEPTLOWER": "\"hr\""
+              "DEPTLOWER": "hr"
             }
           ]
         },
@@ -4296,7 +4296,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          UPPER(JSON_QUERY(base.data, '$.name')) AS nameUpper\n   FROM products base\n   ORDER BY base.data.\"_id\") sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "8",
           "oracleCount": "8",
           "expectedCount": 8,
@@ -4339,35 +4339,35 @@
           "oracleResults": [
             {
               "_id": "P001",
-              "NAMEUPPER": "\"WIDGET\""
+              "NAMEUPPER": "WIDGET"
             },
             {
               "_id": "P002",
-              "NAMEUPPER": "\"GADGET\""
+              "NAMEUPPER": "GADGET"
             },
             {
               "_id": "P003",
-              "NAMEUPPER": "\"PREMIUM WIDGET\""
+              "NAMEUPPER": "PREMIUM WIDGET"
             },
             {
               "_id": "P004",
-              "NAMEUPPER": "\"BASIC WIDGET\""
+              "NAMEUPPER": "BASIC WIDGET"
             },
             {
               "_id": "P005",
-              "NAMEUPPER": "\"DISCONTINUED ITEM\""
+              "NAMEUPPER": "DISCONTINUED ITEM"
             },
             {
               "_id": "P006",
-              "NAMEUPPER": "\"HEADPHONES\""
+              "NAMEUPPER": "HEADPHONES"
             },
             {
               "_id": "P007",
-              "NAMEUPPER": "\"USB CABLE\""
+              "NAMEUPPER": "USB CABLE"
             },
             {
               "_id": "P008",
-              "NAMEUPPER": "\"CHAIR\""
+              "NAMEUPPER": "CHAIR"
             }
           ]
         },
@@ -4406,7 +4406,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          SUBSTR(JSON_QUERY(base.data, '$.name'), 1, 4) AS namePrefix\n   FROM customers base\n   ORDER BY base.data.\"_id\") sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "7",
           "oracleCount": "7",
           "expectedCount": 7,
@@ -4445,31 +4445,31 @@
           "oracleResults": [
             {
               "_id": "C001",
-              "NAMEPREFIX": "\"Joh"
+              "NAMEPREFIX": "John"
             },
             {
               "_id": "C002",
-              "NAMEPREFIX": "\"Jan"
+              "NAMEPREFIX": "Jane"
             },
             {
               "_id": "C003",
-              "NAMEPREFIX": "\"Ali"
+              "NAMEPREFIX": "Alic"
             },
             {
               "_id": "C004",
-              "NAMEPREFIX": "\"Bob"
+              "NAMEPREFIX": "Bob "
             },
             {
               "_id": "C005",
-              "NAMEPREFIX": "\"Cha"
+              "NAMEPREFIX": "Char"
             },
             {
               "_id": "C006",
-              "NAMEPREFIX": "\"Dia"
+              "NAMEPREFIX": "Dian"
             },
             {
               "_id": "C007",
-              "NAMEPREFIX": "\"Eve"
+              "NAMEPREFIX": "Eve "
             }
           ]
         },
@@ -4557,42 +4557,42 @@
             {
               "_id": "P001",
               "NAME": "Widget",
-              "NAMELENGTH": 8
+              "NAMELENGTH": 15
             },
             {
               "_id": "P002",
               "NAME": "Gadget",
-              "NAMELENGTH": 8
+              "NAMELENGTH": 15
             },
             {
               "_id": "P003",
               "NAME": "Premium Widget",
-              "NAMELENGTH": 16
+              "NAMELENGTH": 23
             },
             {
               "_id": "P004",
               "NAME": "Basic Widget",
-              "NAMELENGTH": 14
+              "NAMELENGTH": 21
             },
             {
               "_id": "P005",
               "NAME": "Discontinued Item",
-              "NAMELENGTH": 19
+              "NAMELENGTH": 26
             },
             {
               "_id": "P006",
               "NAME": "Headphones",
-              "NAMELENGTH": 12
+              "NAMELENGTH": 19
             },
             {
               "_id": "P007",
               "NAME": "USB Cable",
-              "NAMELENGTH": 11
+              "NAMELENGTH": 18
             },
             {
               "_id": "P008",
               "NAME": "Chair",
-              "NAMELENGTH": 7
+              "NAMELENGTH": 14
             }
           ]
         },
@@ -4629,7 +4629,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          TRIM(JSON_QUERY(base.data, '$.name')) AS trimmedName\n   FROM employees base\n   ORDER BY base.data.\"_id\") sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -4680,43 +4680,43 @@
           "oracleResults": [
             {
               "_id": "E001",
-              "TRIMMEDNAME": "\"Alice\""
+              "TRIMMEDNAME": "Alice"
             },
             {
               "_id": "E002",
-              "TRIMMEDNAME": "\"Bob\""
+              "TRIMMEDNAME": "Bob"
             },
             {
               "_id": "E003",
-              "TRIMMEDNAME": "\"Carol\""
+              "TRIMMEDNAME": "Carol"
             },
             {
               "_id": "E004",
-              "TRIMMEDNAME": "\"David\""
+              "TRIMMEDNAME": "David"
             },
             {
               "_id": "E005",
-              "TRIMMEDNAME": "\"Eve\""
+              "TRIMMEDNAME": "Eve"
             },
             {
               "_id": "E006",
-              "TRIMMEDNAME": "\"Frank\""
+              "TRIMMEDNAME": "Frank"
             },
             {
               "_id": "E007",
-              "TRIMMEDNAME": "\"Grace\""
+              "TRIMMEDNAME": "Grace"
             },
             {
               "_id": "E008",
-              "TRIMMEDNAME": "\"Henry\""
+              "TRIMMEDNAME": "Henry"
             },
             {
               "_id": "E009",
-              "TRIMMEDNAME": "\"Ivy\""
+              "TRIMMEDNAME": "Ivy"
             },
             {
               "_id": "E010",
-              "TRIMMEDNAME": "\"Jack\""
+              "TRIMMEDNAME": "Jack"
             }
           ]
         },
@@ -6924,14 +6924,14 @@
               "ORDERCOUNT": 2
             },
             {
-              "_id": "silver",
-              "TOTALAMOUNT": 339.99,
-              "ORDERCOUNT": 2
-            },
-            {
               "_id": "platinum",
               "TOTALAMOUNT": 9999.99,
               "ORDERCOUNT": 1
+            },
+            {
+              "_id": "silver",
+              "TOTALAMOUNT": 339.99,
+              "ORDERCOUNT": 2
             }
           ]
         },
@@ -7079,8 +7079,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"name\": 1,\n      \"source\": {\n        \"$literal\": \"employee\"\n      }\n    }\n  },\n  {\n    \"$unionWith\": {\n      \"coll\": \"customers\",\n      \"pipeline\": [\n        {\n          \"$project\": {\n            \"_id\": 1,\n            \"name\": 1,\n            \"source\": {\n              \"$literal\": \"customer\"\n            }\n          }\n        }\n      ]\n    }\n  },\n  {\n    \"$sort\": {\n      \"source\": 1,\n      \"name\": 1\n    }\n  },\n  {\n    \"$limit\": 10\n  }\n]",
-          "sql": "SELECT base.data.\"_id\" AS \"_id\", base.data.name AS name, 'employee' AS source FROM employees base UNION ALL SELECT base.data.\"_id\" AS \"_id\", base.data.name AS name, 'customer' AS source FROM customers base ORDER BY source ASC, name ASC FETCH FIRST 10 ROWS ONLY",
-          "sqlFormatted": "SELECT base.data.\"_id\" AS \"_id\",\n       base.data.name AS name,\n       'employee' AS SOURCE\nFROM employees base\nUNION ALL\nSELECT base.data.\"_id\" AS \"_id\",\n       base.data.name AS name,\n       'customer' AS SOURCE\nFROM customers base\nORDER BY SOURCE ASC, name ASC FETCH FIRST 10 ROWS ONLY",
+          "sql": "SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, 'employee' AS source FROM employees base UNION ALL SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, 'customer' AS source FROM customers base ORDER BY source ASC, name ASC FETCH FIRST 10 ROWS ONLY",
+          "sqlFormatted": "SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n       JSON_QUERY(base.data, '$.name') AS name,\n       'employee' AS SOURCE\nFROM employees base\nUNION ALL\nSELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n       JSON_QUERY(base.data, '$.name') AS name,\n       'customer' AS SOURCE\nFROM customers base\nORDER BY SOURCE ASC, name ASC FETCH FIRST 10 ROWS ONLY",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -7244,11 +7244,11 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"status\": \"completed\"\n    }\n  },\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"amount\": 1,\n      \"category\": 1\n    }\n  },\n  {\n    \"$unionWith\": {\n      \"coll\": \"sales\",\n      \"pipeline\": [\n        {\n          \"$match\": {\n            \"status\": \"pending\"\n          }\n        },\n        {\n          \"$project\": {\n            \"_id\": 1,\n            \"amount\": 1,\n            \"category\": 1\n          }\n        }\n      ]\n    }\n  },\n  {\n    \"$sort\": {\n      \"_id\": 1\n    }\n  }\n]",
-          "sql": "SELECT base.data.\"_id\" AS \"_id\", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'completed' UNION ALL SELECT base.data.\"_id\" AS \"_id\", base.data.amount AS amount, base.data.category AS category FROM sales base WHERE base.data.status = 'pending' ORDER BY \"_id\" ASC",
-          "sqlFormatted": "SELECT base.data.\"_id\" AS \"_id\",\n       base.data.amount AS amount,\n       base.data.category AS category\nFROM sales base\nWHERE base.data.status = 'completed'\nUNION ALL\nSELECT base.data.\"_id\" AS \"_id\",\n       base.data.amount AS amount,\n       base.data.category AS category\nFROM sales base\nWHERE base.data.status = 'pending'\nORDER BY \"_id\" ASC",
+          "sql": "SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.amount') AS amount, JSON_QUERY(base.data, '$.category') AS category FROM sales base WHERE base.data.status = 'completed' UNION ALL SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.amount') AS amount, JSON_QUERY(base.data, '$.category') AS category FROM sales base WHERE base.data.status = 'pending' ORDER BY \"_id\" ASC",
+          "sqlFormatted": "SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n       JSON_QUERY(base.data, '$.amount') AS amount,\n       JSON_QUERY(base.data, '$.category') AS category\nFROM sales base\nWHERE base.data.status = 'completed'\nUNION ALL\nSELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n       JSON_QUERY(base.data, '$.amount') AS amount,\n       JSON_QUERY(base.data, '$.category') AS category\nFROM sales base\nWHERE base.data.status = 'pending'\nORDER BY \"_id\" ASC",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "loose",
+          "matchType": "strict",
           "mongodbCount": "7",
           "oracleCount": "7",
           "expectedCount": 7,
@@ -7294,37 +7294,37 @@
           "oracleResults": [
             {
               "_id": "S001",
-              "AMOUNT": "150",
+              "AMOUNT": 150,
               "CATEGORY": "electronics"
             },
             {
               "_id": "S002",
-              "AMOUNT": "250",
+              "AMOUNT": 250,
               "CATEGORY": "electronics"
             },
             {
               "_id": "S004",
-              "AMOUNT": "500",
+              "AMOUNT": 500,
               "CATEGORY": "electronics"
             },
             {
               "_id": "S006",
-              "AMOUNT": "89.99",
+              "AMOUNT": 89.99,
               "CATEGORY": "clothing"
             },
             {
               "_id": "S009",
-              "AMOUNT": "9999.99",
+              "AMOUNT": 9999.99,
               "CATEGORY": "jewelry"
             },
             {
               "_id": "S003",
-              "AMOUNT": "75.5",
+              "AMOUNT": 75.5,
               "CATEGORY": "clothing"
             },
             {
               "_id": "S007",
-              "AMOUNT": "0",
+              "AMOUNT": 0,
               "CATEGORY": "electronics"
             }
           ]
@@ -7383,8 +7383,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"category\": \"electronics\"\n    }\n  },\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"price\": 1\n    }\n  },\n  {\n    \"$unionWith\": {\n      \"coll\": \"products\",\n      \"pipeline\": [\n        {\n          \"$match\": {\n            \"category\": \"tools\"\n          }\n        },\n        {\n          \"$project\": {\n            \"_id\": 1,\n            \"price\": 1\n          }\n        }\n      ]\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": null,\n      \"totalProducts\": {\n        \"$sum\": 1\n      },\n      \"avgPrice\": {\n        \"$avg\": \"$price\"\n      }\n    }\n  }\n]",
-          "sql": "SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT base.data.\"_id\" AS \"_id\", base.data.price AS price FROM products base WHERE base.data.category = 'electronics' UNION ALL SELECT base.data.\"_id\" AS \"_id\", base.data.price AS price FROM products base WHERE base.data.category = 'tools')",
-          "sqlFormatted": "SELECT COUNT(*) AS totalProducts,\n       AVG(price) AS avgPrice\nFROM\n  (SELECT base.data.\"_id\" AS \"_id\",\n          base.data.price AS price\n   FROM products base\n   WHERE base.data.category = 'electronics'\n   UNION ALL SELECT base.data.\"_id\" AS \"_id\",\n                    base.data.price AS price\n   FROM products base\n   WHERE base.data.category = 'tools')",
+          "sql": "SELECT COUNT(*) AS totalProducts, AVG(price) AS avgPrice FROM (SELECT base.data.\"_id\" AS \"_id\", base.data.price AS price FROM products base WHERE base.data.category = 'electronics' UNION ALL SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.price') AS price FROM products base WHERE base.data.category = 'tools')",
+          "sqlFormatted": "SELECT COUNT(*) AS totalProducts,\n       AVG(price) AS avgPrice\nFROM\n  (SELECT base.data.\"_id\" AS \"_id\",\n          base.data.price AS price\n   FROM products base\n   WHERE base.data.category = 'electronics'\n   UNION ALL SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n                    JSON_QUERY(base.data, '$.price') AS price\n   FROM products base\n   WHERE base.data.category = 'tools')",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -7668,17 +7668,17 @@
             {
               "BUCKET_ID": 1,
               "COUNT": 3,
-              "AVGPRICE": 78.33
+              "AVGPRICE": 14.996666666666666
             },
             {
               "BUCKET_ID": 2,
               "COUNT": 2,
-              "AVGPRICE": 174.995
+              "AVGPRICE": 124.995
             },
             {
               "BUCKET_ID": 3,
               "COUNT": 2,
-              "AVGPRICE": 254.995
+              "AVGPRICE": 399.995
             }
           ]
         },
@@ -7765,26 +7765,26 @@
             {
               "BUCKET_ID": 1,
               "COUNT": 3,
-              "MINSALARY": "105000",
-              "MAXSALARY": "65000"
+              "MINSALARY": 60000,
+              "MAXSALARY": 70000
             },
             {
               "BUCKET_ID": 2,
               "COUNT": 3,
-              "MINSALARY": "70000",
-              "MAXSALARY": "75000"
-            },
-            {
-              "BUCKET_ID": 4,
-              "COUNT": 2,
-              "MINSALARY": "95000",
-              "MAXSALARY": "98000"
+              "MINSALARY": 72000,
+              "MAXSALARY": 80000
             },
             {
               "BUCKET_ID": 3,
               "COUNT": 2,
-              "MINSALARY": "80000",
-              "MAXSALARY": "85000"
+              "MINSALARY": 85000,
+              "MAXSALARY": 95000
+            },
+            {
+              "BUCKET_ID": 4,
+              "COUNT": 2,
+              "MINSALARY": 98000,
+              "MAXSALARY": 105000
             }
           ]
         },
@@ -8211,19 +8211,19 @@
                 ],
                 "topEarners": [
                   {
+                    "_id": 3,
+                    "name": "Carol",
+                    "salary": 105000
+                  },
+                  {
                     "_id": 9,
                     "name": "Ivy",
-                    "salary": "98000"
+                    "salary": 98000
                   },
                   {
                     "_id": 1,
                     "name": "Alice",
-                    "salary": "95000"
-                  },
-                  {
-                    "_id": 2,
-                    "name": "Bob",
-                    "salary": "85000"
+                    "salary": 95000
                   }
                 ],
                 "totalStats": [
@@ -8329,28 +8329,28 @@
               "_id": 3,
               "NAME": "Carol",
               "DEPARTMENT": "Engineering",
-              "SALARY": "105000",
+              "SALARY": 105000,
               "SALARYRANK": 1
             },
             {
               "_id": 10,
               "NAME": "Jack",
               "DEPARTMENT": "HR",
-              "SALARY": "60000",
+              "SALARY": 60000,
               "SALARYRANK": 1
             },
             {
               "_id": 8,
               "NAME": "Henry",
               "DEPARTMENT": "Marketing",
-              "SALARY": "72000",
+              "SALARY": 72000,
               "SALARYRANK": 1
             },
             {
               "_id": 6,
               "NAME": "Frank",
               "DEPARTMENT": "Sales",
-              "SALARY": "80000",
+              "SALARY": 80000,
               "SALARYRANK": 1
             }
           ]
@@ -8555,19 +8555,19 @@
               "_id": 6,
               "NAME": "Headphones",
               "CATEGORY": "electronics",
-              "PRICE": "199.99"
+              "PRICE": 199.99
             },
             {
               "_id": 8,
               "NAME": "Chair",
               "CATEGORY": "furniture",
-              "PRICE": "299.99"
+              "PRICE": 299.99
             },
             {
               "_id": 3,
               "NAME": "Premium Widget",
               "CATEGORY": "tools",
-              "PRICE": "500"
+              "PRICE": 500
             }
           ]
         },
@@ -8651,19 +8651,19 @@
             {
               "_id": 3,
               "NAME": "Carol",
-              "SALARY": "105000",
+              "SALARY": 105000,
               "DENSERANK": 1
             },
             {
               "_id": 9,
               "NAME": "Ivy",
-              "SALARY": "98000",
+              "SALARY": 98000,
               "DENSERANK": 2
             },
             {
               "_id": 1,
               "NAME": "Alice",
-              "SALARY": "95000",
+              "SALARY": 95000,
               "DENSERANK": 3
             }
           ]
@@ -8873,11 +8873,11 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"name\": 1,\n      \"salaryStr\": {\n        \"$toString\": \"$salary\"\n      }\n    }\n  },\n  {\n    \"$sort\": {\n      \"_id\": 1\n    }\n  },\n  {\n    \"$limit\": 5\n  }\n]",
-          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, TO_CHAR(JSON_QUERY(base.data, '$.salary')) AS salaryStr FROM employees base ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
-          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          TO_CHAR(JSON_QUERY(base.data, '$.salary')) AS salaryStr\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
+          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, CAST(TO_CHAR(JSON_QUERY(base.data, '$.salary')) AS VARCHAR2(4000)) AS salaryStr FROM employees base ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
+          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          CAST(TO_CHAR(JSON_QUERY(base.data, '$.salary')) AS VARCHAR2(4000)) AS salaryStr\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "loose",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -8914,27 +8914,27 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "SALARYSTR": 95000
+              "SALARYSTR": "95000"
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "SALARYSTR": 85000
+              "SALARYSTR": "85000"
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "SALARYSTR": 105000
+              "SALARYSTR": "105000"
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "SALARYSTR": 75000
+              "SALARYSTR": "75000"
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "SALARYSTR": 65000
+              "SALARYSTR": "65000"
             }
           ]
         },
@@ -9065,11 +9065,11 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"name\": 1,\n      \"isActive\": {\n        \"$toBool\": \"$active\"\n      }\n    }\n  },\n  {\n    \"$sort\": {\n      \"_id\": 1\n    }\n  },\n  {\n    \"$limit\": 5\n  }\n]",
-          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, CASE WHEN JSON_QUERY(base.data, '$.active') IS NULL OR TO_CHAR(JSON_QUERY(base.data, '$.active')) IN ('0', 'false') THEN 'false' ELSE 'true' END AS isActive FROM employees base ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
-          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          CASE\n              WHEN JSON_QUERY(base.data, '$.active') IS NULL\n                   OR TO_CHAR(JSON_QUERY(base.data, '$.active')) IN ('0',\n                                                                     'false') THEN 'false'\n              ELSE 'true'\n          END AS isActive\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
+          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, CASE WHEN JSON_QUERY(base.data, '$.active') IS NULL OR TO_CHAR(JSON_QUERY(base.data, '$.active')) IN ('0', 'false') THEN FALSE ELSE TRUE END AS isActive FROM employees base ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
+          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          CASE\n              WHEN JSON_QUERY(base.data, '$.active') IS NULL\n                   OR TO_CHAR(JSON_QUERY(base.data, '$.active')) IN ('0',\n                                                                     'false') THEN FALSE\n              ELSE TRUE\n          END AS isActive\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "loose",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -9106,27 +9106,27 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "ISACTIVE": "true"
+              "ISACTIVE": true
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "ISACTIVE": "true"
+              "ISACTIVE": true
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "ISACTIVE": "true"
+              "ISACTIVE": true
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "ISACTIVE": "true"
+              "ISACTIVE": true
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "ISACTIVE": "true"
+              "ISACTIVE": true
             }
           ]
         },
@@ -9220,7 +9220,7 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "FIRSTNAME": "\"Alice\"",
+              "FIRSTNAME": "Alice",
               "NAMEPARTS": [
                 "Alice"
               ]
@@ -9228,7 +9228,7 @@
             {
               "_id": "E002",
               "NAME": "Bob",
-              "FIRSTNAME": "\"Bob\"",
+              "FIRSTNAME": "Bob",
               "NAMEPARTS": [
                 "Bob"
               ]
@@ -9236,7 +9236,7 @@
             {
               "_id": "E003",
               "NAME": "Carol",
-              "FIRSTNAME": "\"Carol\"",
+              "FIRSTNAME": "Carol",
               "NAMEPARTS": [
                 "Carol"
               ]
@@ -9244,7 +9244,7 @@
             {
               "_id": "E004",
               "NAME": "David",
-              "FIRSTNAME": "\"David\"",
+              "FIRSTNAME": "David",
               "NAMEPARTS": [
                 "David"
               ]
@@ -9252,7 +9252,7 @@
             {
               "_id": "E005",
               "NAME": "Eve",
-              "FIRSTNAME": "\"Eve\"",
+              "FIRSTNAME": "Eve",
               "NAMEPARTS": [
                 "Eve"
               ]
@@ -9297,7 +9297,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          CASE\n              WHEN INSTR(JSON_QUERY(base.data, '$.name'), 'a') = 0 THEN -1\n              ELSE INSTR(JSON_QUERY(base.data, '$.name'), 'a') - 1\n          END AS aPosition\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -9344,12 +9344,12 @@
             {
               "_id": "E003",
               "NAME": "Carol",
-              "APOSITION": 2
+              "APOSITION": 1
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "APOSITION": 2
+              "APOSITION": 1
             },
             {
               "_id": "E005",
@@ -9396,7 +9396,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          CASE\n              WHEN REGEXP_LIKE(JSON_QUERY(base.data, '$.name'), '^[AEIOUaeiou]') THEN 1\n              ELSE 0\n          END AS hasVowelStart\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -9433,7 +9433,7 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "HASVOWELSTART": 0
+              "HASVOWELSTART": 1
             },
             {
               "_id": "E002",
@@ -9453,7 +9453,7 @@
             {
               "_id": "E005",
               "NAME": "Eve",
-              "HASVOWELSTART": 0
+              "HASVOWELSTART": 1
             }
           ]
         },
@@ -9496,7 +9496,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          REGEXP_REPLACE(JSON_QUERY(base.data, '$.department'), 'Engineering', 'Tech', 1, 1) AS modifiedDept\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -9533,27 +9533,27 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "MODIFIEDDEPT": "\"Tech\""
+              "MODIFIEDDEPT": "Tech"
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "MODIFIEDDEPT": "\"Tech\""
+              "MODIFIEDDEPT": "Tech"
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "MODIFIEDDEPT": "\"Tech\""
+              "MODIFIEDDEPT": "Tech"
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "MODIFIEDDEPT": "\"Sales\""
+              "MODIFIEDDEPT": "Sales"
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "MODIFIEDDEPT": "\"Sales\""
+              "MODIFIEDDEPT": "Sales"
             }
           ]
         },
@@ -9596,7 +9596,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          REGEXP_REPLACE(JSON_QUERY(base.data, '$.name'), ' ', '_') AS nameNoSpaces\n   FROM employees base\n   ORDER BY base.data.\"_id\" FETCH FIRST 5 ROWS ONLY) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "5",
           "oracleCount": "5",
           "expectedCount": 5,
@@ -9633,27 +9633,27 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "NAMENOSPACES": "\"Alice\""
+              "NAMENOSPACES": "Alice"
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "NAMENOSPACES": "\"Bob\""
+              "NAMENOSPACES": "Bob"
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "NAMENOSPACES": "\"Carol\""
+              "NAMENOSPACES": "Carol"
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "NAMENOSPACES": "\"David\""
+              "NAMENOSPACES": "David"
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "NAMENOSPACES": "\"Eve\""
+              "NAMENOSPACES": "Eve"
             }
           ]
         },
@@ -10646,12 +10646,12 @@
           "sortBy": null,
           "mongodbResults": [
             {
-              "_id": "P002",
-              "name": "Gadget"
+              "_id": "P007",
+              "name": "USB Cable"
             },
             {
-              "_id": "P005",
-              "name": "Discontinued Item"
+              "_id": "P006",
+              "name": "Headphones"
             },
             {
               "_id": "P003",
@@ -10660,16 +10660,16 @@
           ],
           "oracleResults": [
             {
-              "_id": "P007",
-              "NAME": "USB Cable"
+              "_id": "P005",
+              "NAME": "Discontinued Item"
+            },
+            {
+              "_id": "P006",
+              "NAME": "Headphones"
             },
             {
               "_id": "P008",
               "NAME": "Chair"
-            },
-            {
-              "_id": "P001",
-              "NAME": "Widget"
             }
           ]
         },
@@ -10711,36 +10711,41 @@
           "sortBy": null,
           "mongodbResults": [
             {
-              "_id": "E008",
-              "name": "Henry",
-              "department": "Marketing"
+              "_id": "E001",
+              "name": "Alice",
+              "department": "Engineering"
             },
             {
-              "_id": "E005",
-              "name": "Eve",
+              "_id": "E010",
+              "name": "Jack",
+              "department": "HR"
+            },
+            {
+              "_id": "E009",
+              "name": "Ivy",
+              "department": "Engineering"
+            },
+            {
+              "_id": "E004",
+              "name": "David",
               "department": "Sales"
             },
             {
               "_id": "E003",
               "name": "Carol",
               "department": "Engineering"
-            },
-            {
-              "_id": "E006",
-              "name": "Frank",
-              "department": "Sales"
-            },
-            {
-              "_id": "E004",
-              "name": "David",
-              "department": "Sales"
             }
           ],
           "oracleResults": [
             {
-              "_id": "E010",
-              "NAME": "Jack",
-              "DEPARTMENT": "HR"
+              "_id": "E002",
+              "NAME": "Bob",
+              "DEPARTMENT": "Engineering"
+            },
+            {
+              "_id": "E004",
+              "NAME": "David",
+              "DEPARTMENT": "Sales"
             },
             {
               "_id": "E008",
@@ -10748,19 +10753,14 @@
               "DEPARTMENT": "Marketing"
             },
             {
-              "_id": "E009",
-              "NAME": "Ivy",
-              "DEPARTMENT": "Engineering"
+              "_id": "E010",
+              "NAME": "Jack",
+              "DEPARTMENT": "HR"
             },
             {
-              "_id": "E001",
-              "NAME": "Alice",
-              "DEPARTMENT": "Engineering"
-            },
-            {
-              "_id": "E006",
-              "NAME": "Frank",
-              "DEPARTMENT": "Sales"
+              "_id": "E007",
+              "NAME": "Grace",
+              "DEPARTMENT": "Marketing"
             }
           ]
         },
@@ -11045,8 +11045,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"discount\": null\n    }\n  },\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"orderId\": 1,\n      \"discount\": 1\n    }\n  }\n]",
-          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.orderId') AS orderId, JSON_QUERY(base.data, '$.discount') AS discount FROM sales base WHERE base.data.discount IS NULL) sub",
-          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.orderId') AS orderId,\n          JSON_QUERY(base.data, '$.discount') AS discount\n   FROM sales base\n   WHERE base.data.discount IS NULL) sub",
+          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.orderId') AS orderId, JSON_QUERY(base.data, '$.discount') AS discount FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')) sub",
+          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.orderId') AS orderId,\n          JSON_QUERY(base.data, '$.discount') AS discount\n   FROM sales base\n   WHERE NOT JSON_EXISTS(base.data, '$.discount?(@ != null)')) sub",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -11237,8 +11237,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"metadata.campaign\": null\n    }\n  },\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"orderId\": 1,\n      \"campaign\": \"$metadata.campaign\"\n    }\n  }\n]",
-          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.orderId') AS orderId, JSON_QUERY(base.data, '$.metadata.campaign') AS campaign FROM sales base WHERE base.data.metadata.campaign IS NULL) sub",
-          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.orderId') AS orderId,\n          JSON_QUERY(base.data, '$.metadata.campaign') AS campaign\n   FROM sales base\n   WHERE base.data.metadata.campaign IS NULL) sub",
+          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.orderId') AS orderId, JSON_QUERY(base.data, '$.metadata.campaign') AS campaign FROM sales base WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')) sub",
+          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.orderId') AS orderId,\n          JSON_QUERY(base.data, '$.metadata.campaign') AS campaign\n   FROM sales base\n   WHERE NOT JSON_EXISTS(base.data, '$.metadata.campaign?(@ != null)')) sub",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -11348,16 +11348,16 @@
           ],
           "oracleResults": [
             {
+              "_id": "east",
+              "TOTALDISCOUNT": 550
+            },
+            {
               "_id": "north",
               "TOTALDISCOUNT": 10
             },
             {
               "_id": "south",
               "TOTALDISCOUNT": 30
-            },
-            {
-              "_id": "east",
-              "TOTALDISCOUNT": 550
             },
             {
               "_id": "west",
@@ -11422,12 +11422,12 @@
           ],
           "oracleResults": [
             {
-              "_id": "electronics",
-              "AVGDISCOUNT": 17
-            },
-            {
               "_id": "clothing",
               "AVGDISCOUNT": 2.5
+            },
+            {
+              "_id": "electronics",
+              "AVGDISCOUNT": 17
             },
             {
               "_id": "furniture",
@@ -12927,7 +12927,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          TRIM(JSON_QUERY(base.data, '$.name')) AS trimmedName\n   FROM employees base) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -12989,52 +12989,52 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "TRIMMEDNAME": "\"Alice\""
+              "TRIMMEDNAME": "Alice"
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "TRIMMEDNAME": "\"Bob\""
+              "TRIMMEDNAME": "Bob"
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "TRIMMEDNAME": "\"Carol\""
+              "TRIMMEDNAME": "Carol"
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "TRIMMEDNAME": "\"David\""
+              "TRIMMEDNAME": "David"
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "TRIMMEDNAME": "\"Eve\""
+              "TRIMMEDNAME": "Eve"
             },
             {
               "_id": "E006",
               "NAME": "Frank",
-              "TRIMMEDNAME": "\"Frank\""
+              "TRIMMEDNAME": "Frank"
             },
             {
               "_id": "E007",
               "NAME": "Grace",
-              "TRIMMEDNAME": "\"Grace\""
+              "TRIMMEDNAME": "Grace"
             },
             {
               "_id": "E008",
               "NAME": "Henry",
-              "TRIMMEDNAME": "\"Henry\""
+              "TRIMMEDNAME": "Henry"
             },
             {
               "_id": "E009",
               "NAME": "Ivy",
-              "TRIMMEDNAME": "\"Ivy\""
+              "TRIMMEDNAME": "Ivy"
             },
             {
               "_id": "E010",
               "NAME": "Jack",
-              "TRIMMEDNAME": "\"Jack\""
+              "TRIMMEDNAME": "Jack"
             }
           ]
         },
@@ -13067,7 +13067,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          TRIM(JSON_QUERY(base.data, '$.name')) AS trimmedName\n   FROM employees base) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -13129,52 +13129,52 @@
             {
               "_id": "E001",
               "NAME": "Alice",
-              "TRIMMEDNAME": "\"Alice\""
+              "TRIMMEDNAME": "Alice"
             },
             {
               "_id": "E002",
               "NAME": "Bob",
-              "TRIMMEDNAME": "\"Bob\""
+              "TRIMMEDNAME": "Bob"
             },
             {
               "_id": "E003",
               "NAME": "Carol",
-              "TRIMMEDNAME": "\"Carol\""
+              "TRIMMEDNAME": "Carol"
             },
             {
               "_id": "E004",
               "NAME": "David",
-              "TRIMMEDNAME": "\"David\""
+              "TRIMMEDNAME": "David"
             },
             {
               "_id": "E005",
               "NAME": "Eve",
-              "TRIMMEDNAME": "\"Eve\""
+              "TRIMMEDNAME": "Eve"
             },
             {
               "_id": "E006",
               "NAME": "Frank",
-              "TRIMMEDNAME": "\"Frank\""
+              "TRIMMEDNAME": "Frank"
             },
             {
               "_id": "E007",
               "NAME": "Grace",
-              "TRIMMEDNAME": "\"Grace\""
+              "TRIMMEDNAME": "Grace"
             },
             {
               "_id": "E008",
               "NAME": "Henry",
-              "TRIMMEDNAME": "\"Henry\""
+              "TRIMMEDNAME": "Henry"
             },
             {
               "_id": "E009",
               "NAME": "Ivy",
-              "TRIMMEDNAME": "\"Ivy\""
+              "TRIMMEDNAME": "Ivy"
             },
             {
               "_id": "E010",
               "NAME": "Jack",
-              "TRIMMEDNAME": "\"Jack\""
+              "TRIMMEDNAME": "Jack"
             }
           ]
         },
@@ -13209,7 +13209,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          JSON_QUERY(base.data, '$.department') AS department,\n          CASE\n              WHEN UPPER(JSON_QUERY(base.data, '$.department')) < UPPER('ENGINEERING') THEN -1\n              WHEN UPPER(JSON_QUERY(base.data, '$.department')) > UPPER('ENGINEERING') THEN 1\n              ELSE 0\n          END AS compareResult\n   FROM employees base) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -13282,61 +13282,61 @@
               "_id": "E001",
               "NAME": "Alice",
               "DEPARTMENT": "Engineering",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 0
             },
             {
               "_id": "E002",
               "NAME": "Bob",
               "DEPARTMENT": "Engineering",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 0
             },
             {
               "_id": "E003",
               "NAME": "Carol",
               "DEPARTMENT": "Engineering",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 0
             },
             {
               "_id": "E004",
               "NAME": "David",
               "DEPARTMENT": "Sales",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             },
             {
               "_id": "E005",
               "NAME": "Eve",
               "DEPARTMENT": "Sales",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             },
             {
               "_id": "E006",
               "NAME": "Frank",
               "DEPARTMENT": "Sales",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             },
             {
               "_id": "E007",
               "NAME": "Grace",
               "DEPARTMENT": "Marketing",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             },
             {
               "_id": "E008",
               "NAME": "Henry",
               "DEPARTMENT": "Marketing",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             },
             {
               "_id": "E009",
               "NAME": "Ivy",
               "DEPARTMENT": "Engineering",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 0
             },
             {
               "_id": "E010",
               "NAME": "Jack",
               "DEPARTMENT": "HR",
-              "COMPARERESULT": -1
+              "COMPARERESULT": 1
             }
           ]
         },
@@ -14010,20 +14010,20 @@
           ],
           "oracleResults": [
             {
-              "_id": "Sales",
-              "HIGHESTPAIDEMPLOYEE": "David"
-            },
-            {
               "_id": "Engineering",
               "HIGHESTPAIDEMPLOYEE": "Alice"
+            },
+            {
+              "_id": "HR",
+              "HIGHESTPAIDEMPLOYEE": "Jack"
             },
             {
               "_id": "Marketing",
               "HIGHESTPAIDEMPLOYEE": "Grace"
             },
             {
-              "_id": "HR",
-              "HIGHESTPAIDEMPLOYEE": "Jack"
+              "_id": "Sales",
+              "HIGHESTPAIDEMPLOYEE": "David"
             }
           ]
         },
@@ -14089,20 +14089,20 @@
           ],
           "oracleResults": [
             {
-              "_id": "Sales",
-              "LOWESTPAIDEMPLOYEE": "Frank"
-            },
-            {
               "_id": "Engineering",
               "LOWESTPAIDEMPLOYEE": "Ivy"
+            },
+            {
+              "_id": "HR",
+              "LOWESTPAIDEMPLOYEE": "Jack"
             },
             {
               "_id": "Marketing",
               "LOWESTPAIDEMPLOYEE": "Henry"
             },
             {
-              "_id": "HR",
-              "LOWESTPAIDEMPLOYEE": "Jack"
+              "_id": "Sales",
+              "LOWESTPAIDEMPLOYEE": "Frank"
             }
           ]
         },
@@ -14383,8 +14383,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$project\": {\n      \"source\": \"sales\",\n      \"amount\": 1\n    }\n  },\n  {\n    \"$unionWith\": {\n      \"coll\": \"products\",\n      \"pipeline\": [\n        {\n          \"$project\": {\n            \"source\": \"products\",\n            \"amount\": \"$price\"\n          }\n        }\n      ]\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": \"$source\",\n      \"totalAmount\": {\n        \"$sum\": \"$amount\"\n      }\n    }\n  },\n  {\n    \"$sort\": {\n      \"_id\": 1\n    }\n  }\n]",
-          "sql": "SELECT source AS \"_id\", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS source, base.data.amount AS amount FROM sales base UNION ALL SELECT 'products' AS source, base.data.price AS amount FROM products base) GROUP BY source",
-          "sqlFormatted": "SELECT SOURCE AS \"_id\",\n                 SUM(amount) AS totalAmount\nFROM\n  (SELECT 'sales' AS SOURCE,\n          base.data.amount AS amount\n   FROM sales base\n   UNION ALL SELECT 'products' AS SOURCE,\n                    base.data.price AS amount\n   FROM products base)\nGROUP BY SOURCE",
+          "sql": "SELECT source AS \"_id\", SUM(amount) AS totalAmount FROM (SELECT 'sales' AS source, base.data.amount AS amount FROM sales base UNION ALL SELECT 'products' AS source, JSON_QUERY(base.data, '$.price') AS amount FROM products base) GROUP BY source",
+          "sqlFormatted": "SELECT SOURCE AS \"_id\",\n                 SUM(amount) AS totalAmount\nFROM\n  (SELECT 'sales' AS SOURCE,\n          base.data.amount AS amount\n   FROM sales base\n   UNION ALL SELECT 'products' AS SOURCE,\n                    JSON_QUERY(base.data, '$.price') AS amount\n   FROM products base)\nGROUP BY SOURCE",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -14652,7 +14652,7 @@
           "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.orderId') AS orderId,\n          JSON_QUERY(base.data, '$.status') AS status,\n          CASE\n              WHEN JSON_QUERY(base.data, '$.status') = 'completed' THEN 'low'\n              ELSE CASE\n                       WHEN JSON_QUERY(base.data, '$.status') = 'pending' THEN 'high'\n                       ELSE 'medium'\n                   END\n          END AS priority\n   FROM sales base) sub",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "unknown",
+          "matchType": "strict",
           "mongodbCount": "10",
           "oracleCount": "10",
           "expectedCount": 10,
@@ -14725,25 +14725,25 @@
               "_id": "S001",
               "ORDERID": 1001,
               "STATUS": "completed",
-              "PRIORITY": "medium"
+              "PRIORITY": "low"
             },
             {
               "_id": "S002",
               "ORDERID": 1002,
               "STATUS": "completed",
-              "PRIORITY": "medium"
+              "PRIORITY": "low"
             },
             {
               "_id": "S003",
               "ORDERID": 1003,
               "STATUS": "pending",
-              "PRIORITY": "medium"
+              "PRIORITY": "high"
             },
             {
               "_id": "S004",
               "ORDERID": 1004,
               "STATUS": "completed",
-              "PRIORITY": "medium"
+              "PRIORITY": "low"
             },
             {
               "_id": "S005",
@@ -14755,13 +14755,13 @@
               "_id": "S006",
               "ORDERID": 1006,
               "STATUS": "completed",
-              "PRIORITY": "medium"
+              "PRIORITY": "low"
             },
             {
               "_id": "S007",
               "ORDERID": 1007,
               "STATUS": "pending",
-              "PRIORITY": "medium"
+              "PRIORITY": "high"
             },
             {
               "_id": "S008",
@@ -14773,7 +14773,7 @@
               "_id": "S009",
               "ORDERID": 1009,
               "STATUS": "completed",
-              "PRIORITY": "medium"
+              "PRIORITY": "low"
             },
             {
               "_id": "S010",
@@ -14813,11 +14813,11 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"metadata\": {\n        \"$ne\": null\n      }\n    }\n  },\n  {\n    \"$replaceRoot\": {\n      \"newRoot\": {\n        \"orderId\": \"$orderId\",\n        \"source\": \"$metadata.source\",\n        \"campaign\": \"$metadata.campaign\"\n      }\n    }\n  }\n]",
-          "sql": "SELECT base.data.orderId AS orderId, base.data.metadata.source AS source, base.data.metadata.campaign AS campaign FROM sales base WHERE base.data.metadata IS NOT NULL",
-          "sqlFormatted": "SELECT base.data.orderId AS orderId,\n       base.data.metadata.source AS SOURCE,\n       base.data.metadata.campaign AS campaign\nFROM sales base\nWHERE base.data.metadata IS NOT NULL",
+          "sql": "SELECT JSON_QUERY(base.data, '$.orderId') AS orderId, JSON_QUERY(base.data, '$.metadata.source') AS source, JSON_QUERY(base.data, '$.metadata.campaign') AS campaign FROM sales base WHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')",
+          "sqlFormatted": "SELECT JSON_QUERY(base.data, '$.orderId') AS orderId,\n       JSON_QUERY(base.data, '$.metadata.source') AS SOURCE,\n       JSON_QUERY(base.data, '$.metadata.campaign') AS campaign\nFROM sales base\nWHERE JSON_EXISTS(base.data, '$.metadata?(@ != null)')",
           "sqlError": null,
           "status": "PASS",
-          "matchType": "loose",
+          "matchType": "strict",
           "mongodbCount": "9",
           "oracleCount": "9",
           "expectedCount": 9,
@@ -14872,47 +14872,47 @@
           ],
           "oracleResults": [
             {
-              "ORDERID": "1001",
+              "ORDERID": 1001,
               "SOURCE": "web",
               "CAMPAIGN": "winter-sale"
             },
             {
-              "ORDERID": "1002",
+              "ORDERID": 1002,
               "SOURCE": "mobile",
               "CAMPAIGN": "winter-sale"
             },
             {
-              "ORDERID": "1003",
+              "ORDERID": 1003,
               "SOURCE": "web",
               "CAMPAIGN": null
             },
             {
-              "ORDERID": "1004",
+              "ORDERID": 1004,
               "SOURCE": "store",
               "CAMPAIGN": "vip-exclusive"
             },
             {
-              "ORDERID": "1005",
+              "ORDERID": 1005,
               "SOURCE": "web",
               "CAMPAIGN": "furniture-fest"
             },
             {
-              "ORDERID": "1006",
+              "ORDERID": 1006,
               "SOURCE": "mobile",
               "CAMPAIGN": "clearance"
             },
             {
-              "ORDERID": "1007",
+              "ORDERID": 1007,
               "SOURCE": "api",
               "CAMPAIGN": null
             },
             {
-              "ORDERID": "1008",
+              "ORDERID": 1008,
               "SOURCE": "support",
               "CAMPAIGN": null
             },
             {
-              "ORDERID": "1009",
+              "ORDERID": 1009,
               "SOURCE": "store",
               "CAMPAIGN": "valentine"
             }
@@ -17035,16 +17035,16 @@
               "totalRecords": 11,
               "pageData": [
                 {
-                  "docRefNumber": "DOC-2024-008",
-                  "customerPONumber": "PO-A007"
+                  "docRefNumber": "DOC-2024-004",
+                  "customerPONumber": "PO-A004"
+                },
+                {
+                  "docRefNumber": "DOC-2024-010",
+                  "customerPONumber": "PO-A009"
                 },
                 {
                   "docRefNumber": "DOC-2024-007",
                   "customerPONumber": "PO-A006"
-                },
-                {
-                  "docRefNumber": "DOC-2024-009",
-                  "customerPONumber": "PO-A008"
                 }
               ]
             }
@@ -17462,8 +17462,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"fulfillment\": {\n        \"$ne\": null\n      }\n    }\n  },\n  {\n    \"$group\": {\n      \"_id\": \"$fulfillment.warehouse\",\n      \"orderCount\": {\n        \"$sum\": 1\n      },\n      \"totalAmount\": {\n        \"$sum\": \"$payment.amount\"\n      }\n    }\n  },\n  {\n    \"$sort\": {\n      \"_id\": 1\n    }\n  }\n]",
-          "sql": "SELECT base.data.fulfillment.warehouse AS \"_id\", SUM(1) AS orderCount, SUM(JSON_VALUE(base.data, '$.payment.amount' RETURNING NUMBER)) AS totalAmount FROM orders_detailed base WHERE base.data.fulfillment IS NOT NULL GROUP BY base.data.fulfillment.warehouse ORDER BY \"_id\"",
-          "sqlFormatted": "SELECT base.data.fulfillment.warehouse AS \"_id\",\n       SUM(1) AS orderCount,\n       SUM(JSON_VALUE(base.data, '$.payment.amount' RETURNING NUMBER)) AS totalAmount\nFROM orders_detailed base\nWHERE base.data.fulfillment IS NOT NULL\nGROUP BY base.data.fulfillment.warehouse\nORDER BY \"_id\"",
+          "sql": "SELECT base.data.fulfillment.warehouse AS \"_id\", SUM(1) AS orderCount, SUM(JSON_VALUE(base.data, '$.payment.amount' RETURNING NUMBER)) AS totalAmount FROM orders_detailed base WHERE JSON_EXISTS(base.data, '$.fulfillment?(@ != null)') GROUP BY base.data.fulfillment.warehouse ORDER BY \"_id\"",
+          "sqlFormatted": "SELECT base.data.fulfillment.warehouse AS \"_id\",\n       SUM(1) AS orderCount,\n       SUM(JSON_VALUE(base.data, '$.payment.amount' RETURNING NUMBER)) AS totalAmount\nFROM orders_detailed base\nWHERE JSON_EXISTS(base.data, '$.fulfillment?(@ != null)')\nGROUP BY base.data.fulfillment.warehouse\nORDER BY \"_id\"",
           "sqlError": null,
           "status": "PASS",
           "matchType": "strict",
@@ -17491,6 +17491,11 @@
           ],
           "oracleResults": [
             {
+              "_id": "WH-CENTRAL",
+              "ORDERCOUNT": 1,
+              "TOTALAMOUNT": 64.95
+            },
+            {
               "_id": "WH-EAST",
               "ORDERCOUNT": 3,
               "TOTALAMOUNT": 373.31
@@ -17499,11 +17504,6 @@
               "_id": "WH-WEST",
               "ORDERCOUNT": 3,
               "TOTALAMOUNT": 309.47
-            },
-            {
-              "_id": "WH-CENTRAL",
-              "ORDERCOUNT": 1,
-              "TOTALAMOUNT": 64.95
             }
           ]
         },
@@ -17571,14 +17571,14 @@
               "TOTALAMOUNT": 797.26
             },
             {
-              "_id": "paypal",
-              "COUNT": 2,
-              "TOTALAMOUNT": 175.44
-            },
-            {
               "_id": "debit_card",
               "COUNT": 2,
               "TOTALAMOUNT": 138.97
+            },
+            {
+              "_id": "paypal",
+              "COUNT": 2,
+              "TOTALAMOUNT": 175.44
             }
           ]
         },
@@ -17651,14 +17651,14 @@
           ],
           "oracleResults": [
             {
+              "_id": "cancelled",
+              "COUNT": 1,
+              "AVGAMOUNT": 0
+            },
+            {
               "_id": "delivered",
               "COUNT": 6,
               "AVGAMOUNT": 112.05833333333334
-            },
-            {
-              "_id": "shipped",
-              "COUNT": 1,
-              "AVGAMOUNT": 75.38
             },
             {
               "_id": "pending",
@@ -17666,14 +17666,14 @@
               "AVGAMOUNT": 84.98
             },
             {
-              "_id": "cancelled",
-              "COUNT": 1,
-              "AVGAMOUNT": 0
-            },
-            {
               "_id": "processing",
               "COUNT": 1,
               "AVGAMOUNT": 278.96
+            },
+            {
+              "_id": "shipped",
+              "COUNT": 1,
+              "AVGAMOUNT": 75.38
             }
           ]
         },
@@ -19112,15 +19112,15 @@
               ],
               "byCategory": [
                 {
+                  "_id": "clothing",
+                  "count": 1
+                },
+                {
                   "_id": "electronics",
                   "count": 3
                 },
                 {
                   "_id": "jewelry",
-                  "count": 1
-                },
-                {
-                  "_id": "clothing",
                   "count": 1
                 }
               ]
@@ -19145,12 +19145,12 @@
                 ],
                 "byCategory": [
                   {
-                    "_id": "electronics",
-                    "count": 3
-                  },
-                  {
                     "_id": "clothing",
                     "count": 1
+                  },
+                  {
+                    "_id": "electronics",
+                    "count": 3
                   },
                   {
                     "_id": "jewelry",
@@ -19227,8 +19227,8 @@
             }
           ],
           "pipelineFormatted": "[\n  {\n    \"$match\": {\n      \"active\": true\n    }\n  },\n  {\n    \"$lookup\": {\n      \"from\": \"inventory\",\n      \"let\": {\n        \"productId\": \"$_id\"\n      },\n      \"pipeline\": [\n        {\n          \"$match\": {\n            \"$expr\": {\n              \"$eq\": [\n                \"$productId\",\n                \"$$productId\"\n              ]\n            }\n          }\n        },\n        {\n          \"$group\": {\n            \"_id\": null,\n            \"totalStock\": {\n              \"$sum\": \"$quantity\"\n            }\n          }\n        }\n      ],\n      \"as\": \"inventoryData\"\n    }\n  },\n  {\n    \"$project\": {\n      \"_id\": 1,\n      \"name\": 1,\n      \"category\": 1,\n      \"totalInventory\": {\n        \"$ifNull\": [\n          {\n            \"$arrayElemAt\": [\n              \"$inventoryData.totalStock\",\n              0\n            ]\n          },\n          0\n        ]\n      }\n    }\n  }\n]",
-          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, JSON_QUERY(base.data, '$.category') AS category, NVL(JSON_QUERY(base.data, '$.inventoryData.totalStock[0]'), 0) AS totalInventory FROM products base , LATERAL (SELECT JSON_ARRAYAGG(inventory_1_inner.data) AS inventoryData FROM inventory inventory_1_inner WHERE JSON_VALUE(inventory_1_inner.data, '$.productId') = JSON_VALUE(base.data, '$._id')) inventory_1 WHERE base.data.active = true) sub",
-          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          JSON_QUERY(base.data, '$.category') AS category,\n          NVL(JSON_QUERY(base.data, '$.inventoryData.totalStock[0]'), 0) AS totalInventory\n   FROM products base,\n        LATERAL\n     (SELECT JSON_ARRAYAGG(inventory_1_inner.data) AS inventoryData\n      FROM inventory inventory_1_inner\n      WHERE JSON_VALUE(inventory_1_inner.data, '$.productId') = JSON_VALUE(base.data, '$._id')) inventory_1\n   WHERE base.data.active = TRUE) sub",
+          "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) FROM (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\", JSON_QUERY(base.data, '$.name') AS name, JSON_QUERY(base.data, '$.category') AS category, NVL(CAST(JSON_QUERY(base.data, '$.inventoryData.totalStock[0]') AS NUMBER), 0) AS totalInventory FROM products base , LATERAL (SELECT JSON_ARRAYAGG(inventory_1_inner.data) AS inventoryData FROM inventory inventory_1_inner WHERE JSON_VALUE(inventory_1_inner.data, '$.productId') = JSON_VALUE(base.data, '$._id')) inventory_1 WHERE base.data.active = true) sub",
+          "sqlFormatted": "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB)\nFROM\n  (SELECT JSON_QUERY(base.data, '$.\"_id\"') AS \"_id\",\n          JSON_QUERY(base.data, '$.name') AS name,\n          JSON_QUERY(base.data, '$.category') AS category,\n          NVL(CAST(JSON_QUERY(base.data, '$.inventoryData.totalStock[0]') AS NUMBER), 0) AS totalInventory\n   FROM products base,\n        LATERAL\n     (SELECT JSON_ARRAYAGG(inventory_1_inner.data) AS inventoryData\n      FROM inventory inventory_1_inner\n      WHERE JSON_VALUE(inventory_1_inner.data, '$.productId') = JSON_VALUE(base.data, '$._id')) inventory_1\n   WHERE base.data.active = TRUE) sub",
           "sqlError": null,
           "status": "PASS",
           "matchType": "unknown",
@@ -19286,43 +19286,43 @@
               "_id": "P001",
               "NAME": "Widget",
               "CATEGORY": "tools",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P002",
               "NAME": "Gadget",
               "CATEGORY": "electronics",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P003",
               "NAME": "Premium Widget",
               "CATEGORY": "tools",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P004",
               "NAME": "Basic Widget",
               "CATEGORY": "tools",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P006",
               "NAME": "Headphones",
               "CATEGORY": "electronics",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P007",
               "NAME": "USB Cable",
               "CATEGORY": "electronics",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             },
             {
               "_id": "P008",
               "NAME": "Chair",
               "CATEGORY": "furniture",
-              "TOTALINVENTORY": "0"
+              "TOTALINVENTORY": 0
             }
           ]
         },
@@ -20081,14 +20081,14 @@
               "RESOLVEDCOUNT": 1
             },
             {
-              "_id": "medium",
-              "COUNT": 4,
-              "RESOLVEDCOUNT": 3
-            },
-            {
               "_id": "low",
               "COUNT": 2,
               "RESOLVEDCOUNT": 0
+            },
+            {
+              "_id": "medium",
+              "COUNT": 4,
+              "RESOLVEDCOUNT": 3
             },
             {
               "_id": "urgent",

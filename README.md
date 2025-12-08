@@ -12,12 +12,12 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 175 passing cross-database validation tests.
+**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 174 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
 
 | Metric | Value |
 |--------|-------|
 | Unit Tests | 1,408 |
-| Cross-DB Validation | 175 |
+| Cross-DB Validation | 174 |
 | Large-Scale Tests | 10 |
 | Instruction Coverage | 93% |
 | Branch Coverage | 83% |

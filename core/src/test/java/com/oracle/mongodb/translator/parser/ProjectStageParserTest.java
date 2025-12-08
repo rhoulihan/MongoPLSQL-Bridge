@@ -118,15 +118,11 @@ class ProjectStageParserTest {
 
   @Test
   void shouldRejectUnsupportedExpressionOperator() {
-    // { $project: { computed: { $zip: {...} } } } - $zip is not supported
+    // { $project: { computed: { $fakeOperatorThatDoesNotExist: {...} } } }
     var doc =
         new Document(
             "computed",
-            new Document(
-                "$zip",
-                new Document(
-                    "inputs",
-                    java.util.List.of(java.util.List.of(1, 2), java.util.List.of("a", "b")))));
+            new Document("$fakeOperatorThatDoesNotExist", new Document("value", 42)));
 
     assertThatThrownBy(() -> parser.parse(doc))
         .isInstanceOf(com.oracle.mongodb.translator.exception.UnsupportedOperatorException.class);

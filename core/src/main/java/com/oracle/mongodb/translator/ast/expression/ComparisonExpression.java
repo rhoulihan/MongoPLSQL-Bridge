@@ -49,17 +49,39 @@ public final class ComparisonExpression implements Expression {
   public void render(SqlGenerationContext ctx) {
     // Handle NULL comparisons specially
     if (right instanceof LiteralExpression lit && lit.isNull()) {
-      // For null comparisons, use dot notation with IS NULL / IS NOT NULL
-      // This works for both missing fields (SQL NULL) and JSON null values
-      ctx.visit(left);
-      if (op == ComparisonOp.EQ) {
-        // field = null means field is missing OR field is JSON null
-        ctx.sql(" IS NULL");
-      } else if (op == ComparisonOp.NE) {
-        // field != null means field exists AND field is not JSON null
-        ctx.sql(" IS NOT NULL");
+      // For null comparisons with native JSON type, use JSON_EXISTS with filter
+      // This correctly handles all types (scalars, objects, arrays) unlike JSON_VALUE
+      // which returns NULL for objects/arrays
+      if (left instanceof FieldPathExpression fieldPath) {
+        // $ne: null → JSON_EXISTS(data, '$.field?(@ != null)')
+        // $eq: null → NOT JSON_EXISTS(data, '$.field?(@ != null)')
+        if (op == ComparisonOp.EQ) {
+          ctx.sql("NOT ");
+        }
+        ctx.sql("JSON_EXISTS(");
+        String alias = ctx.getBaseTableAlias();
+        if (alias != null && !alias.isEmpty()) {
+          ctx.sql(alias);
+          ctx.sql(".");
+        }
+        ctx.sql(fieldPath.getDataColumn());
+        ctx.sql(", '");
+        ctx.sql(fieldPath.getJsonPath());
+        ctx.sql("?(@ != null)')");
+
+        if (op != ComparisonOp.EQ && op != ComparisonOp.NE) {
+          throw new IllegalStateException("Invalid NULL comparison with operator: " + op);
+        }
       } else {
-        throw new IllegalStateException("Invalid NULL comparison with operator: " + op);
+        // Fallback for non-field expressions - use standard IS NULL check
+        ctx.visit(left);
+        if (op == ComparisonOp.EQ) {
+          ctx.sql(" IS NULL");
+        } else if (op == ComparisonOp.NE) {
+          ctx.sql(" IS NOT NULL");
+        } else {
+          throw new IllegalStateException("Invalid NULL comparison with operator: " + op);
+        }
       }
       return;
     }

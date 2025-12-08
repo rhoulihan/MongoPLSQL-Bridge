@@ -1,9 +1,191 @@
 # TODO - MongoDB to Oracle SQL Translator
 
 This file tracks improvements, enhancements, and features discovered during development.
-Last updated: 2025-12-07
+Last updated: 2025-12-08
+
+---
+
+## MongoDB Compatibility Gap Analysis - Implementation Roadmap
+
+Based on comparison with [MongoDB's official jstests](https://github.com/mongodb/mongo/tree/master/jstests/aggregation).
+See `docs/TEST-GAP-ANALYSIS.md` for full analysis.
+
+### Phase 1: Date Operations (Highest Impact)
+
+Critical for analytics workloads. All have direct Oracle equivalents.
+
+- [x] **$dateAdd** - Add time interval to date (completed: 2025-12-08)
+  - Files: `DateArithmeticExpression.java`, `DateArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `TO_TIMESTAMP(...) + INTERVAL 'n' UNIT`
+  - MongoDB: `{ $dateAdd: { startDate: "$date", unit: "day", amount: 5 } }`
+
+- [x] **$dateSubtract** - Subtract time interval from date (completed: 2025-12-08)
+  - Files: `DateArithmeticExpression.java`, `DateArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `TO_TIMESTAMP(...) - INTERVAL 'n' UNIT`
+  - MongoDB: `{ $dateSubtract: { startDate: "$date", unit: "day", amount: 5 } }`
+
+- [x] **$dateDiff** - Calculate difference between dates (completed: 2025-12-08)
+  - Files: `DateArithmeticExpression.java`, `DateArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `MONTHS_BETWEEN()` for months, date subtraction for days/hours/etc.
+  - MongoDB: `{ $dateDiff: { startDate: "$start", endDate: "$end", unit: "day" } }`
+
+- [x] **$dateFromString** - Parse string to date (completed: 2025-12-08)
+  - Files: `DateStringExpression.java`, `DateStringOp.java`, `ExpressionParser.java`
+  - Oracle: `TO_TIMESTAMP(string, 'YYYY-MM-DD')` with MongoDB format conversion
+  - MongoDB: `{ $dateFromString: { dateString: "$dateStr", format: "%Y-%m-%d" } }`
+
+- [x] **$dateToString** - Format date as string (completed: 2025-12-08)
+  - Files: `DateStringExpression.java`, `DateStringOp.java`, `ExpressionParser.java`
+  - Oracle: `TO_CHAR(TO_TIMESTAMP(...), 'YYYY-MM-DD')` with MongoDB format conversion
+  - MongoDB: `{ $dateToString: { date: "$date", format: "%Y-%m-%d" } }`
+
+- [x] **$dateTrunc** - Truncate date to unit (completed: 2025-12-08)
+  - Files: `DateTruncExpression.java`, `ExpressionParser.java`
+  - Oracle: `TRUNC(TO_TIMESTAMP(...), 'MONTH')` with unit mapping
+  - MongoDB: `{ $dateTrunc: { date: "$date", unit: "month" } }`
+
+- [x] **$dateFromParts** - Construct date from parts (completed: 2025-12-08)
+  - Files: `DatePartsExpression.java`, `ExpressionParser.java`
+  - Oracle: `TO_TIMESTAMP(year||'-'||month||'-'||day||' '||hour||':'||minute||':'||second, 'YYYY-MM-DD HH24:MI:SS')`
+  - MongoDB: `{ $dateFromParts: { year: 2023, month: 6, day: 15 } }`
+
+- [x] **$dateToParts** - Extract parts from date (completed: 2025-12-08)
+  - Files: `DatePartsExpression.java`, `ExpressionParser.java`
+  - Oracle: `JSON_OBJECT('year' VALUE EXTRACT(YEAR FROM ts), 'month' VALUE EXTRACT(MONTH FROM ts), ...)`
+  - MongoDB: `{ $dateToParts: { date: "$date" } }`
+
+### Phase 2: Type Conversion Enhancement (COMPLETED)
+
+All type conversion operators were previously implemented.
+
+- [x] **$convert** - Generic type conversion with error handling (completed: previously)
+  - Files: `TypeConversionExpression.java`, `TypeConversionOp.java`, `ExpressionParser.java`
+  - Oracle: `NVL(...)` for onNull handling
+  - MongoDB: `{ $convert: { input: "$field", to: "int", onError: 0, onNull: 0 } }`
+
+- [x] **$isNumber** - Check if value is numeric (completed: previously)
+  - Files: `TypeConversionExpression.java`, `TypeConversionOp.java`, `ExpressionParser.java`
+  - Oracle: `CASE WHEN REGEXP_LIKE(TO_CHAR(...), '^-?[0-9]+(\.[0-9]+)?$') THEN 1 ELSE 0 END`
+  - MongoDB: `{ $isNumber: "$field" }`
+
+- [x] **$toDecimal** - Convert to decimal (completed: previously)
+  - Files: `TypeConversionExpression.java`, `TypeConversionOp.java`, `ExpressionParser.java`
+  - Oracle: `TO_NUMBER(...)`
+  - MongoDB: `{ $toDecimal: "$field" }`
+
+- [x] **$toLong** - Convert to long integer (completed: previously)
+  - Files: `TypeConversionExpression.java`, `TypeConversionOp.java`, `ExpressionParser.java`
+  - Oracle: `TRUNC(TO_NUMBER(...))`
+  - MongoDB: `{ $toLong: "$field" }`
+
+- [x] **$toObjectId** - Convert to ObjectId (completed: previously)
+  - Files: `TypeConversionExpression.java`, `TypeConversionOp.java`, `ExpressionParser.java`
+  - Note: Returns value as-is (ObjectId is stored as string in Oracle JSON)
+
+### Phase 3: Array Enhancements (MOSTLY COMPLETED)
+
+Most array operators were previously implemented. Only $range and $zip are pending.
+
+- [x] **$indexOfArray** - Find index of element in array (completed: previously)
+  - Files: `ArrayExpression.java`, `ArrayOp.java`, `ExpressionParser.java`
+  - Oracle: Stub implementation
+  - MongoDB: `{ $indexOfArray: [ "$arr", "value" ] }`
+
+- [x] **$objectToArray** - Convert object to array of k-v pairs (completed: previously)
+  - Files: `ObjectExpression.java`, `ObjectOp.java`, `ExpressionParser.java`
+  - Oracle: JSON_TABLE to extract keys and values
+  - MongoDB: `{ $objectToArray: "$obj" }`
+
+- [x] **$arrayToObject** - Convert array of k-v pairs to object (completed: previously)
+  - Files: `ObjectExpression.java`, `ObjectOp.java`, `ExpressionParser.java`
+  - Oracle: JSON_OBJECT with aggregation
+  - MongoDB: `{ $arrayToObject: "$arr" }`
+
+- [x] **$range** - Generate array of integers (completed: 2025-12-08)
+  - Files: `ArrayExpression.java`, `ArrayOp.java`, `ExpressionParser.java`
+  - Oracle: `SELECT JSON_ARRAYAGG(n) FROM (SELECT start + (LEVEL-1)*step AS n FROM DUAL CONNECT BY ...)`
+  - MongoDB: `{ $range: [ 0, 10, 2 ] }` (start, end, step)
+
+- [x] **$sortArray** - Sort array elements (completed: previously)
+  - Files: `ArrayExpression.java`, `ArrayOp.java`, `ExpressionParser.java`
+  - Oracle: JSON_TABLE with ORDER BY and JSON_ARRAYAGG
+  - MongoDB: `{ $sortArray: { input: "$arr", sortBy: { field: 1 } } }`
+
+- [x] **$zip** - Merge arrays element-wise (completed: 2025-12-08)
+  - Files: `ArrayExpression.java`, `ArrayOp.java`, `ExpressionParser.java`
+  - Oracle: JSON_TABLE with row numbers and JOIN to zip arrays together
+  - MongoDB: `{ $zip: { inputs: [ "$arr1", "$arr2" ], useLongestLength: true, defaults: [0, "N/A"] } }`
+
+### Phase 4: Complete Stage Implementations (COMPLETED)
+
+- [x] **$unset Stage** - Remove fields (alias for $project exclusion) (completed: previously)
+  - Files: `UnsetStage.java`, `UnsetStageParser.java`, `StageParserRegistry.java`
+  - Oracle: SELECT with excluded fields via ProjectStage
+  - MongoDB: `{ $unset: ["field1", "field2"] }`
+
+- [x] **$densify Stage** - Fill gaps in time series data (completed: 2025-12-08)
+  - Files: `DensifyStage.java`, `DensifyStageParser.java`, `DensifyStageTest.java`, `DensifyStageParserTest.java`
+  - Oracle: Recursive CTE with date/sequence generation
+  - MongoDB: `{ $densify: { field: "date", range: { step: 1, unit: "day" } } }`
+
+- [x] **$fill Stage** - Fill missing values (completed: 2025-12-08)
+  - Files: `FillStage.java`, `FillStageParser.java`, `FillStageTest.java`, `FillStageParserTest.java`
+  - Oracle: LAG/LEAD IGNORE NULLS window functions, COALESCE
+  - MongoDB: `{ $fill: { output: { field: { method: "linear" } } } }`
+
+### Phase 5: Mathematical Operations (COMPLETED)
+
+All math operators were previously implemented.
+
+- [x] **$exp** - Euler's number raised to power (completed: previously)
+  - Files: `ArithmeticExpression.java`, `ArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `EXP(n)`
+  - MongoDB: `{ $exp: "$field" }`
+
+- [x] **$ln** - Natural logarithm (completed: previously)
+  - Files: `ArithmeticExpression.java`, `ArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `LN(n)`
+  - MongoDB: `{ $ln: "$field" }`
+
+- [x] **$log10** - Base-10 logarithm (completed: previously)
+  - Files: `ArithmeticExpression.java`, `ArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `LOG(10, n)` (Note: $log with custom base not yet implemented)
+  - MongoDB: `{ $log10: "$field" }`
+
+- [x] **$pow** - Raise to power (completed: previously)
+  - Files: `ArithmeticExpression.java`, `ArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `POWER(base, exponent)`
+  - MongoDB: `{ $pow: [ "$base", "$exp" ] }`
+
+- [x] **$sqrt** - Square root (completed: previously)
+  - Files: `ArithmeticExpression.java`, `ArithmeticOp.java`, `ExpressionParser.java`
+  - Oracle: `SQRT(n)`
+  - MongoDB: `{ $sqrt: "$field" }`
+
+---
 
 ## Completed Implementations
+
+### Recent Completions (2025-12-08)
+
+- [x] **$setWindowFields Global Window (without partitionBy)** (completed: 2025-12-08)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/SetWindowFieldsStage.java`
+  - Fix: Handle case where partitionBy is omitted (global window over entire result set)
+  - Test: WINDOW010 ($documentNumber without partitionBy) now passing
+
+- [x] **$unwind preserveNullAndEmptyArrays Option** (completed: 2025-12-08)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/UnwindStage.java`
+  - Fix: LEFT OUTER JOIN pattern with COALESCE to preserve nulls
+  - Test: UNWIND005 (unwind with preserveNullAndEmptyArrays) now passing
+
+- [x] **$in Expression Operator in Expressions** (completed: 2025-12-08)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/parser/ExpressionParser.java`
+  - Fix: Support $in as general comparison expression returning boolean
+  - Test: COMPLEX012 ($in inside $cond expression) now passing
+
+- [x] **$sum/$avg Array Operators** (completed: 2025-12-08)
+  - Files: `ArrayExpression.java`, `ArrayOp.java`, `FieldPathExpression.java`
+  - Added: Support for $sum and $avg operating on array elements
 
 ### High Priority - Stage Implementations
 
@@ -79,6 +261,8 @@ Last updated: 2025-12-07
   - Supports: Complex patterns like `{locationCount: {$arrayElemAt: ["$summary.count", 0]}, topLocations: "$results"}`
   - Tests: FACET_PAGINATION003 passing
 
+---
+
 ## Stub/Incomplete Implementations
 
 - [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-05)
@@ -91,23 +275,7 @@ Last updated: 2025-12-07
     - `PipelineRendererTest.java` - 7 tests with @Disabled annotation
   - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
 
-- [ ] **$setWindowFields Global Window (without partitionBy)** (discovered: 2025-12-07)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/SetWindowFieldsStage.java`
-  - Issue: $documentNumber/$rowNumber without partitionBy clause generates invalid SQL
-  - Skipped Test: WINDOW010 ($documentNumber without partitionBy)
-  - Fix: Need to handle case where partitionBy is omitted (global window over entire result set)
-
-- [ ] **$unwind preserveNullAndEmptyArrays Option** (discovered: 2025-12-07)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/UnwindStage.java`
-  - Issue: The `preserveNullAndEmptyArrays: true` option is not implemented
-  - Skipped Test: UNWIND005 (unwind with preserveNullAndEmptyArrays)
-  - Fix: Need LEFT OUTER JOIN pattern with COALESCE to preserve nulls
-
-- [ ] **$in Expression Operator in Expressions** (discovered: 2025-12-07)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/parser/ExpressionParser.java`
-  - Issue: $in operator works in $match context but not as nested expression (e.g., inside $cond)
-  - Skipped Test: COMPLEX012 ($in inside $cond expression)
-  - Fix: Need to support $in as general comparison expression returning boolean
+---
 
 ## Improvements
 
@@ -116,11 +284,27 @@ Last updated: 2025-12-07
   - Current: Uses placeholder selection when nothing is rendered
   - Consider: Better error handling or warning when pipeline produces no output
 
+---
+
 ## Future Features
 
 - [ ] **Unsupported Operator Registry Enhancement**
   - Files: `core/src/main/java/com/oracle/mongodb/translator/parser/PipelineParser.java:62`, `ExpressionParser.java:129,215,427,616`
   - Consider: Adding detailed error messages with suggested alternatives for each unsupported operator
+
+- [ ] **String Operations - $regexFind, $regexFindAll** (Medium Priority)
+  - Oracle: REGEXP_SUBSTR with CONNECT BY for findAll
+  - MongoDB: `{ $regexFind: { input: "$field", regex: "pattern" } }`
+
+- [ ] **$let Expression** - Define and use variables in expression
+  - Oracle: WITH clause or inline substitution
+  - MongoDB: `{ $let: { vars: { x: 1 }, in: { $add: ["$$x", 1] } } }`
+
+- [ ] **$literal Expression** - Return value without parsing
+  - Oracle: Direct value embedding
+  - MongoDB: `{ $literal: "$field" }` (returns the string "$field")
+
+---
 
 ## Technical Debt
 
@@ -140,9 +324,12 @@ Last updated: 2025-12-07
     - Add explicit type hints in translation options
   - Complexity: Medium-High (requires type propagation through AST)
 
+---
+
 ## Notes
 
 Items are categorized by priority:
+- **Phase 1-5**: Systematic implementation of MongoDB compatibility gaps
 - **High Priority**: Core functionality that limits translator capabilities
 - **Medium Priority**: Features that improve completeness
 - **Low Priority**: Nice-to-have improvements

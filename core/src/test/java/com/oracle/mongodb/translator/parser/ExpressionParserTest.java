@@ -177,8 +177,8 @@ class ExpressionParserTest {
     var expr = parser.parse(doc);
     expr.render(context);
 
-    // Uses dot notation with IS NULL for null comparison
-    assertThat(context.toSql()).contains("data.deletedAt IS NULL");
+    // Uses JSON_EXISTS with filter for null comparison (compatible with native JSON type)
+    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test
@@ -1212,8 +1212,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": null}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // Uses dot notation with IS NULL for null comparison
-    assertThat(context.toSql()).contains("data.status IS NULL");
+    // Uses JSON_EXISTS with filter for null comparison (compatible with native JSON type)
+    assertThat(context.toSql()).contains("NOT JSON_EXISTS(data, '$.status?(@ != null)')");
   }
 
   @Test
@@ -1221,8 +1221,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"status\": {\"$ne\": null}}");
     var expr = parser.parse(doc);
     expr.render(context);
-    // Uses dot notation with IS NOT NULL for not-null comparison
-    assertThat(context.toSql()).contains("data.status IS NOT NULL");
+    // Uses JSON_EXISTS with filter for not-null comparison (compatible with native JSON type)
+    assertThat(context.toSql()).contains("JSON_EXISTS(data, '$.status?(@ != null)')");
   }
 
   @Test
@@ -1528,5 +1528,209 @@ class ExpressionParserTest {
     // Should combine conditional with type operations
     assertThat(sql).contains("CASE");
     assertThat(sql).isNotEmpty();
+  }
+
+  // =====================================================
+  // Date Arithmetic Operations Tests (Phase 1)
+  // =====================================================
+
+  @Test
+  void shouldParseDateAddExpression() {
+    var doc =
+        Document.parse(
+            "{\"$dateAdd\": {\"startDate\": \"$orderDate\", \"unit\": \"day\", \"amount\": 5}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("+ INTERVAL '5' DAY");
+  }
+
+  @Test
+  void shouldParseDateAddWithMonthUnit() {
+    var doc =
+        Document.parse(
+            "{\"$dateAdd\": {\"startDate\": \"$startDate\", \"unit\": \"month\", \"amount\": 3}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("+ INTERVAL '3' MONTH");
+  }
+
+  @Test
+  void shouldParseDateSubtractExpression() {
+    var doc =
+        Document.parse(
+            "{\"$dateSubtract\": {\"startDate\": \"$endDate\", \"unit\": \"day\", \"amount\": 7}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("- INTERVAL '7' DAY");
+  }
+
+  @Test
+  void shouldParseDateDiffExpression() {
+    var doc =
+        Document.parse(
+            "{\"$dateDiff\": {"
+                + "\"startDate\": \"$start\", \"endDate\": \"$end\", \"unit\": \"day\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("'$.start'");
+    assertThat(sql).contains("'$.end'");
+  }
+
+  @Test
+  void shouldParseDateDiffWithMonthUnit() {
+    var doc =
+        Document.parse(
+            "{\"$dateDiff\": {"
+                + "\"startDate\": \"$hireDate\", "
+                + "\"endDate\": \"$termDate\", \"unit\": \"month\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("MONTHS_BETWEEN");
+  }
+
+  // =====================================================
+  // Date String Conversion Expression Tests
+  // =====================================================
+
+  @Test
+  void shouldParseDateFromStringExpression() {
+    var doc = Document.parse("{\"$dateFromString\": {\"dateString\": \"$dateStr\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("JSON_VALUE(data, '$.dateStr')");
+  }
+
+  @Test
+  void shouldParseDateFromStringWithFormat() {
+    var doc =
+        Document.parse(
+            "{\"$dateFromString\": {\"dateString\": \"$dateStr\", \"format\": \"%Y-%m-%d\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("'YYYY-MM-DD'");
+  }
+
+  @Test
+  void shouldParseDateToStringExpression() {
+    var doc = Document.parse("{\"$dateToString\": {\"date\": \"$createdAt\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_CHAR");
+    assertThat(sql).contains("TO_TIMESTAMP");
+  }
+
+  @Test
+  void shouldParseDateToStringWithFormat() {
+    var doc =
+        Document.parse(
+            "{\"$dateToString\": {\"date\": \"$timestamp\", \"format\": \"%Y-%m-%d %H:%M:%S\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_CHAR");
+    assertThat(sql).contains("'YYYY-MM-DD HH24:MI:SS'");
+  }
+
+  // =====================================================
+  // Date Truncation Expression Tests
+  // =====================================================
+
+  @Test
+  void shouldParseDateTruncExpression() {
+    var doc = Document.parse("{\"$dateTrunc\": {\"date\": \"$timestamp\", \"unit\": \"day\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TRUNC");
+    assertThat(sql).contains("TO_TIMESTAMP");
+  }
+
+  @Test
+  void shouldParseDateTruncWithMonthUnit() {
+    var doc = Document.parse("{\"$dateTrunc\": {\"date\": \"$createdAt\", \"unit\": \"month\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TRUNC");
+    assertThat(sql).contains("'MONTH'");
+  }
+
+  @Test
+  void shouldParseDateTruncWithYearUnit() {
+    var doc = Document.parse("{\"$dateTrunc\": {\"date\": \"$date\", \"unit\": \"year\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TRUNC");
+    assertThat(sql).contains("'YEAR'");
+  }
+
+  // =====================================================
+  // Date Parts Expression Tests
+  // =====================================================
+
+  @Test
+  void shouldParseDateFromPartsExpression() {
+    var doc =
+        Document.parse("{\"$dateFromParts\": {\"year\": 2023, \"month\": 6, \"day\": 15}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("2023");
+  }
+
+  @Test
+  void shouldParseDateFromPartsWithTimeComponents() {
+    var doc =
+        Document.parse(
+            "{\"$dateFromParts\": {\"year\": 2023, \"month\": 6, \"day\": 15, "
+                + "\"hour\": 10, \"minute\": 30, \"second\": 45}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("2023");
+    assertThat(sql).contains("10");
+    assertThat(sql).contains("30");
+  }
+
+  @Test
+  void shouldParseDateFromPartsWithFieldReferences() {
+    var doc =
+        Document.parse(
+            "{\"$dateFromParts\": {\"year\": \"$yr\", \"month\": \"$mo\", \"day\": \"$dy\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("TO_TIMESTAMP");
+    assertThat(sql).contains("$.yr");
+    assertThat(sql).contains("$.mo");
+    assertThat(sql).contains("$.dy");
+  }
+
+  @Test
+  void shouldParseDateToPartsExpression() {
+    var doc = Document.parse("{\"$dateToParts\": {\"date\": \"$timestamp\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_OBJECT");
+    assertThat(sql).contains("EXTRACT");
+    assertThat(sql).contains("YEAR");
+    assertThat(sql).contains("MONTH");
+    assertThat(sql).contains("DAY");
   }
 }

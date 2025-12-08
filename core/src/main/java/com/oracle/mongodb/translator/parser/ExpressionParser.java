@@ -13,8 +13,14 @@ import com.oracle.mongodb.translator.ast.expression.ArrayOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
+import com.oracle.mongodb.translator.ast.expression.DateArithmeticExpression;
+import com.oracle.mongodb.translator.ast.expression.DateArithmeticOp;
 import com.oracle.mongodb.translator.ast.expression.DateExpression;
 import com.oracle.mongodb.translator.ast.expression.DateOp;
+import com.oracle.mongodb.translator.ast.expression.DatePartsExpression;
+import com.oracle.mongodb.translator.ast.expression.DateStringExpression;
+import com.oracle.mongodb.translator.ast.expression.DateStringOp;
+import com.oracle.mongodb.translator.ast.expression.DateTruncExpression;
 import com.oracle.mongodb.translator.ast.expression.ExistsExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
@@ -394,6 +400,22 @@ public final class ExpressionParser {
       return parseStringExpression(op, operand);
     }
 
+    if (DateArithmeticOp.isDateArithmeticOp(op)) {
+      return parseDateArithmeticExpression(op, operand);
+    }
+
+    if (DateStringOp.isDateStringOp(op)) {
+      return parseDateStringExpression(op, operand);
+    }
+
+    if ("$dateTrunc".equals(op)) {
+      return parseDateTruncExpression(operand);
+    }
+
+    if ("$dateFromParts".equals(op) || "$dateToParts".equals(op)) {
+      return parseDatePartsExpression(op, operand);
+    }
+
     if (DateOp.isDateOp(op)) {
       return parseDateExpression(op, operand);
     }
@@ -694,6 +716,139 @@ public final class ExpressionParser {
     return new DateExpression(dateOp, parseValue(operand));
   }
 
+  private Expression parseDateArithmeticExpression(String op, Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException(op + " requires a document argument");
+    }
+
+    DateArithmeticOp dateArithOp = DateArithmeticOp.fromMongo(op);
+
+    if (dateArithOp == DateArithmeticOp.DATE_DIFF) {
+      // $dateDiff: { startDate: expr, endDate: expr, unit: string }
+      Object startDate = doc.get("startDate");
+      Object endDate = doc.get("endDate");
+      Object unit = doc.get("unit");
+
+      if (startDate == null || endDate == null || unit == null) {
+        throw new IllegalArgumentException(
+            "$dateDiff requires 'startDate', 'endDate', and 'unit' fields");
+      }
+
+      String unitStr = unit.toString();
+      return DateArithmeticExpression.dateDiff(
+          parseValue(startDate), parseValue(endDate), unitStr);
+    }
+
+    // $dateAdd / $dateSubtract: { startDate: expr, unit: string, amount: number }
+    Object startDate = doc.get("startDate");
+    Object unit = doc.get("unit");
+    Object amount = doc.get("amount");
+
+    if (startDate == null || unit == null || amount == null) {
+      throw new IllegalArgumentException(op + " requires 'startDate', 'unit', and 'amount' fields");
+    }
+
+    String unitStr = unit.toString();
+    Expression amountExpr = parseValue(amount);
+
+    if (dateArithOp == DateArithmeticOp.DATE_ADD) {
+      return DateArithmeticExpression.dateAdd(parseValue(startDate), unitStr, amountExpr);
+    } else {
+      return DateArithmeticExpression.dateSubtract(parseValue(startDate), unitStr, amountExpr);
+    }
+  }
+
+  private Expression parseDateStringExpression(String op, Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException(op + " requires a document argument");
+    }
+
+    DateStringOp dateStringOp = DateStringOp.fromMongo(op);
+
+    if (dateStringOp == DateStringOp.DATE_FROM_STRING) {
+      // $dateFromString: { dateString: expr, format: string (optional) }
+      Object dateString = doc.get("dateString");
+      Object format = doc.get("format");
+
+      if (dateString == null) {
+        throw new IllegalArgumentException("$dateFromString requires 'dateString' field");
+      }
+
+      String formatStr = format != null ? format.toString() : null;
+      return DateStringExpression.dateFromString(parseValue(dateString), formatStr);
+    }
+
+    // $dateToString: { date: expr, format: string (optional) }
+    Object date = doc.get("date");
+    Object format = doc.get("format");
+
+    if (date == null) {
+      throw new IllegalArgumentException("$dateToString requires 'date' field");
+    }
+
+    String formatStr = format != null ? format.toString() : null;
+    return DateStringExpression.dateToString(parseValue(date), formatStr);
+  }
+
+  private Expression parseDateTruncExpression(Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException("$dateTrunc requires a document argument");
+    }
+
+    // $dateTrunc: { date: expr, unit: string }
+    Object date = doc.get("date");
+    Object unit = doc.get("unit");
+
+    if (date == null || unit == null) {
+      throw new IllegalArgumentException("$dateTrunc requires 'date' and 'unit' fields");
+    }
+
+    String unitStr = unit.toString();
+    return DateTruncExpression.dateTrunc(parseValue(date), unitStr);
+  }
+
+  private Expression parseDatePartsExpression(String op, Object operand) {
+    if (!(operand instanceof Document doc)) {
+      throw new IllegalArgumentException(op + " requires a document argument");
+    }
+
+    if ("$dateFromParts".equals(op)) {
+      // $dateFromParts: { year: expr, month: expr, day: expr, hour: expr, minute: expr, second:
+      // expr }
+      Object year = doc.get("year");
+      Object month = doc.get("month");
+      Object day = doc.get("day");
+      Object hour = doc.get("hour");
+      Object minute = doc.get("minute");
+      Object second = doc.get("second");
+
+      if (year == null || month == null || day == null) {
+        throw new IllegalArgumentException(
+            "$dateFromParts requires 'year', 'month', and 'day' fields");
+      }
+
+      Expression hourExpr = hour != null ? parseValue(hour) : null;
+      Expression minuteExpr = minute != null ? parseValue(minute) : null;
+      Expression secondExpr = second != null ? parseValue(second) : null;
+
+      return DatePartsExpression.dateFromParts(
+          parseValue(year),
+          parseValue(month),
+          parseValue(day),
+          hourExpr,
+          minuteExpr,
+          secondExpr);
+    }
+
+    // $dateToParts: { date: expr }
+    Object date = doc.get("date");
+    if (date == null) {
+      throw new IllegalArgumentException("$dateToParts requires 'date' field");
+    }
+
+    return DatePartsExpression.dateToParts(parseValue(date));
+  }
+
   private Expression parseArrayExpression(String op, Object operand) {
     ArrayOp arrayOp = ArrayOp.fromMongo(op);
 
@@ -721,6 +876,8 @@ public final class ExpressionParser {
       case ARRAY_TO_OBJECT -> ObjectExpression.arrayToObject(parseValue(operand));
       case SUM_ARRAY -> ArrayExpression.sumArray(parseValue(operand));
       case AVG_ARRAY -> ArrayExpression.avgArray(parseValue(operand));
+      case RANGE -> parseRange(operand);
+      case ZIP -> parseZip(operand);
       case ANY_ELEMENT_TRUE, ALL_ELEMENTS_TRUE -> throw new UnsupportedOperatorException(op);
       default -> throw new UnsupportedOperatorException(op);
     };
@@ -920,6 +1077,63 @@ public final class ExpressionParser {
       throw new IllegalArgumentException("$setIsSubset requires exactly 2 arguments");
     }
     return ArrayExpression.setIsSubset(parseValue(args.get(0)), parseValue(args.get(1)));
+  }
+
+  private Expression parseRange(Object operand) {
+    if (!(operand instanceof List)) {
+      throw new IllegalArgumentException("$range requires an array [start, end, step?]");
+    }
+    @SuppressWarnings("unchecked")
+    List<Object> args = (List<Object>) operand;
+    if (args.size() < 2 || args.size() > 3) {
+      throw new IllegalArgumentException("$range requires 2 or 3 arguments [start, end, step?]");
+    }
+    Expression start = parseValue(args.get(0));
+    Expression end = parseValue(args.get(1));
+    if (args.size() == 3) {
+      return ArrayExpression.range(start, end, parseValue(args.get(2)));
+    }
+    return ArrayExpression.range(start, end);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Expression parseZip(Object operand) {
+    if (!(operand instanceof Map)) {
+      throw new IllegalArgumentException("$zip requires an object with 'inputs' field");
+    }
+    Map<String, Object> spec = (Map<String, Object>) operand;
+
+    Object inputsObj = spec.get("inputs");
+    if (!(inputsObj instanceof List)) {
+      throw new IllegalArgumentException("$zip 'inputs' must be an array of arrays");
+    }
+    List<Object> inputsList = (List<Object>) inputsObj;
+    List<Expression> inputs = new ArrayList<>();
+    for (Object input : inputsList) {
+      inputs.add(parseValue(input));
+    }
+
+    boolean useLongestLength = false;
+    if (spec.containsKey("useLongestLength")) {
+      Object useLongestObj = spec.get("useLongestLength");
+      if (useLongestObj instanceof Boolean) {
+        useLongestLength = (Boolean) useLongestObj;
+      }
+    }
+
+    List<Expression> defaults = null;
+    if (spec.containsKey("defaults")) {
+      Object defaultsObj = spec.get("defaults");
+      if (defaultsObj instanceof List) {
+        List<Object> defaultsList = (List<Object>) defaultsObj;
+        defaults = new ArrayList<>();
+        for (Object def : defaultsList) {
+          defaults.add(parseValue(def));
+        }
+      }
+    }
+
+    return ArrayExpression.zip(inputs, useLongestLength, defaults);
   }
 
   private Expression parseObjectExpression(String op, Object operand) {

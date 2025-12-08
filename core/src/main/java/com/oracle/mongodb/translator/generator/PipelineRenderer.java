@@ -1523,6 +1523,10 @@ public final class PipelineRenderer {
 
   private void renderProjectSelectClauseRowByRow(
       ProjectStage project, Set<String> computedFieldNames, SqlGenerationContext ctx) {
+    // Use JSON output mode to preserve native JSON types when columns are wrapped
+    // in JSON_OBJECT(*) by the outer query (e.g., for UNION or nested pipelines)
+    ctx.setJsonOutputMode(true);
+
     boolean first = true;
     for (var entry : project.getProjections().entrySet()) {
       final String alias = entry.getKey();
@@ -1553,6 +1557,8 @@ public final class PipelineRenderer {
     if (first) {
       ctx.sql("NULL AS dummy");
     }
+
+    ctx.setJsonOutputMode(false);
   }
 
   private void renderProjectSelectClauseJsonAgg(
@@ -1628,6 +1634,9 @@ public final class PipelineRenderer {
     if (newRoot instanceof InlineObjectExpression inlineObj) {
       // Document with explicit field mappings: {field1: "$expr1", field2: "$expr2"}
       // Render as: expr1 AS field1, expr2 AS field2
+      // Use JSON output mode to preserve native JSON types when wrapped in JSON_OBJECT(*)
+      ctx.setJsonOutputMode(true);
+
       boolean first = true;
       for (Map.Entry<String, Expression> entry : inlineObj.getFields().entrySet()) {
         if (!first) {
@@ -1641,6 +1650,8 @@ public final class PipelineRenderer {
       if (first) {
         ctx.sql("NULL AS dummy");
       }
+
+      ctx.setJsonOutputMode(false);
     } else if (newRoot instanceof FieldPathExpression fieldPath) {
       // Subdocument promotion: {newRoot: "$subdocument"}
       // Render as: JSON_QUERY(data, '$.subdocument') AS data

@@ -883,4 +883,161 @@ class ArrayExpressionTest {
     // Should indicate that this case is not fully supported
     assertThat(context.toSql()).containsIgnoringCase("map");
   }
+
+  // ==================== $range Tests ====================
+
+  @Test
+  void shouldRenderRangeWithStartAndEnd() {
+    // MongoDB: {$range: [0, 10]} - generates [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    // Oracle: SELECT JSON_ARRAYAGG(n ORDER BY n) FROM (SELECT 0 + LEVEL - 1 AS n FROM DUAL
+    //         CONNECT BY LEVEL <= 10 - 0)
+    var expr = ArrayExpression.range(LiteralExpression.of(0), LiteralExpression.of(10));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("CONNECT BY");
+    assertThat(sql).contains("LEVEL");
+  }
+
+  @Test
+  void shouldRenderRangeWithStep() {
+    // MongoDB: {$range: [0, 10, 2]} - generates [0, 2, 4, 6, 8]
+    // Oracle: SELECT JSON_ARRAYAGG(n ORDER BY n) FROM (SELECT 0 + (LEVEL - 1) * 2 AS n FROM DUAL
+    //         CONNECT BY 0 + (LEVEL - 1) * 2 < 10)
+    var expr =
+        ArrayExpression.range(
+            LiteralExpression.of(0), LiteralExpression.of(10), LiteralExpression.of(2));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("CONNECT BY");
+    assertThat(sql).containsAnyOf("* 2", "*2");
+  }
+
+  @Test
+  void shouldRenderRangeWithNegativeStep() {
+    // MongoDB: {$range: [10, 0, -1]} - generates [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+    var expr =
+        ArrayExpression.range(
+            LiteralExpression.of(10), LiteralExpression.of(0), LiteralExpression.of(-1));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("CONNECT BY");
+  }
+
+  @Test
+  void shouldRenderRangeWithFieldPaths() {
+    // MongoDB: {$range: ["$start", "$end"]}
+    var expr =
+        ArrayExpression.range(FieldPathExpression.of("start"), FieldPathExpression.of("end"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("CONNECT BY");
+    assertThat(sql).contains("JSON_VALUE");
+  }
+
+  @Test
+  void shouldReturnRangeOp() {
+    var expr = ArrayExpression.range(LiteralExpression.of(0), LiteralExpression.of(10));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.RANGE);
+  }
+
+  @Test
+  void shouldProvideReadableRangeToString() {
+    var expr = ArrayExpression.range(LiteralExpression.of(0), LiteralExpression.of(10));
+    assertThat(expr.toString()).contains("$range");
+  }
+
+  // === $zip Tests (TDD RED phase) ===
+
+  @Test
+  void shouldRenderZipWithTwoArrays() {
+    // MongoDB: {$zip: {inputs: ["$arr1", "$arr2"]}}
+    // Creates array of pairs: [[arr1[0], arr2[0]], [arr1[1], arr2[1]], ...]
+    var expr =
+        ArrayExpression.zip(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("JSON_TABLE");
+  }
+
+  @Test
+  void shouldRenderZipWithThreeArrays() {
+    // MongoDB: {$zip: {inputs: ["$arr1", "$arr2", "$arr3"]}}
+    var expr =
+        ArrayExpression.zip(
+            List.of(
+                FieldPathExpression.of("arr1"),
+                FieldPathExpression.of("arr2"),
+                FieldPathExpression.of("arr3")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldRenderZipWithUseLongestLength() {
+    // MongoDB: {$zip: {inputs: ["$arr1", "$arr2"], useLongestLength: true}}
+    var expr =
+        ArrayExpression.zip(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")),
+            true,
+            null);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    // Should use FULL OUTER JOIN to preserve longest array
+    assertThat(sql.toUpperCase()).contains("OUTER");
+  }
+
+  @Test
+  void shouldRenderZipWithDefaults() {
+    // MongoDB: {$zip: {inputs: ["$arr1", "$arr2"], useLongestLength: true, defaults: [0, "N/A"]}}
+    var expr =
+        ArrayExpression.zip(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")),
+            true,
+            List.of(LiteralExpression.of(0), LiteralExpression.of("N/A")));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    // Should use COALESCE for defaults
+    assertThat(sql.toUpperCase()).contains("COALESCE");
+  }
+
+  @Test
+  void shouldReturnZipOp() {
+    var expr =
+        ArrayExpression.zip(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+    assertThat(expr.getOp()).isEqualTo(ArrayOp.ZIP);
+  }
+
+  @Test
+  void shouldProvideReadableZipToString() {
+    var expr =
+        ArrayExpression.zip(
+            List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
+    assertThat(expr.toString()).contains("$zip");
+  }
 }

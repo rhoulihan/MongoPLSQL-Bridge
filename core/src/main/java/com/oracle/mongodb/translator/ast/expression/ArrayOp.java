@@ -36,7 +36,9 @@ public enum ArrayOp {
   ANY_ELEMENT_TRUE("$anyElementTrue"),
   ALL_ELEMENTS_TRUE("$allElementsTrue"),
   SUM_ARRAY("$sum"),
-  AVG_ARRAY("$avg");
+  AVG_ARRAY("$avg"),
+  RANGE("$range"),
+  ZIP("$zip");
 
   private static final Map<String, ArrayOp> MONGO_LOOKUP;
 
@@ -67,7 +69,9 @@ public enum ArrayOp {
             Map.entry("$anyElementTrue", ANY_ELEMENT_TRUE),
             Map.entry("$allElementsTrue", ALL_ELEMENTS_TRUE),
             Map.entry("$sum", SUM_ARRAY),
-            Map.entry("$avg", AVG_ARRAY));
+            Map.entry("$avg", AVG_ARRAY),
+            Map.entry("$range", RANGE),
+            Map.entry("$zip", ZIP));
   }
 
   private final String mongoOperator;

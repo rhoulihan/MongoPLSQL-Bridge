@@ -166,6 +166,59 @@ public final class ArrayExpression implements Expression {
   }
 
   /**
+   * Creates a $range expression with start and end (step defaults to 1).
+   *
+   * @param start the starting value (inclusive)
+   * @param end the ending value (exclusive)
+   */
+  public static ArrayExpression range(Expression start, Expression end) {
+    // Store start as arrayExpression, end as indexExpression, step as 1 in additionalArgs
+    return new ArrayExpression(ArrayOp.RANGE, start, end, List.of(LiteralExpression.of(1)));
+  }
+
+  /**
+   * Creates a $range expression with start, end, and step.
+   *
+   * @param start the starting value (inclusive)
+   * @param end the ending value (exclusive)
+   * @param step the increment value
+   */
+  public static ArrayExpression range(Expression start, Expression end, Expression step) {
+    return new ArrayExpression(ArrayOp.RANGE, start, end, List.of(step));
+  }
+
+  /**
+   * Creates a $zip expression.
+   *
+   * @param inputs the list of arrays to zip together
+   */
+  public static ArrayExpression zip(List<Expression> inputs) {
+    return zip(inputs, false, null);
+  }
+
+  /**
+   * Creates a $zip expression with options.
+   *
+   * @param inputs the list of arrays to zip together
+   * @param useLongestLength if true, use longest array length; if false, use shortest
+   * @param defaults default values for shorter arrays (null if not provided)
+   */
+  public static ArrayExpression zip(
+      List<Expression> inputs, boolean useLongestLength, List<Expression> defaults) {
+    // Store inputs in additionalArgs, useLongestLength as a LiteralExpression in arrayExpression
+    List<Expression> args = new ArrayList<>();
+    args.addAll(inputs);
+    if (defaults != null) {
+      args.addAll(defaults);
+    }
+    return new ArrayExpression(
+        ArrayOp.ZIP,
+        LiteralExpression.of(useLongestLength),
+        LiteralExpression.of(inputs.size()),
+        args);
+  }
+
+  /**
    * Creates a $sortArray expression.
    *
    * @param array the array to sort
@@ -335,6 +388,14 @@ public final class ArrayExpression implements Expression {
       }
       case SET_IS_SUBSET -> {
         renderSetIsSubset(ctx);
+        return;
+      }
+      case RANGE -> {
+        renderRange(ctx);
+        return;
+      }
+      case ZIP -> {
+        renderZip(ctx);
         return;
       }
       default -> {
@@ -1536,6 +1597,194 @@ public final class ArrayExpression implements Expression {
       }
     }
     return result.toString();
+  }
+
+  /**
+   * Renders $range operator. MongoDB: {$range: [start, end, step?]} - generates array of integers.
+   * Oracle: Uses CONNECT BY LEVEL to generate the sequence.
+   */
+  private void renderRange(SqlGenerationContext ctx) {
+    // arrayExpression = start, indexExpression = end, additionalArgs[0] = step
+    Expression startExpr = arrayExpression;
+    Expression endExpr = indexExpression;
+    final Expression stepExpr =
+        (additionalArgs != null && !additionalArgs.isEmpty())
+            ? additionalArgs.get(0)
+            : LiteralExpression.of(1);
+
+    // For step = 1 (or positive step):
+    // SELECT JSON_ARRAYAGG(n ORDER BY n) FROM (
+    //   SELECT start + LEVEL - 1 AS n FROM DUAL
+    //   CONNECT BY start + LEVEL - 1 < end
+    // )
+    // For general step:
+    // SELECT JSON_ARRAYAGG(n ORDER BY n) FROM (
+    //   SELECT start + (LEVEL - 1) * step AS n FROM DUAL
+    //   CONNECT BY start + (LEVEL - 1) * step < end (for positive step)
+    //   CONNECT BY start + (LEVEL - 1) * step > end (for negative step)
+    // )
+
+    ctx.sql("(SELECT JSON_ARRAYAGG(n ORDER BY n) FROM (SELECT ");
+    renderRangeExpression(ctx, startExpr);
+    ctx.sql(" + (LEVEL - 1) * ");
+    renderRangeExpression(ctx, stepExpr);
+    ctx.sql(" AS n FROM DUAL CONNECT BY ");
+
+    // Determine the direction check based on step
+    if (stepExpr instanceof LiteralExpression lit && lit.getValue() instanceof Number num) {
+      if (num.intValue() < 0) {
+        // Negative step: start + (LEVEL - 1) * step > end
+        renderRangeExpression(ctx, startExpr);
+        ctx.sql(" + (LEVEL - 1) * ");
+        renderRangeExpression(ctx, stepExpr);
+        ctx.sql(" > ");
+        renderRangeExpression(ctx, endExpr);
+      } else {
+        // Positive step: start + (LEVEL - 1) * step < end
+        renderRangeExpression(ctx, startExpr);
+        ctx.sql(" + (LEVEL - 1) * ");
+        renderRangeExpression(ctx, stepExpr);
+        ctx.sql(" < ");
+        renderRangeExpression(ctx, endExpr);
+      }
+    } else {
+      // Dynamic step - use SIGN function
+      ctx.sql("SIGN(");
+      renderRangeExpression(ctx, stepExpr);
+      ctx.sql(") * (");
+      renderRangeExpression(ctx, startExpr);
+      ctx.sql(" + (LEVEL - 1) * ");
+      renderRangeExpression(ctx, stepExpr);
+      ctx.sql(") < SIGN(");
+      renderRangeExpression(ctx, stepExpr);
+      ctx.sql(") * ");
+      renderRangeExpression(ctx, endExpr);
+    }
+
+    ctx.sql("))");
+  }
+
+  /** Helper to render a range expression (start, end, or step). */
+  private void renderRangeExpression(SqlGenerationContext ctx, Expression expr) {
+    if (expr instanceof LiteralExpression lit) {
+      ctx.sql(String.valueOf(lit.getValue()));
+    } else if (expr instanceof FieldPathExpression fieldPath) {
+      ctx.sql("JSON_VALUE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(fieldPath.getPath());
+      ctx.sql("' RETURNING NUMBER)");
+    } else {
+      ctx.visit(expr);
+    }
+  }
+
+  /**
+   * Renders $zip operator. MongoDB: {$zip: {inputs: [arr1, arr2], useLongestLength: boolean,
+   * defaults: [d1, d2]}} Oracle: Uses JSON_TABLE with row numbers and joins to zip arrays together.
+   */
+  private void renderZip(SqlGenerationContext ctx) {
+    // arrayExpression = useLongestLength (as LiteralExpression)
+    // indexExpression = inputCount (as LiteralExpression)
+    // additionalArgs = inputs followed by defaults (if any)
+
+    boolean useLongestLength =
+        arrayExpression instanceof LiteralExpression lit
+            && lit.getValue() instanceof Boolean b
+            && b;
+
+    int inputCount =
+        indexExpression instanceof LiteralExpression lit && lit.getValue() instanceof Number n
+            ? n.intValue()
+            : 2;
+
+    final List<Expression> inputs = additionalArgs.subList(0, inputCount);
+    final List<Expression> defaults =
+        additionalArgs.size() > inputCount
+            ? additionalArgs.subList(inputCount, additionalArgs.size())
+            : Collections.emptyList();
+
+    // Build the SQL using JSON_TABLE for each array
+    // SELECT JSON_ARRAYAGG(JSON_ARRAY(t1.val, t2.val) ORDER BY rn) FROM (
+    //   SELECT t1.rn, t1.val as v1, t2.val as v2 FROM
+    //   JSON_TABLE(data, '$.arr1[*]' COLUMNS (rn FOR ORDINALITY, val PATH '$')) t1
+    //   [INNER/FULL OUTER] JOIN
+    //   JSON_TABLE(data, '$.arr2[*]' COLUMNS (rn FOR ORDINALITY, val PATH '$')) t2
+    //   ON t1.rn = t2.rn
+    // )
+
+    ctx.sql("(SELECT JSON_ARRAYAGG(JSON_ARRAY(");
+
+    // List columns for the JSON_ARRAY
+    for (int i = 0; i < inputCount; i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      if (useLongestLength && i < defaults.size()) {
+        ctx.sql("COALESCE(t");
+        ctx.sql(String.valueOf(i + 1));
+        ctx.sql(".val, ");
+        renderZipDefault(ctx, defaults.get(i));
+        ctx.sql(")");
+      } else {
+        ctx.sql("t");
+        ctx.sql(String.valueOf(i + 1));
+        ctx.sql(".val");
+      }
+    }
+
+    ctx.sql(") ORDER BY ");
+    // Order by first table's row number
+    ctx.sql("t1.rn) FROM ");
+
+    // First JSON_TABLE
+    renderZipJsonTable(ctx, inputs.get(0), 1);
+
+    // Join remaining tables
+    String joinType = useLongestLength ? " FULL OUTER JOIN " : " INNER JOIN ";
+    for (int i = 1; i < inputCount; i++) {
+      ctx.sql(joinType);
+      renderZipJsonTable(ctx, inputs.get(i), i + 1);
+      ctx.sql(" ON t1.rn = t");
+      ctx.sql(String.valueOf(i + 1));
+      ctx.sql(".rn");
+    }
+
+    ctx.sql(")");
+  }
+
+  /** Helper to render JSON_TABLE for a zip input array. */
+  private void renderZipJsonTable(SqlGenerationContext ctx, Expression arrayExpr, int tableNum) {
+    ctx.sql("JSON_TABLE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
+
+    if (arrayExpr instanceof FieldPathExpression fieldPath) {
+      ctx.sql(fieldPath.getPath());
+    } else {
+      // For non-field-path expressions, use a placeholder
+      ctx.sql("array");
+      ctx.sql(String.valueOf(tableNum));
+    }
+
+    ctx.sql("[*]' COLUMNS (rn FOR ORDINALITY, val PATH '$')) t");
+    ctx.sql(String.valueOf(tableNum));
+  }
+
+  /** Helper to render a default value for zip. */
+  private void renderZipDefault(SqlGenerationContext ctx, Expression defaultExpr) {
+    if (defaultExpr instanceof LiteralExpression lit) {
+      Object value = lit.getValue();
+      if (value instanceof String) {
+        ctx.sql("'");
+        ctx.sql(value.toString().replace("'", "''"));
+        ctx.sql("'");
+      } else {
+        ctx.sql(String.valueOf(value));
+      }
+    } else {
+      ctx.visit(defaultExpr);
+    }
   }
 
   @Override

@@ -76,26 +76,26 @@ class ComparisonExpressionTest {
 
   @Test
   void shouldHandleNullEqualityComparison() {
-    // Uses dot notation with IS NULL for null comparison
+    // Uses JSON_EXISTS with filter for null comparison (compatible with native JSON type)
     var expr =
         new ComparisonExpression(
             ComparisonOp.EQ, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("data.deletedAt IS NULL");
+    assertThat(context.toSql()).isEqualTo("NOT JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test
   void shouldHandleNullInequalityComparison() {
-    // Uses dot notation with IS NOT NULL for not-null comparison
+    // Uses JSON_EXISTS with filter for not-null comparison (compatible with native JSON type)
     var expr =
         new ComparisonExpression(
             ComparisonOp.NE, FieldPathExpression.of("deletedAt"), LiteralExpression.ofNull());
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("data.deletedAt IS NOT NULL");
+    assertThat(context.toSql()).isEqualTo("JSON_EXISTS(data, '$.deletedAt?(@ != null)')");
   }
 
   @Test

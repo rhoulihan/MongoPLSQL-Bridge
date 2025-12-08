@@ -116,6 +116,14 @@ public final class StageParserRegistry {
     // $unset stage - remove fields from documents
     UnsetStageParser unsetParser = new UnsetStageParser();
     register("$unset", unsetParser::parse);
+
+    // $densify stage - fill gaps in sequences
+    DensifyStageParser densifyParser = new DensifyStageParser();
+    register("$densify", value -> densifyParser.parse(value));
+
+    // $fill stage - fill null and missing values
+    FillStageParser fillParser = new FillStageParser();
+    register("$fill", value -> fillParser.parse(value));
   }
 
   private SortStage parseSortStage(Object value) {

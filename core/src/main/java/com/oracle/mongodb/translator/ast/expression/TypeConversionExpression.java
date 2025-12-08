@@ -198,20 +198,21 @@ public final class TypeConversionExpression implements Expression {
   }
 
   private void renderToString(SqlGenerationContext ctx) {
-    ctx.sql("TO_CHAR(");
+    // Use CAST to ensure JSON_OBJECT(*) produces a JSON string, not a number
+    // Without CAST, Oracle's JSON inference may convert numeric strings back to numbers
+    ctx.sql("CAST(TO_CHAR(");
     ctx.visit(argument);
-    ctx.sql(")");
+    ctx.sql(") AS VARCHAR2(4000))");
   }
 
   private void renderToBool(SqlGenerationContext ctx) {
     // MongoDB toBool: null/0/false -> false, everything else -> true
-    // Oracle JSON stores booleans as 'true'/'false' strings when queried with JSON_VALUE
-    // Use TO_CHAR to avoid implicit numeric conversion when the value is a string
+    // Use Oracle 23ai native BOOLEAN type which JSON_OBJECT(*) handles correctly
     ctx.sql("CASE WHEN ");
     ctx.visit(argument);
     ctx.sql(" IS NULL OR TO_CHAR(");
     ctx.visit(argument);
-    ctx.sql(") IN ('0', 'false') THEN 'false' ELSE 'true' END");
+    ctx.sql(") IN ('0', 'false') THEN FALSE ELSE TRUE END");
   }
 
   private void renderToDate(SqlGenerationContext ctx) {

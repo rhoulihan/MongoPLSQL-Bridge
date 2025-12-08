@@ -145,7 +145,9 @@ class TypeConversionExpressionTest {
     var expr = TypeConversionExpression.toStringExpr(LiteralExpression.of(42));
     expr.render(context);
 
-    assertThat(context.toSql()).contains("TO_CHAR(");
+    // CAST ensures JSON_OBJECT(*) produces proper JSON string type
+    assertThat(context.toSql()).contains("CAST(TO_CHAR(");
+    assertThat(context.toSql()).contains(") AS VARCHAR2(4000))");
   }
 
   @Test
@@ -154,7 +156,8 @@ class TypeConversionExpressionTest {
     expr.render(context);
 
     assertThat(context.toSql()).contains("CASE WHEN");
-    assertThat(context.toSql()).contains("THEN 'false' ELSE 'true' END");
+    // Use Oracle 23ai native BOOLEAN type which JSON_OBJECT(*) handles correctly
+    assertThat(context.toSql()).contains("THEN FALSE ELSE TRUE END");
   }
 
   @Test
