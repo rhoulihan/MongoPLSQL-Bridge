@@ -107,6 +107,10 @@ public final class BucketStage implements Stage {
 
   @Override
   public void render(SqlGenerationContext ctx) {
+    // Check if we have mixed types (boundaries are numbers but default is string)
+    // Oracle's CASE requires all branches to return compatible types
+    boolean needsStringCast = hasMixedTypes();
+
     // Render CASE expression for bucket assignment
     ctx.sql("CASE");
     for (int i = 0; i < boundaries.size() - 1; i++) {
@@ -115,17 +119,17 @@ public final class BucketStage implements Stage {
       ctx.sql(" WHEN ");
       ctx.visit(groupBy);
       ctx.sql(" >= ");
-      renderLiteral(ctx, lower);
+      renderLiteral(ctx, lower, false);
       ctx.sql(" AND ");
       ctx.visit(groupBy);
       ctx.sql(" < ");
-      renderLiteral(ctx, upper);
+      renderLiteral(ctx, upper, false);
       ctx.sql(" THEN ");
-      renderLiteral(ctx, lower);
+      renderLiteral(ctx, lower, needsStringCast);
     }
     if (hasDefault()) {
       ctx.sql(" ELSE ");
-      renderLiteral(ctx, defaultBucket);
+      renderLiteral(ctx, defaultBucket, needsStringCast);
     }
     ctx.sql(" END AS ");
     ctx.identifier("_id");
@@ -139,13 +143,32 @@ public final class BucketStage implements Stage {
     }
   }
 
-  private void renderLiteral(SqlGenerationContext ctx, Object value) {
+  /**
+   * Checks if boundaries and default have incompatible types that require casting to a common type.
+   */
+  private boolean hasMixedTypes() {
+    if (!hasDefault() || boundaries.isEmpty()) {
+      return false;
+    }
+    boolean boundariesAreNumeric = boundaries.get(0) instanceof Number;
+    boolean defaultIsNumeric = defaultBucket instanceof Number;
+    return boundariesAreNumeric != defaultIsNumeric;
+  }
+
+  private void renderLiteral(SqlGenerationContext ctx, Object value, boolean forceString) {
     if (value instanceof String) {
       ctx.sql("'");
       ctx.sql(((String) value).replace("'", "''"));
       ctx.sql("'");
     } else if (value instanceof Number) {
-      ctx.sql(value.toString());
+      if (forceString) {
+        // Cast numeric to string for type compatibility
+        ctx.sql("'");
+        ctx.sql(value.toString());
+        ctx.sql("'");
+      } else {
+        ctx.sql(value.toString());
+      }
     } else if (value == null) {
       ctx.sql("NULL");
     } else {

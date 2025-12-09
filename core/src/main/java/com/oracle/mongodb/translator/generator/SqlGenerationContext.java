@@ -155,6 +155,25 @@ public interface SqlGenerationContext {
   String getLookupTableAliasByAs(String asField);
 
   /**
+   * Registers a pipeline form $lookup alias. Pipeline lookups produce a JSON array column via
+   * LATERAL subquery with JSON_ARRAYAGG, so field references should use alias.columnName instead of
+   * alias.data.
+   *
+   * @param asField the lookup's "as" field name (also the output column name)
+   * @param tableAlias the SQL table alias for the LATERAL subquery
+   */
+  void registerPipelineLookupAlias(String asField, String tableAlias);
+
+  /**
+   * Gets the table alias for a pipeline form $lookup. Returns null if not found or if this is an
+   * equality form lookup.
+   *
+   * @param asField the lookup's "as" field name
+   * @return the LATERAL subquery alias if this is a pipeline lookup, null otherwise
+   */
+  String getPipelineLookupAlias(String asField);
+
+  /**
    * Registers an unwound field path. When a subsequent stage references a path that starts with the
    * unwound path, it should access the JSON_TABLE column instead of base.data.
    *

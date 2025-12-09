@@ -79,10 +79,12 @@ class BucketStageTest {
     assertThat(sql).contains("WHEN");
     assertThat(sql).contains(">= 0");
     assertThat(sql).contains("< 100");
-    assertThat(sql).contains("THEN 0");
+    // When default is a string but boundaries are numbers (mixed types),
+    // THEN values are cast to strings for Oracle type compatibility
+    assertThat(sql).contains("THEN '0'");
     assertThat(sql).contains(">= 100");
     assertThat(sql).contains("< 200");
-    assertThat(sql).contains("THEN 100");
+    assertThat(sql).contains("THEN '100'");
     assertThat(sql).contains("ELSE 'Other'");
     assertThat(sql).contains("END AS \"_id\"");
   }

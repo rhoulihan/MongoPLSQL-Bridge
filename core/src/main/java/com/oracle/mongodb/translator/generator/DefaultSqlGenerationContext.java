@@ -148,6 +148,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final Map<String, LookupFieldInfo> lookupFields = new HashMap<>();
   private final Set<String> lookupsConsumedBySize = new HashSet<>();
   private final Map<String, String> lookupTableAliases = new HashMap<>();
+  private final Map<String, String> pipelineLookupAliases = new HashMap<>();
   private final Map<String, String> unwoundPaths = new HashMap<>();
   private final boolean inlineValues;
   private final OracleDialect dialect;
@@ -269,6 +270,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     nested.lookupFields.putAll(this.lookupFields);
     nested.lookupsConsumedBySize.addAll(this.lookupsConsumedBySize);
     nested.lookupTableAliases.putAll(this.lookupTableAliases);
+    nested.pipelineLookupAliases.putAll(this.pipelineLookupAliases);
     nested.unwoundPaths.putAll(this.unwoundPaths);
     nested.jsonOutputMode = this.jsonOutputMode;
     nested.nestedPipeline = this.nestedPipeline;
@@ -328,6 +330,16 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public String getLookupTableAliasByAs(String asField) {
     return lookupTableAliases.get(asField);
+  }
+
+  @Override
+  public void registerPipelineLookupAlias(String asField, String tableAlias) {
+    pipelineLookupAliases.put(asField, tableAlias);
+  }
+
+  @Override
+  public String getPipelineLookupAlias(String asField) {
+    return pipelineLookupAliases.get(asField);
   }
 
   @Override

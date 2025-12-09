@@ -12,15 +12,15 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 93% instruction coverage and 174 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
+**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 189 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
 
 | Metric | Value |
 |--------|-------|
 | Unit Tests | 1,408 |
-| Cross-DB Validation | 174 |
+| Cross-DB Validation | 189 |
 | Large-Scale Tests | 10 |
-| Instruction Coverage | 93% |
-| Branch Coverage | 83% |
+| Instruction Coverage | 89% |
+| Branch Coverage | 77% |
 
 ## Supported Operators
 
@@ -207,7 +207,7 @@ Runs 1,408 unit tests covering all operators, parsers, and pipeline scenarios.
 docker compose up -d
 ./scripts/validate-env.sh
 
-# Run cross-database validation (175 tests)
+# Run cross-database validation (190 tests)
 ./query-tests/scripts/setup.sh
 ./query-tests/scripts/run-tests.sh
 ```
@@ -266,7 +266,7 @@ mongo-oracle-translator/
 │       └── test/java/       # Unit tests (1,408)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
-│   ├── tests/               # Test case definitions (175)
+│   ├── tests/               # Test case definitions (190)
 │   ├── large-scale/         # Large-scale comparison tests (10)
 │   └── scripts/             # Test runner scripts
 ├── benchmarks/              # JMH performance benchmarks
