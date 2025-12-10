@@ -99,6 +99,15 @@ public final class PipelineRenderer {
       return;
     }
 
+    // If pipeline requires CTEs for multiple $group stages, use CTE rendering path
+    // But not if there's a $facet stage - those need special rendering via standard path
+    if (components.stageSequence != null
+        && components.stageSequence.requiresCtes()
+        && components.facetStage == null) {
+      renderWithMultiGroupCtes(pipeline, components, ctx);
+      return;
+    }
+
     // Register virtual fields from $addFields stages
     // These fields can then be referenced by subsequent stages like $group
     for (AddFieldsStage addFields : components.addFieldsStages) {
@@ -943,6 +952,329 @@ public final class PipelineRenderer {
   }
 
   /**
+   * Renders a pipeline with multiple $group stages using CTEs (Common Table Expressions). Each
+   * group stage before the last becomes a CTE, allowing subsequent stages to reference the
+   * grouped results.
+   *
+   * <pre>
+   * WITH cte_group_0 AS (
+   *   SELECT category AS "_id", SUM(amount) AS totalRevenue
+   *   FROM orders base
+   *   GROUP BY category
+   * )
+   * SELECT region AS "_id", SUM(totalRevenue) AS grandTotal
+   * FROM cte_group_0
+   * GROUP BY region
+   * </pre>
+   */
+  private void renderWithMultiGroupCtes(
+      Pipeline pipeline, PipelineComponents components, SqlGenerationContext ctx) {
+    PipelineStageSequence sequence = components.stageSequence;
+    List<PipelineStageSequence.StageGroup> stageGroups = sequence.getStageGroups();
+
+    // Render WITH clause
+    ctx.sql("WITH ");
+
+    // Track the source table for each CTE (starts with base collection, then CTE names)
+    String currentSource = components.collectionName;
+    String currentAlias = "base";
+    // Track compound _id fields from previous group for field path resolution
+    GroupStage previousGroupStage = null;
+
+    // Render each CTE (all groups except the last one)
+    for (int i = 0; i < stageGroups.size() - 1; i++) {
+      PipelineStageSequence.StageGroup group = stageGroups.get(i);
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+
+      String cteName = group.getCteName();
+      ctx.sql(cteName);
+      ctx.sql(" AS (");
+
+      // Create a fresh context for this CTE
+      // Only the first CTE (i=0) queries from the base table with JOINs
+      // Subsequent CTEs query from previous CTEs and use plain column names
+      // Propagate inlineValues setting from parent context
+      DefaultSqlGenerationContext cteCtx =
+          new DefaultSqlGenerationContext(ctx.inline(), null, currentAlias);
+      cteCtx.setInCteContext(i > 0); // Only true when referencing previous CTE
+      cteCtx.setCteSourceTable(currentSource);
+
+      // If referencing previous CTE with compound _id, register those fields
+      if (i > 0 && previousGroupStage != null) {
+        cteCtx.registerCompoundIdFields(getCompoundIdFields(previousGroupStage));
+      }
+
+      // Extract stages from this group: GroupStage, LookupStage, UnwindStage, and MatchStage
+      GroupStage groupStage = null;
+      List<LookupStage> lookupStages = new ArrayList<>();
+      List<UnwindStage> unwindStages = new ArrayList<>();
+      List<MatchStage> matchStages = new ArrayList<>();
+      for (Stage stage : group.getStages()) {
+        if (stage instanceof GroupStage gs) {
+          groupStage = gs;
+        } else if (stage instanceof LookupStage ls) {
+          lookupStages.add(ls);
+        } else if (stage instanceof UnwindStage us) {
+          unwindStages.add(us);
+        } else if (stage instanceof MatchStage ms) {
+          matchStages.add(ms);
+        }
+      }
+
+      // Register unwind paths with context for field path resolution
+      for (UnwindStage unwind : unwindStages) {
+        String alias = cteCtx.generateTableAlias("unwind");
+        cteCtx.registerUnwoundPath(unwind.getPath(), alias);
+      }
+
+      // Register lookup fields with context for field path resolution
+      for (LookupStage lookup : lookupStages) {
+        if (!lookup.isPipelineForm()) {
+          cteCtx.registerLookupField(
+              lookup.getAs(),
+              lookup.getFrom(),
+              lookup.getLocalField(),
+              lookup.getForeignField());
+          // Generate table alias and register for field path resolution
+          String alias = cteCtx.generateTableAlias(lookup.getFrom());
+          cteCtx.registerLookupTableAlias(lookup.getAs(), alias);
+        }
+      }
+
+      if (groupStage != null) {
+        // Render SELECT clause for this group
+        cteCtx.sql("SELECT ");
+        renderGroupSelectClause(groupStage, cteCtx);
+
+        // Render FROM clause
+        cteCtx.sql(" FROM ");
+        cteCtx.sql(currentSource);
+        cteCtx.sql(" ");
+        cteCtx.sql(currentAlias);
+
+        // Render CROSS APPLY for any $unwind stages in this group
+        // Skip unwinds on lookup aliases - they don't need JSON_TABLE
+        for (UnwindStage unwind : unwindStages) {
+          // Check if this unwind path matches a lookup alias
+          boolean isLookupAlias = false;
+          for (LookupStage lookup : lookupStages) {
+            if (unwind.getPath().equals(lookup.getAs())) {
+              isLookupAlias = true;
+              break;
+            }
+          }
+          if (isLookupAlias) {
+            // Skip - $lookup JOIN already provides the data
+            continue;
+          }
+          if (unwind.isPreserveNullAndEmptyArrays()) {
+            cteCtx.sql(" LEFT OUTER JOIN LATERAL ");
+          } else {
+            cteCtx.sql(" CROSS APPLY ");
+          }
+          cteCtx.visit(unwind);
+        }
+
+        // Render JOIN clauses for any $lookup stages in this group
+        for (LookupStage lookup : lookupStages) {
+          cteCtx.sql(" ");
+          cteCtx.visit(lookup);
+        }
+
+        // Render WHERE clause for any $match stages in this group
+        if (!matchStages.isEmpty()) {
+          cteCtx.sql(" WHERE ");
+          boolean firstMatch = true;
+          for (MatchStage match : matchStages) {
+            if (!firstMatch) {
+              cteCtx.sql(" AND ");
+            }
+            match.getFilter().render(cteCtx);
+            firstMatch = false;
+          }
+        }
+
+        // Render GROUP BY clause
+        renderCteGroupByClause(groupStage, cteCtx);
+      }
+
+      ctx.sql(cteCtx.toSql());
+      ctx.sql(")");
+
+      // Update source for next iteration
+      currentSource = cteName;
+      currentAlias = cteName;
+      // Save group stage for compound _id field resolution in next CTE
+      previousGroupStage = groupStage;
+    }
+
+    // Render final query that references the last CTE
+    ctx.sql(" ");
+
+    // Get the final stage group
+    PipelineStageSequence.StageGroup finalGroup = stageGroups.get(stageGroups.size() - 1);
+
+    // Extract the GroupStage and ProjectStage from the final group
+    GroupStage finalGroupStage = null;
+    ProjectStage finalProjectStage = null;
+    for (Stage stage : finalGroup.getStages()) {
+      if (stage instanceof GroupStage gs) {
+        finalGroupStage = gs;
+      } else if (stage instanceof ProjectStage ps) {
+        finalProjectStage = ps;
+      }
+    }
+
+    // Create context for final query - this references CTE columns, not JSON paths
+    // Propagate inlineValues setting from parent context
+    DefaultSqlGenerationContext finalCtx =
+        new DefaultSqlGenerationContext(ctx.inline(), null, currentAlias);
+    finalCtx.setInCteContext(true);
+    finalCtx.setCteSourceTable(currentSource);
+
+    // Register compound _id fields from last CTE's group stage for field path resolution
+    if (previousGroupStage != null) {
+      finalCtx.registerCompoundIdFields(getCompoundIdFields(previousGroupStage));
+    }
+
+    if (finalGroupStage != null) {
+      if (finalProjectStage != null) {
+        // $group followed by $project: render $project fields from CTE/subquery
+        // We need a subquery: SELECT project_fields FROM (SELECT group_fields ... GROUP BY ...)
+        renderGroupWithProject(
+            finalGroupStage, finalProjectStage, currentSource, currentAlias, finalCtx);
+      } else {
+        // Just $group: render as before
+        finalCtx.sql("SELECT ");
+        renderGroupSelectClause(finalGroupStage, finalCtx);
+        finalCtx.sql(" FROM ");
+        finalCtx.sql(currentSource);
+        renderCteGroupByClause(finalGroupStage, finalCtx);
+      }
+    } else if (finalProjectStage != null) {
+      // Just $project (no $group in final stage): render project fields from CTE
+      finalCtx.sql("SELECT ");
+      renderCteProjectSelectClause(finalProjectStage, finalCtx);
+      finalCtx.sql(" FROM ");
+      finalCtx.sql(currentSource);
+    }
+
+    ctx.sql(finalCtx.toSql());
+  }
+
+  /**
+   * Renders a $group followed by $project in the final query.
+   * Creates a subquery for the $group and applies $project on top.
+   */
+  private void renderGroupWithProject(
+      GroupStage group,
+      ProjectStage project,
+      String sourceTable,
+      String sourceAlias,
+      SqlGenerationContext ctx) {
+    // SELECT project_fields FROM (SELECT group_fields FROM source GROUP BY ...) inner_query
+    ctx.sql("SELECT ");
+    renderCteProjectSelectClause(project, ctx);
+    ctx.sql(" FROM (SELECT ");
+    renderGroupSelectClause(group, ctx);
+    ctx.sql(" FROM ");
+    ctx.sql(sourceTable);
+    ctx.sql(" ");
+    ctx.sql(sourceAlias);
+    renderCteGroupByClause(group, ctx);
+    ctx.sql(") inner_query");
+  }
+
+  /**
+   * Renders the SELECT clause fields for a project stage in CTE context.
+   * Note: Does NOT output "SELECT " - that's handled by the caller.
+   */
+  private void renderCteProjectSelectClause(ProjectStage project, SqlGenerationContext ctx) {
+    boolean first = true;
+    for (Map.Entry<String, ProjectStage.ProjectionField> entry :
+        project.getProjections().entrySet()) {
+      String fieldName = entry.getKey();
+      ProjectStage.ProjectionField field = entry.getValue();
+
+      // Skip excluded fields (_id: 0)
+      if (field.isExcluded()) {
+        continue;
+      }
+
+      if (!first) {
+        ctx.sql(", ");
+      }
+
+      Expression expr = field.getExpression();
+      if (expr != null) {
+        expr.render(ctx);
+      } else {
+        // Simple field inclusion - reference from CTE
+        ctx.sql(fieldName);
+      }
+      ctx.sql(" AS ");
+      ctx.sql(fieldName);
+      first = false;
+    }
+
+    // If no fields were rendered (all excluded), output a dummy
+    if (first) {
+      ctx.sql("NULL AS dummy");
+    }
+  }
+
+  /**
+   * Renders the SELECT clause fields for a group stage.
+   * Note: Does NOT output "SELECT " - that's handled by the caller.
+   */
+  private void renderGroupSelectClause(GroupStage group, SqlGenerationContext ctx) {
+    boolean first = true;
+
+    // Render _id field
+    Expression idExpr = group.getIdExpression();
+    if (idExpr != null && !(idExpr instanceof LiteralExpression lit && lit.getValue() == null)) {
+      // Compound _id: use renderWithAliases() to get "expr AS field1, expr AS field2, ..."
+      // Simple _id: use render() and add AS "_id" suffix
+      if (idExpr instanceof CompoundIdExpression compound) {
+        compound.renderWithAliases(ctx);
+      } else {
+        idExpr.render(ctx);
+        ctx.sql(" AS \"_id\"");
+      }
+      first = false;
+    }
+
+    // Render accumulator fields
+    for (Map.Entry<String, AccumulatorExpression> entry : group.getAccumulators().entrySet()) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      entry.getValue().render(ctx);
+      ctx.sql(" AS ");
+      ctx.sql(entry.getKey());
+      first = false;
+    }
+
+    // If no _id and no accumulators, output a dummy column (Oracle needs at least one column)
+    if (first) {
+      ctx.sql("NULL AS dummy");
+    }
+  }
+
+  /**
+   * Renders the GROUP BY clause for a group stage in CTE context.
+   */
+  private void renderCteGroupByClause(GroupStage group, SqlGenerationContext ctx) {
+    Expression idExpr = group.getIdExpression();
+    if (idExpr != null && !(idExpr instanceof LiteralExpression lit && lit.getValue() == null)) {
+      ctx.sql(" GROUP BY ");
+      idExpr.render(ctx);
+    }
+  }
+
+  /**
    * Renders a query with $out stage. The $out stage changes the query from SELECT to INSERT INTO
    * ... SELECT pattern, writing the aggregation results to the target collection.
    *
@@ -1760,7 +2092,8 @@ public final class PipelineRenderer {
           components.postUnionGroupStage = group;
           components.hasPostUnionGroup = true;
         } else {
-          components.groupStage = group;
+          components.allGroupStages.add(group);
+          components.groupStage = group; // Keep last group for backward compat
         }
         sawGroupStage = true;
       } else if (stage instanceof ProjectStage project) {
@@ -1838,6 +2171,9 @@ public final class PipelineRenderer {
       }
       // For unknown stages, we skip them (they won't be rendered)
     }
+
+    // Analyze pipeline for CTE requirements (multiple $group stages, etc.)
+    components.stageSequence = PipelineStageSequence.analyze(pipeline);
 
     return components;
   }
@@ -1922,40 +2258,6 @@ public final class PipelineRenderer {
         ctx.sql(" AS ");
         ctx.identifier(graphLookup.getDepthField());
       }
-    }
-  }
-
-  private void renderGroupSelectClause(GroupStage group, SqlGenerationContext ctx) {
-    boolean first = true;
-
-    // Render _id expression if present
-    if (group.getIdExpression() != null) {
-      var idExpr = group.getIdExpression();
-      if (idExpr instanceof CompoundIdExpression compound) {
-        // For compound _id, render each field with its alias
-        compound.renderWithAliases(ctx);
-      } else {
-        ctx.visit(idExpr);
-        ctx.sql(" AS ");
-        ctx.identifier("_id");
-      }
-      first = false;
-    }
-
-    // Render accumulators
-    for (var entry : group.getAccumulators().entrySet()) {
-      if (!first) {
-        ctx.sql(", ");
-      }
-      ctx.visit(entry.getValue());
-      ctx.sql(" AS ");
-      ctx.identifier(entry.getKey());
-      first = false;
-    }
-
-    // If nothing was rendered, select a placeholder
-    if (first) {
-      ctx.sql("NULL AS dummy");
     }
   }
 
@@ -3248,7 +3550,9 @@ public final class PipelineRenderer {
     List<SetWindowFieldsStage> postGroupSetWindowFieldsStages =
         new ArrayList<>(); // $setWindowFields after $group
     List<RedactStage> redactStages = new ArrayList<>();
-    GroupStage groupStage;
+    List<GroupStage> allGroupStages = new ArrayList<>(); // All group stages for CTE detection
+    GroupStage groupStage; // Last/primary group stage for backward compatibility
+    PipelineStageSequence stageSequence; // Stage sequence analysis for CTE generation
     ProjectStage projectStage;
     BucketStage bucketStage;
     BucketAutoStage bucketAutoStage;

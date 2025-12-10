@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-08
+**Last Updated:** 2025-12-10
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -81,7 +81,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation with restrictSearchWithMatch |
 | IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
 | IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
-| IMPL-048 | Integration Test Suite | ✅ Done | 174 cross-validation tests (native JSON type) |
+| IMPL-048 | Integration Test Suite | ✅ Done | 190 cross-validation tests (native JSON type) |
 | IMPL-049 | Type Conversion Operators | ✅ Done | $type, $toInt, $toString, $toDouble, $toBool, $toDate |
 | IMPL-050 | $redact Stage | ✅ Done | Document-level filtering with $$PRUNE/$$KEEP/$$DESCEND |
 | IMPL-051 | $sample Stage | ✅ Done | Random sampling with DBMS_RANDOM.VALUE |
@@ -292,12 +292,12 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1,272 test methods across 76+ test files
+**Unit Tests:** 1,408 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 103 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 190 tests (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
-All tests passing: ✅ Yes
+All tests passing: ✅ Yes (190/191 - 1 skipped)
 
 ### Unit Test Breakdown by Package
 
@@ -355,7 +355,8 @@ All tests passing: ✅ Yes
 | $sample | 2 | ✅ Pass |
 | $count | 3 | ✅ Pass |
 | $graphLookup | 1 | ✅ Pass |
-| **Total** | **103** | **✅ 100%** |
+| FACET_PAGINATION | 3 | ✅ Pass |
+| **Total** | **190** | **✅ 99%** |
 
 ## Example Translations
 

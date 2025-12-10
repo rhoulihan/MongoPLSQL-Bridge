@@ -971,6 +971,26 @@ public final class ExpressionParser {
     if (input == null || sortBy == null) {
       throw new IllegalArgumentException("$sortArray requires 'input' and 'sortBy' fields");
     }
+
+    // Handle sortBy as a document (field-based sorting)
+    // e.g., {$sortArray: {input: "$products", sortBy: {totalRevenue: -1}}}
+    if (sortBy instanceof Document sortByDoc) {
+      if (sortByDoc.isEmpty()) {
+        throw new IllegalArgumentException("$sortArray sortBy document cannot be empty");
+      }
+      // Get the first (and typically only) field from sortBy document
+      Map.Entry<String, Object> sortEntry = sortByDoc.entrySet().iterator().next();
+      String sortField = sortEntry.getKey();
+      Object sortValue = sortEntry.getValue();
+      boolean ascending = true;
+      if (sortValue instanceof Number num) {
+        ascending = num.intValue() >= 0;
+      }
+      return ArrayExpression.sortArrayByField(parseValue(input), sortField, ascending);
+    }
+
+    // Handle sortBy as a number (simple value-based sorting)
+    // e.g., {$sortArray: {input: "$scores", sortBy: 1}}
     boolean ascending = true;
     if (sortBy instanceof Number num) {
       ascending = num.intValue() >= 0;

@@ -226,4 +226,53 @@ public interface SqlGenerationContext {
    * @return true if rendering a nested pipeline
    */
   boolean isNestedPipeline();
+
+  /**
+   * Sets whether the context is rendering within a CTE (Common Table Expression). In CTE context,
+   * field references should access the source table's columns directly rather than using JSON
+   * paths.
+   *
+   * @param inCte true if inside a CTE
+   */
+  void setInCteContext(boolean inCte);
+
+  /**
+   * Returns whether the context is rendering within a CTE.
+   *
+   * @return true if in CTE context
+   */
+  boolean isInCteContext();
+
+  /**
+   * Sets the source table for CTE field references. When in CTE context, field references should
+   * use this table's columns.
+   *
+   * @param sourceTable the CTE source table name
+   */
+  void setCteSourceTable(String sourceTable);
+
+  /**
+   * Gets the source table for CTE field references.
+   *
+   * @return the CTE source table name, or null if not in CTE context
+   */
+  String getCteSourceTable();
+
+  /**
+   * Registers compound _id fields from a previous CTE's GroupStage. When a subsequent CTE
+   * references "$_id.fieldName", it should be translated to just "fieldName" since compound _id
+   * fields are flattened to plain columns in CTEs.
+   *
+   * @param fields the set of field names from the compound _id expression
+   */
+  void registerCompoundIdFields(java.util.Set<String> fields);
+
+  /**
+   * Checks if a field name is a registered compound _id field. Used to translate "_id.fieldName"
+   * references to just "fieldName" in CTE context.
+   *
+   * @param fieldName the field name to check (without _id. prefix)
+   * @return true if this is a compound _id field, false otherwise
+   */
+  boolean isCompoundIdField(String fieldName);
 }

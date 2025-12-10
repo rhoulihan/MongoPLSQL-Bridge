@@ -61,7 +61,15 @@ public final class AddFieldsStage implements Stage {
       if (!first) {
         ctx.sql(", ");
       }
-      ctx.visit(entry.getValue());
+      Expression expr = entry.getValue();
+      // Oracle doesn't support boolean as column value, wrap in CASE WHEN
+      if (expr.isBooleanExpression()) {
+        ctx.sql("CASE WHEN ");
+        ctx.visit(expr);
+        ctx.sql(" THEN 1 ELSE 0 END");
+      } else {
+        ctx.visit(expr);
+      }
       ctx.sql(" AS ");
       ctx.identifier(entry.getKey());
       first = false;

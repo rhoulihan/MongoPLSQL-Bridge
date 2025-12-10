@@ -199,6 +199,16 @@ The test catalog (`docs/test-catalog.html`) shows pass/fail status for all cross
 ### CLI Tool (mongo2sql)
 The project includes a command-line tool for quick pipeline translation without writing Java code.
 
+**IMPORTANT FOR DEBUGGING:** When a test fails with an Oracle error, **ALWAYS use `--execute`** to see the actual SQL and Oracle error output. Do NOT rely on test report files - use the CLI directly:
+
+```bash
+# Debug a failing test - see actual SQL and Oracle error
+./mongo2sql -c orders --execute /tmp/oracle-connection.json pipeline.json
+
+# Connection file format (/tmp/oracle-connection.json):
+# {"jdbcUrl": "jdbc:oracle:thin:@localhost:1521/FREEPDB1", "user": "translator", "password": "translator123"}
+```
+
 ```bash
 # Basic usage - translate a pipeline file
 ./mongo2sql -c <collection_name> <pipeline-file.json>
@@ -206,28 +216,87 @@ The project includes a command-line tool for quick pipeline translation without 
 # With pretty-printed SQL output
 ./mongo2sql -c <collection_name> --pretty <pipeline-file.json>
 
-# Examples:
-./mongo2sql -c purchase_orders /tmp/pipeline.json
-./mongo2sql -c sales --pretty /tmp/complex-pipeline.json
+# Inline bind variables (useful for testing in SQL*Plus)
+./mongo2sql -c sales --inline --pretty pipeline.json
+
+# Execute directly against Oracle database
+./mongo2sql -c orders --execute connection.json pipeline.json
+
+# Save output to file
+./mongo2sql -c products --pretty --output result.sql pipeline.json
 ```
 
-**Pipeline file format** - A JSON array of aggregation stages:
+**Input File Formats:**
+
+1. **Single pipeline** (array of stages):
 ```json
-[
-  {"$match": {"status": "active"}},
-  {"$group": {"_id": "$category", "total": {"$sum": "$amount"}}}
-]
+[{"$match": {"status": "active"}}, {"$limit": 10}]
+```
+
+2. **Pipeline with metadata** (collection name in file):
+```json
+{
+  "name": "Active Orders Query",
+  "collection": "orders",
+  "pipeline": [{"$match": {"status": "active"}}]
+}
+```
+
+3. **Multiple pipelines** (batch translation):
+```json
+{
+  "pipelines": [
+    {"name": "P1", "collection": "orders", "pipeline": [...]},
+    {"name": "P2", "collection": "products", "pipeline": [...]}
+  ]
+}
 ```
 
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-c, --collection <name>` | Collection/table name (required) |
+| `-c, --collection <name>` | Collection/table name (overrides file setting) |
 | `-p, --pretty` | Pretty-print the SQL output |
+| `-i, --inline` | Inline bind variables into SQL (instead of `:1`, `:2`, etc.) |
+| `--no-hints` | Disable Oracle optimizer hints |
+| `--strict` | Fail on unsupported operators (instead of generating stub) |
+| `--data-column <name>` | JSON data column name (default: `data`) |
+| `-x, --execute <file>` | Execute SQL against Oracle using connection file |
+| `-o, --output <file>` | Write output to file instead of stdout |
+| `-v, --version` | Show version information |
+| `-h, --help` | Show help message |
+
+**Connection File Format** (for `--execute`):
+```json
+{
+  "jdbcUrl": "jdbc:oracle:thin:@localhost:1521/FREEPDB1",
+  "user": "translator",
+  "password": "translator123"
+}
+```
+
+**Examples:**
+```bash
+# Translate and view SQL
+./mongo2sql -c events --pretty pipeline.json
+
+# Translate with inlined values for copy-paste to SQL*Plus
+./mongo2sql -c events --inline --pretty pipeline.json
+
+# Execute against local Oracle container
+./mongo2sql -c events --execute /tmp/oracle-conn.json pipeline.json
+
+# Batch translate multiple pipelines
+./mongo2sql --pretty pipelines.json
+
+# Read from stdin
+echo '[{"$match": {"active": true}}]' | ./mongo2sql -c users --pretty
+```
 
 **Troubleshooting:**
 - If `./mongo2sql` doesn't work, ensure the JAR is built: `./gradlew build`
-- The tool reads from stdin if no file is provided: `echo '[{"$match":{}}]' | ./mongo2sql -c test`
+- For execution errors, check Oracle connection details in the connection file
+- Use `--strict` to identify unsupported operators during development
 
 ### Performance Benchmarks (JMH)
 ```bash

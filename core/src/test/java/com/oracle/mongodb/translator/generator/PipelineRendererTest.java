@@ -10,8 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
+import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
+import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
@@ -22,6 +24,8 @@ import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
+import com.oracle.mongodb.translator.ast.expression.SwitchExpression;
+import com.oracle.mongodb.translator.ast.expression.SwitchExpression.SwitchBranch;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
 import com.oracle.mongodb.translator.ast.stage.BucketStage;
@@ -2922,5 +2926,809 @@ class PipelineRendererTest {
     assertThat(sql).contains("posts");
     assertThat(sql).contains("recentPosts");
     assertThat(sql).contains("ORDER BY");
+  }
+
+  // Tests for pre-group $addFields (virtual fields used in GROUP BY aggregations)
+  @Test
+  void shouldNotRenderPreGroupAddFieldsAsStandaloneColumnsInGroupByQuery() {
+    // Pipeline: $addFields (computes isHighValue) -> $group (uses $isHighValue in aggregation)
+    // The pre-group $addFields fields should NOT appear as standalone columns in GROUP BY
+    // They should only be used as virtual fields for expression substitution
+
+    // Pre-group computed field: isHighValue = amount > 1000
+    var preGroupFields = new LinkedHashMap<String, Expression>();
+    preGroupFields.put(
+        "isHighValue",
+        new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("amount", JsonReturnType.NUMBER),
+            LiteralExpression.of(1000)));
+
+    // Group using the virtual field in aggregation
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "highValueCount",
+        AccumulatorExpression.sum(
+            ConditionalExpression.cond(
+                FieldPathExpression.of("isHighValue"),
+                LiteralExpression.of(1),
+                LiteralExpression.of(0))));
+    accumulators.put("totalCount", AccumulatorExpression.count());
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new AddFieldsStage(preGroupFields),
+            new GroupStage(FieldPathExpression.of("category"), accumulators));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // The SQL should contain the GROUP BY clause
+    assertThat(sql).contains("GROUP BY");
+    // The SQL should NOT contain "AS isHighValue" - pre-group fields should not be rendered
+    // as separate columns in a GROUP BY query, they're only for virtual field resolution
+    assertThat(sql).doesNotContain("AS isHighValue");
+  }
+
+  @Test
+  void shouldUseIsNotNullInPostGroupAddFieldsComparisonWithNull() {
+    // $group followed by $addFields with {$ne: [$userId, null]} should use IS NOT NULL
+    // not userId <> NULL which is invalid in Oracle
+
+    // $group stage that produces a userId column
+    Map<String, AccumulatorExpression> accumulators = new LinkedHashMap<>();
+    accumulators.put("userId", AccumulatorExpression.first(FieldPathExpression.of("userId")));
+    accumulators.put("count", AccumulatorExpression.count());
+
+    // $addFields stage after $group that checks if userId is not null
+    // isAuthenticated: {$ne: ["$userId", null]}
+    Map<String, Expression> postGroupFields = new LinkedHashMap<>();
+    postGroupFields.put(
+        "isAuthenticated",
+        new ComparisonExpression(
+            ComparisonOp.NE, FieldPathExpression.of("userId"), LiteralExpression.ofNull()));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new GroupStage(FieldPathExpression.of("sessionId"), accumulators),
+            new AddFieldsStage(postGroupFields));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE WHEN ... IS NOT NULL THEN 1 ELSE 0 END
+    // Oracle doesn't allow IS NOT NULL as a value expression in SELECT
+    assertThat(sql).contains("CASE WHEN userId IS NOT NULL THEN 1 ELSE 0 END");
+    assertThat(sql).doesNotContain("<> NULL");
+    assertThat(sql).doesNotContain("!= NULL");
+  }
+
+  @Test
+  void shouldUseIsNullInPostGroupAddFieldsComparisonWithNull() {
+    // $group followed by $addFields with {$eq: [$userId, null]} should use IS NULL
+    // not userId = NULL which is invalid in Oracle
+
+    // $group stage that produces a userId column
+    Map<String, AccumulatorExpression> accumulators = new LinkedHashMap<>();
+    accumulators.put("userId", AccumulatorExpression.first(FieldPathExpression.of("userId")));
+
+    // $addFields stage after $group that checks if userId is null
+    // isAnonymous: {$eq: ["$userId", null]}
+    Map<String, Expression> postGroupFields = new LinkedHashMap<>();
+    postGroupFields.put(
+        "isAnonymous",
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("userId"), LiteralExpression.ofNull()));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            new GroupStage(FieldPathExpression.of("sessionId"), accumulators),
+            new AddFieldsStage(postGroupFields));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE WHEN ... IS NULL THEN 1 ELSE 0 END
+    // Oracle doesn't allow IS NULL as a value expression in SELECT
+    assertThat(sql).contains("CASE WHEN userId IS NULL THEN 1 ELSE 0 END");
+    assertThat(sql).doesNotContain("= NULL");
+  }
+
+  @Test
+  void shouldWrapSetWindowFieldsAfterGroupInSubquery() {
+    // $group followed by $setWindowFields needs a two-level query:
+    // 1. Inner query: GROUP BY producing aggregated columns (totalSales, orderCount)
+    // 2. Outer query: Window functions referencing those columns by name
+    //
+    // MongoDB: {$group: {_id: "$region", totalSales: {$sum: "$amount"}}},
+    //          {$setWindowFields: {sortBy: {totalSales: -1}, output: {salesRank: {$rank: {}}}}}
+
+    Map<String, AccumulatorExpression> accumulators = new LinkedHashMap<>();
+    accumulators.put("totalSales", AccumulatorExpression.sum(FieldPathExpression.of("amount")));
+    accumulators.put("orderCount", AccumulatorExpression.count());
+
+    var windowField = new WindowField("$rank", null, null);
+    var setWindowFields =
+        new SetWindowFieldsStage(null, Map.of("totalSales", -1), Map.of("salesRank", windowField));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "sales",
+            new GroupStage(FieldPathExpression.of("region"), accumulators),
+            setWindowFields);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+
+    // Should have GROUP BY as inner subquery
+    assertThat(sql).contains("FROM (SELECT");
+    assertThat(sql).contains("GROUP BY");
+
+    // Window functions should reference the aggregated column name directly
+    // NOT base.data.totalSales (which doesn't exist in raw data)
+    assertThat(sql).contains("ORDER BY totalSales DESC");
+    assertThat(sql).contains("RANK()");
+    assertThat(sql).contains("salesRank");
+
+    // Should NOT reference base.data.totalSales in OVER clause
+    // because totalSales is computed by GROUP BY, not from raw data
+    assertThat(sql).doesNotContain("ORDER BY base.data.totalSales");
+    assertThat(sql).doesNotContain("ORDER BY JSON_VALUE(base.data, '$.totalSales'");
+  }
+
+  @Test
+  void shouldUseThreeLevelQueryWhenAddFieldsRefersToWindowFunctionResult() {
+    // When $addFields after $setWindowFields references a window function result,
+    // we need a 3-level query:
+    // 1. Inner: GROUP BY (produces totalSales)
+    // 2. Middle: Window functions (produces percentOfTotal)
+    // 3. Outer: $addFields (salesPercentage = totalSales / percentOfTotal * 100)
+    //
+    // This is because SQL doesn't allow referencing a column alias in the same SELECT
+
+    Map<String, AccumulatorExpression> accumulators = new LinkedHashMap<>();
+    accumulators.put("totalSales", AccumulatorExpression.sum(FieldPathExpression.of("amount")));
+    accumulators.put("orderCount", AccumulatorExpression.count());
+
+    // Window function to compute percentOfTotal
+    var windowSpec =
+        new SetWindowFieldsStage.WindowSpec("documents", List.of("unbounded", "unbounded"));
+    var sumWindowField = new WindowField("$sum", "$totalSales", windowSpec);
+    var setWindowFields =
+        new SetWindowFieldsStage(
+            null, Map.of("totalSales", -1), Map.of("percentOfTotal", sumWindowField));
+
+    // $addFields uses percentOfTotal (a window function result) to compute salesPercentage
+    Map<String, Expression> addFieldsMap = new LinkedHashMap<>();
+    addFieldsMap.put(
+        "salesPercentage",
+        ArithmeticExpression.multiply(
+            ArithmeticExpression.divide(
+                FieldPathExpression.of("totalSales"), FieldPathExpression.of("percentOfTotal")),
+            LiteralExpression.of(100)));
+    var addFields = new AddFieldsStage(addFieldsMap);
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "sales",
+            new GroupStage(FieldPathExpression.of("region"), accumulators),
+            setWindowFields,
+            addFields);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+
+    // Should have 3 levels of nesting (two FROM (SELECT patterns)
+    // Pattern: SELECT ... FROM (SELECT ... FROM (SELECT ... GROUP BY) inner_query) window_query
+    int fromSelectCount = countOccurrences(sql, "FROM (SELECT");
+    assertThat(fromSelectCount)
+        .as("Should have 2 FROM (SELECT patterns for 3-level query")
+        .isEqualTo(2);
+
+    // The innermost query should have GROUP BY
+    assertThat(sql).contains("GROUP BY");
+
+    // The middle query should have window functions
+    assertThat(sql).contains("SUM(totalSales) OVER");
+    assertThat(sql).contains("percentOfTotal");
+
+    // The outer query should have the $addFields expression
+    assertThat(sql).contains("salesPercentage");
+
+    // salesPercentage expression should use direct column references, not base.data.*
+    assertThat(sql).contains("totalSales /").as("Should divide by totalSales column");
+    assertThat(sql).contains("percentOfTotal").as("Should reference percentOfTotal column");
+  }
+
+  @Test
+  void shouldRenderSwitchExpressionInPostGroupAddFields() {
+    // This simulates COMPLEX023 where $bucket (a grouping stage) is followed by
+    // $addFields with a $switch expression that references $_id (the bucket boundary).
+    // The $switch should use direct column references, not base.data."_id"
+
+    // $bucket output has _id, count fields - simulate with $group
+    Map<String, AccumulatorExpression> accumulators = new LinkedHashMap<>();
+    accumulators.put("count", AccumulatorExpression.count());
+
+    // $addFields with $switch referencing $_id
+    // $switch: { branches: [{case: {$lt: ["$_id", 50]}, then: "Small"}], default: "Large"}
+    var switchExpr =
+        SwitchExpression.of(
+            List.of(
+                new SwitchBranch(
+                    new ComparisonExpression(
+                        ComparisonOp.LT, FieldPathExpression.of("_id"), LiteralExpression.of(50)),
+                    LiteralExpression.of("Small (<50)")),
+                new SwitchBranch(
+                    new ComparisonExpression(
+                        ComparisonOp.LT, FieldPathExpression.of("_id"), LiteralExpression.of(100)),
+                    LiteralExpression.of("Medium (50-99)"))),
+            LiteralExpression.of("Large"));
+
+    Map<String, Expression> addFieldsMap = new LinkedHashMap<>();
+    addFieldsMap.put("sizeCategory", switchExpr);
+    var addFields = new AddFieldsStage(addFieldsMap);
+
+    // Use $group to simulate $bucket (both are grouping stages)
+    Pipeline pipeline =
+        Pipeline.of(
+            "events",
+            new GroupStage(FieldPathExpression.of("attendees"), accumulators),
+            addFields);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The $switch in $addFields should use column names, not JSON paths
+    // Should NOT contain base.data."_id" - should use direct column reference "_id"
+    assertThat(sql)
+        .as("$switch in post-group $addFields should NOT use base.data paths")
+        .doesNotContain("base.data.\"_id\"");
+    assertThat(sql).contains("CASE WHEN");
+    assertThat(sql).contains("\"_id\" <").as("Should reference _id as column, not JSON path");
+  }
+
+  // ==========================================================================
+  // CTE Generation Tests - Multiple $group stages require WITH clause
+  // ==========================================================================
+
+  @Test
+  void shouldGenerateCteForTwoGroupStages() {
+    // First $group: group by category, sum amount
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    firstAccums.put(
+        "totalRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount")));
+    GroupStage firstGroup = new GroupStage(FieldPathExpression.of("category"), firstAccums);
+
+    // Second $group: group by region (from first group output), sum totalRevenue
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    secondAccums.put(
+        "grandTotal",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalRevenue")));
+    GroupStage secondGroup = new GroupStage(FieldPathExpression.of("_id.region"), secondAccums);
+
+    Pipeline pipeline = Pipeline.of("orders", firstGroup, secondGroup);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should generate WITH clause for CTE pattern
+    assertThat(sql)
+        .as("Two $group stages should generate WITH clause for CTE")
+        .containsIgnoringCase("WITH");
+
+    // First group should be in CTE
+    assertThat(sql).containsPattern("(?i)WITH\\s+\\w+\\s+AS\\s*\\(");
+
+    // Should have two GROUP BY clauses (one in CTE, one in final query)
+    int groupByCount = countOccurrences(sql.toUpperCase(), "GROUP BY");
+    assertThat(groupByCount)
+        .as("Should have two GROUP BY clauses for two $group stages")
+        .isEqualTo(2);
+  }
+
+  @Test
+  void shouldReferenceCtePreviousGroupOutputInSecondGroup() {
+    // First $group: group by category, sum amount -> outputs: _id (category), totalRevenue
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    firstAccums.put(
+        "totalRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount")));
+    GroupStage firstGroup = new GroupStage(FieldPathExpression.of("category"), firstAccums);
+
+    // Second $group references first group's output field totalRevenue
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    secondAccums.put(
+        "grandTotal",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalRevenue")));
+    GroupStage secondGroup = new GroupStage(LiteralExpression.ofNull(), secondAccums);
+
+    Pipeline pipeline = Pipeline.of("orders", firstGroup, secondGroup);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The final query should reference the CTE, not the original collection
+    // It should reference 'totalRevenue' as a column from CTE, not JSON path
+    assertThat(sql)
+        .as("Second $group should reference CTE output field, not JSON path")
+        .containsIgnoringCase("SUM(totalRevenue)")
+        .doesNotContainIgnoringCase("SUM(JSON_VALUE");
+  }
+
+  @Test
+  void shouldGenerateCteWithProperNaming() {
+    // First $group
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    AccumulatorExpression sumAmount =
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount"));
+    firstAccums.put("total", sumAmount);
+    GroupStage firstGroup = new GroupStage(FieldPathExpression.of("category"), firstAccums);
+
+    // Second $group
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    AccumulatorExpression sumTotal =
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("total"));
+    secondAccums.put("grandTotal", sumTotal);
+    GroupStage secondGroup = new GroupStage(FieldPathExpression.of("region"), secondAccums);
+
+    Pipeline pipeline = Pipeline.of("orders", firstGroup, secondGroup);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // CTE should have a meaningful name pattern like cte_group_0 or stage_group1
+    assertThat(sql)
+        .as("CTE should have proper naming convention")
+        .containsPattern("(?i)WITH\\s+(cte_\\w+|stage_\\w+)\\s+AS");
+  }
+
+  private int countOccurrences(String str, String pattern) {
+    int count = 0;
+    int idx = 0;
+    while ((idx = str.indexOf(pattern, idx)) != -1) {
+      count++;
+      idx += pattern.length();
+    }
+    return count;
+  }
+
+  // ============================================================================
+  // Phase 4: Post-Group Project Integration Tests (COMPLEX028 pattern)
+  // ============================================================================
+
+  @Test
+  void shouldRenderMultiGroupWithProjectSlice() {
+    // COMPLEX028 pattern: $group -> $group with $push -> $project with $slice($sortArray(...))
+    // First $group: group by category with sum
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    firstAccums.put(
+        "totalRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount")));
+    final GroupStage firstGroup = new GroupStage(FieldPathExpression.of("category"), firstAccums);
+
+    // Second $group: group by region, push products into array
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    secondAccums.put(
+        "totalCategoryRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalRevenue")));
+    secondAccums.put(
+        "products",
+        new AccumulatorExpression(AccumulatorOp.PUSH, FieldPathExpression.of("$ROOT")));
+    GroupStage secondGroup = new GroupStage(FieldPathExpression.of("_id.region"), secondAccums);
+
+    // $project with $slice on $sortArray(products, {totalRevenue: -1})
+    ArrayExpression sortedProducts =
+        ArrayExpression.sortArrayByField(FieldPathExpression.of("products"), "totalRevenue", false);
+    ArrayExpression topProducts = ArrayExpression.slice(sortedProducts, LiteralExpression.of(3));
+    Map<String, ProjectionField> projections = new LinkedHashMap<>();
+    projections.put("_id", ProjectionField.exclude());
+    projections.put("region", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put(
+        "totalCategoryRevenue",
+        ProjectionField.include(FieldPathExpression.of("totalCategoryRevenue")));
+    projections.put("topProducts", ProjectionField.include(topProducts));
+    ProjectStage project = new ProjectStage(projections, false);
+
+    Pipeline pipeline = Pipeline.of("orders", firstGroup, secondGroup, project);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should have CTE for first $group
+    assertThat(sql).as("Should have WITH clause for multi-group pipeline").contains("WITH");
+    assertThat(sql)
+        .as("CTE should have proper naming convention")
+        .containsPattern("(?i)cte_\\w+\\s+AS");
+
+    // Final query should select from CTE and include $project fields
+    assertThat(sql).as("Should have region field").containsIgnoringCase("region");
+    assertThat(sql).as("Should have totalCategoryRevenue field").contains("totalCategoryRevenue");
+
+    // $project with $slice should be in the final SELECT clause (not GROUP BY)
+    // The $slice($sortArray(...)) should translate to Oracle JSON_TRANSFORM or similar
+    assertThat(sql)
+        .as("Should have topProducts or slice in final SELECT")
+        .containsAnyOf("topProducts", "JSON_TRANSFORM", "FETCH FIRST", "ROWNUM");
+  }
+
+  @Test
+  void shouldRenderMultiGroupCteWithFinalProjectFields() {
+    // Simpler test: two $groups followed by $project that renames fields
+    // First $group
+    AccumulatorExpression sumAmt =
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount"));
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    firstAccums.put("total", sumAmt);
+    final GroupStage firstGroup = new GroupStage(FieldPathExpression.of("category"), firstAccums);
+
+    // Second $group
+    AccumulatorExpression sumTot =
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("total"));
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    secondAccums.put("grandTotal", sumTot);
+    GroupStage secondGroup = new GroupStage(FieldPathExpression.of("region"), secondAccums);
+
+    // $project to rename fields
+    Map<String, ProjectionField> projections = new LinkedHashMap<>();
+    projections.put("_id", ProjectionField.exclude());
+    projections.put("regionName", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("revenue", ProjectionField.include(FieldPathExpression.of("grandTotal")));
+    ProjectStage project = new ProjectStage(projections, false);
+
+    Pipeline pipeline = Pipeline.of("orders", firstGroup, secondGroup, project);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should have CTE structure
+    assertThat(sql).as("Should have WITH clause").contains("WITH");
+    assertThat(sql).as("CTE should reference first group").containsPattern("(?i)cte_group_0");
+
+    // Final SELECT should use $project field aliases
+    assertThat(sql)
+        .as("Final SELECT should have regionName alias from $project")
+        .containsIgnoringCase("regionName");
+    assertThat(sql)
+        .as("Final SELECT should have revenue alias from $project")
+        .containsIgnoringCase("revenue");
+
+    // Should NOT have the original field names in the final SELECT
+    // (They may appear in the CTE, but final output should use $project aliases)
+  }
+
+  @Test
+  void shouldRenderCteWithUnwindAndLookupBeforeFirstGroup() {
+    // COMPLEX028-like pattern:
+    // $unwind -> $lookup -> $unwind -> $group -> $group
+    // The first CTE must include the unwind/lookup as JOIN operations
+
+    // $unwind on items array
+    UnwindStage unwindItems = new UnwindStage("items");
+
+    // $lookup to join with products collection
+    LookupStage lookup =
+        LookupStage.equality("products", "items.productId", "_id", "productInfo");
+
+    // $unwind on productInfo
+    UnwindStage unwindProductInfo = new UnwindStage("productInfo");
+
+    // First $group: group by product with aggregates
+    Map<String, AccumulatorExpression> firstAccums = new LinkedHashMap<>();
+    firstAccums.put(
+        "totalQuantity",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("items.quantity")));
+    GroupStage firstGroup =
+        new GroupStage(FieldPathExpression.of("productInfo.category"), firstAccums);
+
+    // Second $group: aggregate again by a different field
+    Map<String, AccumulatorExpression> secondAccums = new LinkedHashMap<>();
+    secondAccums.put(
+        "grandTotal",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalQuantity")));
+    GroupStage secondGroup = new GroupStage(LiteralExpression.ofNull(), secondAccums);
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders", unwindItems, lookup, unwindProductInfo, firstGroup, secondGroup);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should have WITH clause for multi-group pipeline
+    assertThat(sql).as("Should have WITH clause").contains("WITH");
+    assertThat(sql).as("Should have CTE").containsPattern("(?i)cte_group_0\\s+AS");
+
+    // First CTE MUST include the $lookup as a JOIN - not just reference unresolved field paths
+    // This is the key assertion: we need JOIN for $lookup in the CTE
+    assertThat(sql)
+        .as("First CTE should include JOIN for $lookup")
+        .containsIgnoringCase("JOIN");
+
+    // The CTE should have a proper FROM clause with the joined tables
+    assertThat(sql)
+        .as("CTE should reference the products table")
+        .containsIgnoringCase("products");
+
+    // Field paths referencing the lookup alias (productInfo) should resolve
+    // to the joined table's data column, NOT be bare references like "productInfo.category"
+    assertThat(sql)
+        .as("Field paths should NOT contain unresolved productInfo references")
+        .doesNotContainIgnoringCase("productInfo.category");
+
+    // Unwind stages should be rendered as CROSS APPLY with JSON_TABLE
+    assertThat(sql)
+        .as("CTE should include CROSS APPLY for $unwind")
+        .containsIgnoringCase("CROSS APPLY");
+    assertThat(sql)
+        .as("CTE should include JSON_TABLE for $unwind")
+        .containsIgnoringCase("JSON_TABLE");
+  }
+
+  @Test
+  void shouldNotRenderCrossApplyForUnwindOnLookupAlias() {
+    // When $unwind is on a lookup alias, it should NOT generate CROSS APPLY JSON_TABLE
+    // because the lookup already provides the joined data via LEFT OUTER JOIN.
+    // The $unwind effectively converts it to INNER JOIN (filters null matches).
+    //
+    // Pipeline: $lookup -> $unwind on lookup alias -> $group
+    LookupStage lookup =
+        LookupStage.equality("products", "productId", "_id", "productInfo");
+
+    // $unwind on the lookup alias
+    UnwindStage unwindProductInfo = new UnwindStage("productInfo");
+
+    // Simple $group for this test
+    Map<String, AccumulatorExpression> accums = new LinkedHashMap<>();
+    accums.put(
+        "total",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("productInfo.price")));
+    GroupStage group = new GroupStage(FieldPathExpression.of("productInfo.category"), accums);
+
+    Pipeline pipeline = Pipeline.of("orders", lookup, unwindProductInfo, group);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should NOT have JSON_TABLE on productInfo - that's a lookup alias, not a base field
+    assertThat(sql)
+        .as("Should NOT generate JSON_TABLE for lookup alias productInfo")
+        .doesNotContain("$.productInfo");
+
+    // Should have JOIN for the lookup
+    assertThat(sql)
+        .as("Should have JOIN for $lookup")
+        .containsIgnoringCase("JOIN");
+
+    // Field paths referencing productInfo should use the lookup table alias
+    assertThat(sql)
+        .as("productInfo.category should resolve to lookup table")
+        .containsIgnoringCase("products");
+  }
+
+  @Test
+  void shouldResolveLookupLocalFieldToUnwoundValue() {
+    // When $lookup follows $unwind, the localField should reference the unwound value
+    //
+    // Pipeline: $unwind items -> $lookup using items.productId
+    UnwindStage unwindItems = new UnwindStage("items");
+
+    LookupStage lookup =
+        LookupStage.equality("products", "items.productId", "_id", "productInfo");
+
+    // Simple $group
+    Map<String, AccumulatorExpression> accums = new LinkedHashMap<>();
+    accums.put(
+        "total",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("productInfo.price")));
+    GroupStage group = new GroupStage(FieldPathExpression.of("productInfo.category"), accums);
+
+    Pipeline pipeline = Pipeline.of("orders", unwindItems, lookup, group);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The lookup ON condition should reference the unwound value, not base.data.items.productId
+    // After $unwind: "$items", items.productId should be unwind_1.value.productId
+    assertThat(sql)
+        .as("Lookup localField should NOT reference base.data.items")
+        .doesNotContain("base.data, '$.items.productId'");
+
+    // Should reference the unwind alias for the localField
+    assertThat(sql)
+        .as("Lookup ON clause should reference unwound value")
+        .containsPattern("(?i)unwind.*value.*productId");
+  }
+
+  @Test
+  void shouldSkipCrossApplyForUnwindOnLookupAliasInMultiGroupCte() {
+    // When $unwind is on a lookup alias in a multi-group CTE pipeline,
+    // it should NOT generate CROSS APPLY JSON_TABLE because the lookup
+    // already produces the joined data via LEFT OUTER JOIN.
+    //
+    // This is the COMPLEX028 pattern:
+    // $unwind: "$items" -> $lookup: {as: "productInfo"} -> $unwind: "$productInfo"
+    //   -> $group1 -> $group2
+    //
+    // The second $unwind on "productInfo" should NOT generate JSON_TABLE
+    // because "productInfo" comes from the $lookup, not from a base document array.
+
+    UnwindStage unwindItems = new UnwindStage("items");
+    LookupStage lookup =
+        LookupStage.equality("products", "items.productId", "_id", "productInfo");
+    UnwindStage unwindProductInfo = new UnwindStage("productInfo");
+
+    // First group: group by productInfo.category
+    Map<String, AccumulatorExpression> accums1 = new LinkedHashMap<>();
+    accums1.put(
+        "totalQuantity",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("items.quantity")));
+    GroupStage group1 = new GroupStage(FieldPathExpression.of("productInfo.category"), accums1);
+
+    // Second group: group by _id (which is category from first group)
+    Map<String, AccumulatorExpression> accums2 = new LinkedHashMap<>();
+    accums2.put(
+        "totalCategoryQuantity",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalQuantity")));
+    GroupStage group2 = new GroupStage(FieldPathExpression.of("_id"), accums2);
+
+    Pipeline pipeline =
+        Pipeline.of("orders", unwindItems, lookup, unwindProductInfo, group1, group2);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should NOT have JSON_TABLE for productInfo (it's a lookup alias, not an array field)
+    assertThat(sql)
+        .as("Should NOT generate JSON_TABLE for lookup alias productInfo")
+        .doesNotContain("$.productInfo[*]");
+
+    // Should have the lookup JOIN
+    assertThat(sql).as("Should have JOIN for $lookup").containsIgnoringCase("JOIN");
+
+    // Should have CROSS APPLY for items (a real array field)
+    assertThat(sql).as("Should have JSON_TABLE for items array").contains("$.items[*]");
+  }
+
+  @Test
+  void shouldResolveCompoundIdFieldsInSecondCteGroup() {
+    // When first group has compound _id and second group references $_id.fieldName,
+    // the second CTE should use just "fieldName" since first CTE outputs it as a column
+
+    // First group: compound _id with category and productId
+    Map<String, Expression> compoundFields = new LinkedHashMap<>();
+    compoundFields.put("category", FieldPathExpression.of("category"));
+    compoundFields.put("productId", FieldPathExpression.of("_id"));
+    CompoundIdExpression compoundId = new CompoundIdExpression(compoundFields);
+
+    Map<String, AccumulatorExpression> accums1 = new LinkedHashMap<>();
+    accums1.put(
+        "totalRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("price")));
+    GroupStage group1 = new GroupStage(compoundId, accums1);
+
+    // Second group: group by $_id.category (referencing compound _id field from first group)
+    Map<String, AccumulatorExpression> accums2 = new LinkedHashMap<>();
+    accums2.put(
+        "totalCategoryRevenue",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalRevenue")));
+    GroupStage group2 = new GroupStage(FieldPathExpression.of("_id.category"), accums2);
+
+    Pipeline pipeline = Pipeline.of("products", group1, group2);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Second CTE should reference "category" not "_id.category"
+    // because first CTE outputs compound _id fields as plain columns
+    assertThat(sql)
+        .as("Second CTE should use plain column name 'category', not '_id.category'")
+        .contains("GROUP BY category");
+
+    // Should NOT have "_id.category" in the SQL since compound _id is flattened
+    assertThat(sql)
+        .as("Should not have _id.category since compound _id is flattened")
+        .doesNotContain("_id.category");
+  }
+
+  @Test
+  void shouldInlineValuesInCteContext() {
+    // When inlineValues=true, bind variables should be inlined in CTE context
+    // This tests the fix for COMPLEX024 where $sum: 1 and $round precision were
+    // generating bind placeholders (:1, :2, etc.) instead of inline values
+
+    // Create context with inlineValues=true
+    final DefaultSqlGenerationContext inlineContext =
+        new DefaultSqlGenerationContext(true, null, "base");
+
+    // First group: simple count with $sum: 1
+    Map<String, AccumulatorExpression> accums1 = new LinkedHashMap<>();
+    accums1.put(
+        "orderCount",
+        new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    accums1.put(
+        "totalAmount",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("amount")));
+    GroupStage group1 = new GroupStage(FieldPathExpression.of("category"), accums1);
+
+    // Second group: aggregate across categories
+    Map<String, AccumulatorExpression> accums2 = new LinkedHashMap<>();
+    accums2.put(
+        "grandTotal",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("totalAmount")));
+    GroupStage group2 = new GroupStage(FieldPathExpression.of("region"), accums2);
+
+    Pipeline pipeline = Pipeline.of("orders", group1, group2);
+
+    renderer.render(pipeline, inlineContext);
+    String sql = inlineContext.toSql();
+
+    // Should NOT contain bind variable placeholders when inlineValues=true
+    assertThat(sql)
+        .as("CTE context should inline values, not use bind variables")
+        .doesNotContain(":1")
+        .doesNotContain(":2")
+        .doesNotContain(":3");
+
+    // Should contain inline literal "1" for the SUM(1)
+    assertThat(sql)
+        .as("Should have inline SUM(1) in CTE")
+        .contains("SUM(1)");
+  }
+
+  @Test
+  void shouldRenderMatchStageInCteContext() {
+    // Pipeline: $match -> $group1 -> $group2
+    // The $match filter should appear as WHERE clause in the first CTE
+    // This tests fix for COMPLEX024 where $match before $group is ignored in CTE
+
+    // $match: {status: "active"}
+    Expression matchFilter =
+        new ComparisonExpression(
+            ComparisonOp.EQ, FieldPathExpression.of("status"), LiteralExpression.of("active"));
+    MatchStage match = new MatchStage(matchFilter);
+
+    // First group: count by category
+    Map<String, AccumulatorExpression> accums1 = new LinkedHashMap<>();
+    accums1.put(
+        "orderCount",
+        new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    GroupStage group1 = new GroupStage(FieldPathExpression.of("category"), accums1);
+
+    // Second group: total across categories
+    Map<String, AccumulatorExpression> accums2 = new LinkedHashMap<>();
+    accums2.put(
+        "grandTotal",
+        new AccumulatorExpression(AccumulatorOp.SUM, FieldPathExpression.of("orderCount")));
+    GroupStage group2 = new GroupStage(null, accums2);
+
+    Pipeline pipeline = Pipeline.of("orders", match, group1, group2);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The CTE should have a WHERE clause for the $match filter
+    assertThat(sql)
+        .as("CTE should include WHERE clause for $match filter")
+        .containsIgnoringCase("WHERE");
+
+    // Should have the status comparison in the WHERE clause
+    // With bind variables, it will be "status = :N" (bind var for "active")
+    assertThat(sql)
+        .as("CTE should filter by status field")
+        .contains("status");
+
+    // Verify WHERE clause appears before GROUP BY (proper SQL order)
+    int whereIdx = sql.indexOf("WHERE");
+    int groupByIdx = sql.indexOf("GROUP BY");
+    assertThat(whereIdx)
+        .as("WHERE should come before GROUP BY in CTE")
+        .isLessThan(groupByIdx);
   }
 }

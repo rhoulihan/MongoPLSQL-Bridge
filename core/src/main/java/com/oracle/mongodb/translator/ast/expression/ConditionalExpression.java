@@ -98,12 +98,49 @@ public final class ConditionalExpression implements Expression {
 
   private void renderCond(SqlGenerationContext ctx) {
     ctx.sql("CASE WHEN ");
+    // Handle FieldPathExpression as boolean condition - Oracle requires explicit comparison
+    // MongoDB $cond: ["$boolField", ...] uses truthy evaluation, but Oracle CASE WHEN
+    // needs a boolean expression, and JSON field access doesn't return SQL boolean directly.
+    // However, if the field path resolves to a virtual field that is already a boolean
+    // expression (like $gt, $lt, etc.), we should NOT add "= true".
+    boolean needsBooleanCoercion = false;
+    if (condition instanceof FieldPathExpression fp) {
+      // Check if this resolves to a virtual field that is a boolean expression
+      String path = fp.getPath();
+      String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+      if (normalizedPath.startsWith(".")) {
+        normalizedPath = normalizedPath.substring(1);
+      }
+      Expression virtualExpr = ctx.getVirtualField(normalizedPath);
+      if (virtualExpr == null) {
+        // Not a virtual field - this is a raw JSON field reference that needs boolean coercion
+        needsBooleanCoercion = true;
+      } else {
+        // Virtual field - check if it's already a boolean expression
+        needsBooleanCoercion = !isBooleanExpression(virtualExpr);
+      }
+    }
+
     ctx.visit(condition);
+
+    if (needsBooleanCoercion) {
+      ctx.sql(" = true");
+    }
     ctx.sql(" THEN ");
     ctx.visit(thenExpr);
     ctx.sql(" ELSE ");
     ctx.visit(elseExpr);
     ctx.sql(" END");
+  }
+
+  /**
+   * Checks if an expression produces a boolean value (SQL predicate).
+   * Boolean expressions don't need "= true" when used as CASE WHEN conditions.
+   */
+  private boolean isBooleanExpression(Expression expr) {
+    return expr instanceof ComparisonExpression
+        || expr instanceof LogicalExpression
+        || expr instanceof InExpression;
   }
 
   private void renderIfNull(SqlGenerationContext ctx) {

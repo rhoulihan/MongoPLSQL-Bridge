@@ -156,6 +156,11 @@ public final class ComparisonExpression implements Expression {
   }
 
   @Override
+  public boolean isBooleanExpression() {
+    return true;
+  }
+
+  @Override
   public String toString() {
     return "Comparison(" + left + " " + op + " " + right + ")";
   }

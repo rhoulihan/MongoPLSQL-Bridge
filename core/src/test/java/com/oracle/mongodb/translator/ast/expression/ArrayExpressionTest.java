@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -347,6 +348,39 @@ class ArrayExpressionTest {
     assertThat(sql).contains("$.items");
     // Should use nested path for field access
     assertThat(sql).contains("$.price");
+  }
+
+  @Test
+  void shouldRenderReduceWithNestedArithmeticExpression() {
+    // MongoDB: {$reduce: {input: "$items", initialValue: 0,
+    //           in: {$add: ["$$value", {$multiply: ["$$this.qty", "$$this.price"]}]}}}
+    // This is used in COMPLEX027 to calculate order totals
+    // Oracle: (SELECT NVL(SUM(qty * price), 0) FROM JSON_TABLE(...))
+    var multiplyExpr =
+        new ArithmeticExpression(
+            ArithmeticOp.MULTIPLY,
+            List.of(
+                FieldPathExpression.of("$this.qty"),
+                FieldPathExpression.of("$this.price")));
+    var addExpr =
+        new ArithmeticExpression(
+            ArithmeticOp.ADD,
+            List.of(FieldPathExpression.of("$value"), multiplyExpr));
+    var expr =
+        ArrayExpression.reduce(FieldPathExpression.of("items"), LiteralExpression.of(0), addExpr);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should translate $reduce with nested arithmetic to SQL SUM
+    assertThat(sql).containsIgnoringCase("SUM");
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.items");
+    // Should extract both qty and price fields
+    assertThat(sql).contains("qty");
+    assertThat(sql).contains("price");
+    // Should NOT contain the "not supported" message
+    assertThat(sql).doesNotContain("not supported");
   }
 
   @Test
@@ -1039,5 +1073,230 @@ class ArrayExpressionTest {
         ArrayExpression.zip(
             List.of(FieldPathExpression.of("arr1"), FieldPathExpression.of("arr2")));
     assertThat(expr.toString()).contains("$zip");
+  }
+
+  // ==================== $sortArray with Field-Based sortBy Tests ====================
+
+  @Test
+  void shouldRenderSortArrayByFieldDescending() {
+    // MongoDB: {$sortArray: {input: "$products", sortBy: {totalRevenue: -1}}}
+    // Oracle: (SELECT JSON_ARRAYAGG(val FORMAT JSON ORDER BY totalRevenue DESC)
+    //         FROM JSON_TABLE(data, '$.products[*]'
+    //         COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$',
+    //                  totalRevenue NUMBER PATH '$.totalRevenue')))
+    var expr =
+        ArrayExpression.sortArrayByField(
+            FieldPathExpression.of("products"), "totalRevenue", false);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("JSON_TABLE");
+    // Should order by the field name
+    assertThat(sql).containsIgnoringCase("ORDER BY");
+    assertThat(sql).contains("totalRevenue");
+    assertThat(sql).containsIgnoringCase("DESC");
+    // Should preserve the full JSON object, not just extract the sort field
+    assertThat(sql).containsIgnoringCase("FORMAT JSON");
+  }
+
+  @Test
+  void shouldRenderSortArrayByFieldAscending() {
+    // MongoDB: {$sortArray: {input: "$items", sortBy: {price: 1}}}
+    var expr =
+        ArrayExpression.sortArrayByField(FieldPathExpression.of("items"), "price", true);
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_ARRAYAGG");
+    assertThat(sql).contains("ORDER BY");
+    assertThat(sql).contains("price");
+    assertThat(sql).containsIgnoringCase("ASC");
+  }
+
+  @Test
+  void shouldReturnSortFieldFromArrayExpression() {
+    var expr =
+        ArrayExpression.sortArrayByField(
+            FieldPathExpression.of("products"), "totalRevenue", false);
+
+    assertThat(expr.getSortField()).isEqualTo("totalRevenue");
+  }
+
+  // ==================== $map with Object Transformation Tests ====================
+
+  @Test
+  void shouldRenderMapWithObjectTransformation() {
+    // MongoDB: {$map: {input: "$items", as: "item", in: {
+    //   product: "$$item.product",
+    //   qty: "$$item.qty",
+    //   price: "$$item.price",
+    //   lineTotal: {$multiply: ["$$item.qty", "$$item.price"]}
+    // }}}
+    // This is used in COMPLEX027 to transform items array
+    // Oracle: Should use JSON_TABLE with columns for each referenced field
+
+    // Build the object transformation expression
+    Map<String, Expression> fields = new java.util.LinkedHashMap<>();
+    fields.put("product", FieldPathExpression.of("$item.product"));
+    fields.put("qty", FieldPathExpression.of("$item.qty"));
+    fields.put("price", FieldPathExpression.of("$item.price"));
+    fields.put(
+        "lineTotal",
+        new ArithmeticExpression(
+            ArithmeticOp.MULTIPLY,
+            List.of(
+                FieldPathExpression.of("$item.qty"),
+                FieldPathExpression.of("$item.price"))));
+
+    var inlineObj = new InlineObjectExpression(fields);
+    var expr = ArrayExpression.map(FieldPathExpression.of("items"), inlineObj);
+
+    var contextWithAlias = new DefaultSqlGenerationContext(false, null, "base");
+    expr.render(contextWithAlias);
+
+    String sql = contextWithAlias.toSql();
+    // Should generate JSON_TABLE with columns
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.items");
+    // Should have columns for each referenced field
+    assertThat(sql).containsIgnoringCase("product");
+    assertThat(sql).containsIgnoringCase("qty");
+    assertThat(sql).containsIgnoringCase("price");
+    // Should generate JSON_OBJECT
+    assertThat(sql).contains("JSON_OBJECT");
+    // Should NOT have invalid Oracle dot notation
+    assertThat(sql).doesNotContain("base.data.item.product");
+    assertThat(sql).doesNotContain("base.data.item.qty");
+    assertThat(sql).doesNotContain("base.data.item.price");
+  }
+
+  @Test
+  void shouldRenderFilterWithNestedArithmeticCondition() {
+    // MongoDB: {$filter: {input: "$items", as: "item", cond: {$gte: [{$multiply:
+    //   ["$$item.qty", "$$item.price"]}, 100]}}}
+    // This is used in COMPLEX027 to filter high-value items
+    // Oracle: Should use JSON_TABLE with columns for qty and price, then
+    //   WHERE (qty * price) >= 100
+
+    // Build the condition: {$gte: [{$multiply: ["$item.qty", "$item.price"]}, 100]}
+    var multiplyExpr =
+        new ArithmeticExpression(
+            ArithmeticOp.MULTIPLY,
+            List.of(
+                FieldPathExpression.of("$item.qty"), FieldPathExpression.of("$item.price")));
+    var condition =
+        new ComparisonExpression(ComparisonOp.GTE, multiplyExpr, LiteralExpression.of(100));
+
+    var expr = ArrayExpression.filter(FieldPathExpression.of("items"), condition);
+
+    var contextWithAlias = new DefaultSqlGenerationContext(false, null, "base");
+    expr.render(contextWithAlias);
+
+    String sql = contextWithAlias.toSql();
+
+    // Should generate JSON_TABLE with columns for qty and price
+    assertThat(sql).contains("JSON_TABLE");
+    assertThat(sql).contains("$.items");
+    assertThat(sql).containsIgnoringCase("qty");
+    assertThat(sql).containsIgnoringCase("price");
+
+    // Should use column references in WHERE clause (qty * price) >= 100
+    // Note: the arithmetic should use the column names, not base.data.item paths
+    assertThat(sql).doesNotContain("base.data.item.qty");
+    assertThat(sql).doesNotContain("base.data.item.price");
+
+    // Should have WHERE clause with the arithmetic condition
+    assertThat(sql).containsIgnoringCase("WHERE");
+  }
+
+  // ==================== CTE Context Tests ====================
+
+  @Test
+  void shouldRenderSortArrayByFieldInCteContext() {
+    // In CTE context, "products" is a plain column name (an array from $push accumulator)
+    // $sortArray: {input: "$products", sortBy: {totalRevenue: -1}}
+    // Should NOT generate: JSON_TABLE(cte.data, '$.products[*]' ...)
+    // SHOULD generate: JSON_TABLE(products, '$[*]' ...)
+    var expr =
+        ArrayExpression.sortArrayByField(
+            FieldPathExpression.of("products"), "totalRevenue", false);
+
+    // Create context in CTE mode
+    var cteContext = new DefaultSqlGenerationContext(true, null, "cte_group_1");
+    cteContext.setInCteContext(true);
+
+    expr.render(cteContext);
+
+    String sql = cteContext.toSql();
+
+    // In CTE context, the column is the array, so JSON_TABLE path should be '$[*]'
+    // NOT '$.products[*]' since we're not accessing data.products, just the column itself
+    assertThat(sql)
+        .as("CTE context should reference column directly, not via .data")
+        .doesNotContain("cte_group_1.data");
+    assertThat(sql)
+        .as("CTE context should use '$[*]' path since column IS the array")
+        .contains("'$[*]'");
+    assertThat(sql)
+        .as("Should still have ORDER BY")
+        .containsIgnoringCase("ORDER BY");
+    assertThat(sql)
+        .as("Should order by totalRevenue")
+        .contains("totalRevenue");
+  }
+
+  @Test
+  void shouldRenderSliceOnSortArrayInCteContext() {
+    // $slice($sortArray($products, {totalRevenue: -1}), 3) in CTE context
+    var sortedProducts =
+        ArrayExpression.sortArrayByField(
+            FieldPathExpression.of("products"), "totalRevenue", false);
+    var slicedProducts = ArrayExpression.slice(sortedProducts, LiteralExpression.of(3));
+
+    var cteContext = new DefaultSqlGenerationContext(true, null, "cte_group_1");
+    cteContext.setInCteContext(true);
+
+    slicedProducts.render(cteContext);
+
+    String sql = cteContext.toSql();
+
+    // Should not reference cte_group_1.data
+    assertThat(sql)
+        .as("CTE context should not reference .data column")
+        .doesNotContain(".data");
+    // Should limit to 3 rows
+    assertThat(sql)
+        .as("Should limit results")
+        .containsIgnoringCase("FETCH FIRST 3 ROWS ONLY");
+  }
+
+  @Test
+  void shouldRenderSizeInCteContext() {
+    // In CTE context, "states" is a plain column name (an array from $addToSet accumulator)
+    // $size: "$states" should generate: JSON_VALUE(states, '$.size()' RETURNING NUMBER)
+    // NOT: JSON_VALUE(cte_group_0.data, '$.states.size()' RETURNING NUMBER)
+    var expr = ArrayExpression.size(FieldPathExpression.of("states"));
+
+    // Create context in CTE mode
+    var cteContext = new DefaultSqlGenerationContext(true, null, "cte_group_0");
+    cteContext.setInCteContext(true);
+
+    expr.render(cteContext);
+
+    String sql = cteContext.toSql();
+
+    // In CTE context, the column IS the array, so we reference it directly
+    assertThat(sql)
+        .as("CTE context should NOT reference .data column")
+        .doesNotContain(".data");
+    assertThat(sql)
+        .as("CTE context should reference column name directly")
+        .contains("JSON_VALUE(states,");
+    assertThat(sql)
+        .as("Should use $.size() path since column IS the array")
+        .contains("'$.size()'");
   }
 }

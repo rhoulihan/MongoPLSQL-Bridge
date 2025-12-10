@@ -12,12 +12,12 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 189 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
+**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 190 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
 
 | Metric | Value |
 |--------|-------|
 | Unit Tests | 1,408 |
-| Cross-DB Validation | 189 |
+| Cross-DB Validation | 190 |
 | Large-Scale Tests | 10 |
 | Instruction Coverage | 89% |
 | Branch Coverage | 77% |
@@ -108,7 +108,7 @@ The translator includes a CLI for quick pipeline translation. See the [CLI Guide
 ./mongo2sql pipeline.json
 
 # With options
-./mongo2sql --collection orders --pretty --inline pipeline.json
+./mongo2sql --collection orders --inline pipeline.json
 ```
 
 **CLI Options:**
@@ -117,7 +117,6 @@ The translator includes a CLI for quick pipeline translation. See the [CLI Guide
 |--------|-------|-------------|
 | `--collection <name>` | `-c` | Collection/table name (overrides file setting) |
 | `--inline` | `-i` | Inline bind variables into SQL |
-| `--pretty` | `-p` | Pretty-print the SQL output |
 | `--no-hints` | | Disable Oracle optimizer hints |
 | `--strict` | | Fail on unsupported operators |
 | `--data-column <name>` | | JSON data column name (default: data) |
@@ -207,7 +206,7 @@ Runs 1,408 unit tests covering all operators, parsers, and pipeline scenarios.
 docker compose up -d
 ./scripts/validate-env.sh
 
-# Run cross-database validation (190 tests)
+# Run cross-database validation (191 tests)
 ./query-tests/scripts/setup.sh
 ./query-tests/scripts/run-tests.sh
 ```
@@ -266,7 +265,7 @@ mongo-oracle-translator/
 │       └── test/java/       # Unit tests (1,408)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
-│   ├── tests/               # Test case definitions (190)
+│   ├── tests/               # Test case definitions (191)
 │   ├── large-scale/         # Large-scale comparison tests (10)
 │   └── scripts/             # Test runner scripts
 ├── benchmarks/              # JMH performance benchmarks

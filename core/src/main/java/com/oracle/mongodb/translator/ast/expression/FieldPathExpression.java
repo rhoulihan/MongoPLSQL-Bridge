@@ -119,7 +119,37 @@ public final class FieldPathExpression implements Expression {
       return;
     }
 
-    // Check if this path references a $lookup result field
+    // In CTE context, field references are plain column names from previous CTE
+    // e.g., "totalRevenue" -> totalRevenue (not data.totalRevenue or JSON_VALUE)
+    if (ctx.isInCteContext()) {
+      // Check for compound _id references: "_id.category" -> "category"
+      // Previous CTE with compound _id flattens fields to plain column names
+      String resolvedPath = normalizedPath;
+      if (normalizedPath.startsWith("_id.")) {
+        String fieldAfterPrefix = normalizedPath.substring(4);
+        if (ctx.isCompoundIdField(fieldAfterPrefix)) {
+          resolvedPath = fieldAfterPrefix;
+        }
+      }
+      // Quote identifiers starting with underscore for Oracle compatibility
+      if (!resolvedPath.isEmpty() && !Character.isLetter(resolvedPath.charAt(0))) {
+        ctx.sql("\"" + resolvedPath + "\"");
+      } else {
+        ctx.sql(resolvedPath);
+      }
+      return;
+    }
+
+    // Check if this path references a pipeline form $lookup result
+    // Pipeline lookups use LATERAL subquery with JSON_ARRAYAGG, so the result is a column
+    // e.g., "orders" -> lateral_alias.orders (not lateral_alias.data.orders)
+    String pipelineLookupAlias = checkPipelineLookupPath(ctx, normalizedPath);
+    if (pipelineLookupAlias != null && "data".equals(dataColumn)) {
+      renderPipelineLookupFieldPath(ctx, pipelineLookupAlias, normalizedPath);
+      return;
+    }
+
+    // Check if this path references an equality form $lookup result field
     // e.g., "customer.tier" where "customer" is from $lookup
     String lookupAlias = ctx.getLookupTableAlias(normalizedPath);
     if (lookupAlias != null && "data".equals(dataColumn)) {
@@ -248,14 +278,14 @@ public final class FieldPathExpression implements Expression {
       ctx.sql(returnType.getOracleSyntax());
       ctx.sql(")");
     } else {
-      // Build dot notation expression
-      StringBuilder dotExpr = new StringBuilder();
-      dotExpr.append(lookupAlias).append(".data");
+      // Build dot notation expression with proper quoting
+      ctx.sql(lookupAlias);
+      ctx.sql(".data");
       if (!remainingPath.isEmpty()) {
         FieldNameValidator.validateFieldName(remainingPath);
-        dotExpr.append(".").append(remainingPath);
+        ctx.sql(".");
+        renderDotNotationSegments(ctx, remainingPath);
       }
-      ctx.sql(dotExpr.toString());
     }
   }
 
@@ -275,6 +305,74 @@ public final class FieldPathExpression implements Expression {
         ctx.sql(segment);
       }
     }
+  }
+
+  /**
+   * Helper method to render Oracle dot notation path segments with proper quoting. Identifiers
+   * starting with non-letter characters (like _id) must be quoted in Oracle's simplified dot
+   * notation.
+   */
+  private void renderDotNotationSegments(SqlGenerationContext ctx, String path) {
+    String[] segments = path.split("\\.");
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        ctx.sql(".");
+      }
+      String segment = segments[i];
+      if (!segment.isEmpty() && !Character.isLetter(segment.charAt(0))) {
+        ctx.sql("\"");
+        ctx.sql(segment);
+        ctx.sql("\"");
+      } else {
+        ctx.sql(segment);
+      }
+    }
+  }
+
+  /**
+   * Checks if the path references a pipeline form $lookup. Returns the table alias if found.
+   *
+   * @param ctx the SQL generation context
+   * @param normalizedPath the field path (without $ prefix)
+   * @return the pipeline lookup table alias, or null if not a pipeline lookup
+   */
+  private String checkPipelineLookupPath(SqlGenerationContext ctx, String normalizedPath) {
+    // Check for exact match first (e.g., "orders")
+    String alias = ctx.getPipelineLookupAlias(normalizedPath);
+    if (alias != null) {
+      return alias;
+    }
+    // Check for nested path (e.g., "orders.amount")
+    int dotIndex = normalizedPath.indexOf('.');
+    if (dotIndex > 0) {
+      String rootField = normalizedPath.substring(0, dotIndex);
+      return ctx.getPipelineLookupAlias(rootField);
+    }
+    return null;
+  }
+
+  /**
+   * Renders a field path that references a pipeline form $lookup result. Pipeline lookups produce a
+   * JSON array column (via JSON_ARRAYAGG), so we access alias.columnName instead of alias.data.
+   *
+   * <p>Example: "$orders" -> sales_1.orders, "$orders.amount" -> sales_1.orders.amount
+   */
+  private void renderPipelineLookupFieldPath(
+      SqlGenerationContext ctx, String tableAlias, String path) {
+    // For pipeline lookups, the column name is the "as" field
+    // path is like "orders" or "orders.amount"
+    int dotIndex = path.indexOf('.');
+    final String columnName = dotIndex >= 0 ? path.substring(0, dotIndex) : path;
+    final String remainingPath = dotIndex >= 0 ? path.substring(dotIndex + 1) : "";
+
+    // Build the reference: tableAlias.columnName[.remainingPath]
+    StringBuilder expr = new StringBuilder();
+    expr.append(tableAlias).append(".").append(columnName);
+    if (!remainingPath.isEmpty()) {
+      FieldNameValidator.validateFieldName(remainingPath);
+      expr.append(".").append(remainingPath);
+    }
+    ctx.sql(expr.toString());
   }
 
   /**

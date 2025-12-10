@@ -362,6 +362,28 @@ db.org_chart.createIndex({reportsTo: 1});
 db.org_chart.createIndex({department: 1});
 
 // ============================================================
+// Orders Collection (for $lookup tests with products)
+// ============================================================
+print('Loading orders collection...');
+db.orders.drop();
+
+db.orders.insertMany([
+  {_id: "O001", customerId: "C001", orderDate: new Date("2024-01-15T10:00:00.000Z"), status: "completed", items: [{productId: "P001", quantity: 3}, {productId: "P002", quantity: 1}]},
+  {_id: "O002", customerId: "C002", orderDate: new Date("2024-01-16T14:30:00.000Z"), status: "completed", items: [{productId: "P003", quantity: 1}, {productId: "P007", quantity: 5}]},
+  {_id: "O003", customerId: "C001", orderDate: new Date("2024-01-18T09:15:00.000Z"), status: "pending", items: [{productId: "P006", quantity: 2}]},
+  {_id: "O004", customerId: "C003", orderDate: new Date("2024-01-20T16:00:00.000Z"), status: "completed", items: [{productId: "P004", quantity: 10}, {productId: "P001", quantity: 2}, {productId: "P002", quantity: 3}]},
+  {_id: "O005", customerId: "C004", orderDate: new Date("2024-01-22T11:45:00.000Z"), status: "shipped", items: [{productId: "P008", quantity: 1}]},
+  {_id: "O006", customerId: "C002", orderDate: new Date("2024-01-25T08:30:00.000Z"), status: "completed", items: [{productId: "P006", quantity: 1}, {productId: "P007", quantity: 2}]},
+  {_id: "O007", customerId: "C005", orderDate: new Date("2024-02-01T13:00:00.000Z"), status: "completed", items: [{productId: "P001", quantity: 5}, {productId: "P004", quantity: 20}]},
+  {_id: "O008", customerId: "C006", orderDate: new Date("2024-02-05T15:20:00.000Z"), status: "pending", items: [{productId: "P003", quantity: 2}, {productId: "P006", quantity: 1}]}
+]);
+
+print('  Inserted ' + db.orders.countDocuments() + ' orders documents');
+
+db.orders.createIndex({customerId: 1});
+db.orders.createIndex({status: 1});
+
+// ============================================================
 // Summary
 // ============================================================
 print('');
@@ -376,4 +398,5 @@ print('    - customers: ' + db.customers.countDocuments() + ' documents');
 print('    - events: ' + db.events.countDocuments() + ' documents');
 print('    - inventory: ' + db.inventory.countDocuments() + ' documents');
 print('    - org_chart: ' + db.org_chart.countDocuments() + ' documents');
+print('    - orders: ' + db.orders.countDocuments() + ' documents');
 print('============================================================');

@@ -1,7 +1,7 @@
 # TODO - MongoDB to Oracle SQL Translator
 
 This file tracks improvements, enhancements, and features discovered during development.
-Last updated: 2025-12-08
+Last updated: 2025-12-10
 
 ---
 
@@ -166,7 +166,27 @@ All math operators were previously implemented.
 
 ## Completed Implementations
 
-### Recent Completions (2025-12-08)
+### Recent Completions (2025-12-10)
+
+- [x] **COMPLEX024 - CTE Context $match/$addFields Support** (completed: 2025-12-10)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java`
+  - Fix: Added `$match` and `$addFields` stage rendering in `renderWithMultiGroupCtes()` method
+  - Fix: Bind variables now properly inlined in CTE context
+  - Test: COMPLEX024 now passing (count: 6)
+
+- [x] **COMPLEX028 - Multi-group CTE `_id` Field Handling** (completed: 2025-12-10)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java`
+  - Fix: Proper `_id` field quoting in lookup field paths for CTE stage rendering
+  - Test: COMPLEX028 now passing (count: 3)
+
+- [x] **FACET_PAGINATION - Exclude $facet from CTE Rendering Path** (completed: 2025-12-10)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:102-109`
+  - Issue: Pipelines with `$facet` stage were incorrectly routed to CTE rendering path
+  - Fix: Added `&& components.facetStage == null` condition to CTE routing check
+  - Result: $facet pipelines now use standard rendering path with facet-specific methods
+  - Tests: FACET_PAGINATION001, 002, 003 now passing
+
+### Previous Completions (2025-12-08)
 
 - [x] **$setWindowFields Global Window (without partitionBy)** (completed: 2025-12-08)
   - File: `core/src/main/java/com/oracle/mongodb/translator/ast/stage/SetWindowFieldsStage.java`
@@ -260,6 +280,41 @@ All math operators were previously implemented.
   - Added: `renderArrayElemAtFacetExtraction()` for scalar extraction (e.g., `$arrayElemAt: ["$summary.count", 0]`)
   - Supports: Complex patterns like `{locationCount: {$arrayElemAt: ["$summary.count", 0]}, topLocations: "$results"}`
   - Tests: FACET_PAGINATION003 passing
+
+---
+
+## Known Test Issues (3 remaining issues)
+
+- [x] **COMPLEX024 - $match + $addFields before $group in CTE** (fixed: 2025-12-10)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java`
+  - Pipeline: `$match -> $addFields -> $group -> $project -> $sort`
+  - Fix: Added $match and $addFields rendering in CTE context (`renderWithMultiGroupCtes`)
+  - All bind variable inlining and $size handling also fixed
+  - Test now passes: COMPLEX024 PASS (count: 6)
+
+- [x] **COMPLEX028 - Multi-group CTE with $unwind/$lookup stage ordering** (fixed: 2025-12-10)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java`
+  - Pipeline: `$unwind -> $lookup -> $unwind -> $group -> $group -> $project`
+  - Fix: Properly handled `_id` field quoting in lookup field paths and CTE stage rendering
+  - Test now passes: COMPLEX028 PASS (count: 3)
+
+- [ ] **COMPLEX018 - $sum with nested $size** (discovered: 2025-12-09)
+  - File: `query-tests/tests/test-cases.json`
+  - Issue: `{"$sum": {"$size": "$events"}}` inside $group doesn't properly delegate to ArrayExpression.renderSize()
+  - Generated SQL: Uses direct JSON_VALUE path instead of proper $size rendering
+  - Needs investigation in AccumulatorExpression argument handling
+
+- [ ] **COMPLEX020 - $setWindowFields after $group** (discovered: 2025-12-09)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java`
+  - Issue: Window functions referencing aggregated columns produce invalid SQL
+  - Problem: `$totalSales` from GROUP BY cannot be accessed as `base.data.totalSales` in window function
+  - Fix Required: Two-level query - inner query for GROUP BY, outer for window functions
+  - Complexity: High (architectural change to pipeline rendering)
+
+- [ ] **COMPLEX023 - $bucket with mixed types** (discovered: 2025-12-09)
+  - File: `query-tests/tests/test-cases.json`
+  - Issue: $bucket mixes NUMBER and STRING types in CASE expression
+  - Needs investigation in BucketStage rendering
 
 ---
 

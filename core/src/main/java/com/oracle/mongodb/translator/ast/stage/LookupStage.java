@@ -10,6 +10,7 @@ import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.InExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
@@ -176,11 +177,39 @@ public final class LookupStage implements Stage {
     ctx.tableName(from);
     ctx.sql(" ");
     ctx.sql(alias);
-    ctx.sql(" ON JSON_VALUE(");
-    ctx.sql(ctx.getBaseTableAlias());
-    ctx.sql(".data, '$.");
-    ctx.sql(validLocalField);
-    ctx.sql("') = JSON_VALUE(");
+    ctx.sql(" ON ");
+
+    // Check if localField starts with an unwound path (e.g., "items.productId")
+    // If so, reference the unwind alias instead of base table
+    String localFieldRoot = validLocalField.contains(".")
+        ? validLocalField.substring(0, validLocalField.indexOf("."))
+        : validLocalField;
+    SqlGenerationContext.UnwindInfo unwindInfo = ctx.getUnwindInfo(localFieldRoot);
+
+    if (unwindInfo != null) {
+      // localField references an unwound array - use the unwind alias
+      // e.g., "items.productId" becomes "JSON_VALUE(unwind_1.value, '$.productId')"
+      final String remainingPath = validLocalField.contains(".")
+          ? validLocalField.substring(validLocalField.indexOf(".") + 1)
+          : "";
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(unwindInfo.tableAlias());
+      ctx.sql(".value, '$");
+      if (!remainingPath.isEmpty()) {
+        ctx.sql(".");
+        ctx.sql(remainingPath);
+      }
+      ctx.sql("')");
+    } else {
+      // Standard case - reference base table
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(ctx.getBaseTableAlias());
+      ctx.sql(".data, '$.");
+      ctx.sql(validLocalField);
+      ctx.sql("')");
+    }
+
+    ctx.sql(" = JSON_VALUE(");
     ctx.sql(alias);
     ctx.sql(".data, '$.");
     ctx.sql(validForeignField);
@@ -195,9 +224,15 @@ public final class LookupStage implements Stage {
     // Validate table name
     FieldNameValidator.validateTableName(from);
 
-    // Generate alias for the LATERAL subquery
-    String alias = ctx.generateTableAlias(from);
-    ctx.registerLookupTableAlias(as, alias);
+    // Use pre-registered alias if available, otherwise generate a new one
+    String alias = ctx.getLookupTableAliasByAs(as);
+    if (alias == null) {
+      alias = ctx.generateTableAlias(from);
+      ctx.registerLookupTableAlias(as, alias);
+      // Also register as pipeline lookup for proper field resolution
+      // Pipeline lookups use alias.columnName instead of alias.data.path
+      ctx.registerPipelineLookupAlias(as, alias);
+    }
 
     // Start LATERAL join - use comma join since LATERAL works as correlated subquery
     ctx.sql(", LATERAL (SELECT JSON_ARRAYAGG(");
@@ -317,6 +352,8 @@ public final class LookupStage implements Stage {
       ctx.sql(")");
     } else if (expr instanceof ComparisonExpression comp) {
       renderComparisonWithVarSubstitution(comp, innerAlias, ctx);
+    } else if (expr instanceof InExpression inExpr) {
+      renderInExpressionWithVarSubstitution(inExpr, innerAlias, ctx);
     } else {
       // Fallback for other expressions - visit directly
       // This may not work for all cases but handles simple expressions
@@ -370,6 +407,34 @@ public final class LookupStage implements Stage {
       // Non-field expression (literal, etc.)
       ctx.visit(right);
     }
+  }
+
+  /**
+   * Renders an IN expression with the inner table alias. The field in the IN expression should
+   * reference the inner (foreign) table, not the base table.
+   */
+  private void renderInExpressionWithVarSubstitution(
+      InExpression inExpr, String innerAlias, SqlGenerationContext ctx) {
+    // Render the field with inner table alias
+    renderFieldReference(inExpr.getField(), innerAlias, ctx);
+
+    // Render IN or NOT IN keyword
+    if (inExpr.isNegated()) {
+      ctx.sql(" NOT IN (");
+    } else {
+      ctx.sql(" IN (");
+    }
+
+    // Render the values with bind variables
+    var values = inExpr.getValues();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      ctx.bind(values.get(i));
+    }
+
+    ctx.sql(")");
   }
 
   /** Renders a field reference expression. */

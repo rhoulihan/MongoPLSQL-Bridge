@@ -9,6 +9,7 @@ package com.oracle.mongodb.translator.parser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
@@ -1036,6 +1037,42 @@ class ExpressionParserTest {
     Expression expr = parser.parseValue(doc);
     expr.render(context);
     assertThat(context.toSql()).contains("JSON_ARRAYAGG").contains("ORDER BY").contains("DESC");
+  }
+
+  @Test
+  void shouldParseSortArrayWithFieldSortByDescending() {
+    // MongoDB: {$sortArray: {input: "$products", sortBy: {totalRevenue: -1}}}
+    var doc =
+        Document.parse(
+            "{\"$sortArray\": {\"input\": \"$products\", \"sortBy\": {\"totalRevenue\": -1}}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isInstanceOf(ArrayExpression.class);
+    ArrayExpression arrayExpr = (ArrayExpression) expr;
+    assertThat(arrayExpr.getSortField()).isEqualTo("totalRevenue");
+    expr.render(context);
+    assertThat(context.toSql())
+        .contains("JSON_ARRAYAGG")
+        .contains("ORDER BY")
+        .contains("totalRevenue")
+        .contains("DESC")
+        .containsIgnoringCase("FORMAT JSON");
+  }
+
+  @Test
+  void shouldParseSortArrayWithFieldSortByAscending() {
+    // MongoDB: {$sortArray: {input: "$items", sortBy: {price: 1}}}
+    var doc =
+        Document.parse("{\"$sortArray\": {\"input\": \"$items\", \"sortBy\": {\"price\": 1}}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isInstanceOf(ArrayExpression.class);
+    ArrayExpression arrayExpr = (ArrayExpression) expr;
+    assertThat(arrayExpr.getSortField()).isEqualTo("price");
+    expr.render(context);
+    assertThat(context.toSql())
+        .contains("JSON_ARRAYAGG")
+        .contains("ORDER BY")
+        .contains("price")
+        .containsIgnoringCase("ASC");
   }
 
   @Test

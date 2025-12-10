@@ -104,4 +104,28 @@ class ExistsExpressionTest {
 
     assertThat(expr.toString()).isEqualTo("Exists(tags, true)");
   }
+
+  @Test
+  void shouldRenderArrayIndexWithBracketNotation() {
+    // MongoDB: {"items.0": {"$exists": true}} - check if first array element exists
+    // Oracle requires bracket notation for array indices: $.items[0] not $.items.0
+    var context = new DefaultSqlGenerationContext();
+    var expr = new ExistsExpression("items.0", true);
+
+    expr.render(context);
+
+    // Oracle JSON path requires bracket notation for array indices
+    assertThat(context.toSql()).isEqualTo("JSON_EXISTS(data, '$.items[0]')");
+  }
+
+  @Test
+  void shouldRenderNestedArrayIndexWithBracketNotation() {
+    // MongoDB: {"orders.1.items.2": {"$exists": true}}
+    var context = new DefaultSqlGenerationContext();
+    var expr = new ExistsExpression("orders.1.items.2", true);
+
+    expr.render(context);
+
+    assertThat(context.toSql()).isEqualTo("JSON_EXISTS(data, '$.orders[1].items[2]')");
+  }
 }

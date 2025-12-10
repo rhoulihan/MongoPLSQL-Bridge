@@ -486,4 +486,21 @@ class SetWindowFieldsStageTest {
     assertThat(sql).contains("1 PRECEDING");
     assertThat(sql).contains("1 FOLLOWING");
   }
+
+  @Test
+  void shouldRenderUnboundedPrecedingAndFollowingWindow() {
+    // MongoDB: documents: ["unbounded", "unbounded"] - entire partition
+    // Oracle: ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    var windowSpec = new WindowSpec("documents", List.of("unbounded", "unbounded"));
+    var windowField = new WindowField("$sum", "$totalSales", windowSpec);
+    var output = Map.of("percentOfTotal", windowField);
+    var stage = new SetWindowFieldsStage(null, Map.of("totalSales", -1), output);
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING");
+    // Should NOT have two PRECEDING
+    assertThat(sql).doesNotContain("UNBOUNDED PRECEDING AND UNBOUNDED PRECEDING");
+  }
 }

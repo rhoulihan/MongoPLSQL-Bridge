@@ -11,8 +11,11 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.oracle.mongodb.translator.ast.expression.ArithmeticExpression;
 import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
+import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
+import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
 import java.util.LinkedHashMap;
@@ -118,5 +121,27 @@ class AddFieldsStageTest {
     var stage = new AddFieldsStage(fields);
 
     assertThat(stage.toString()).contains("AddFieldsStage").contains("total");
+  }
+
+  @Test
+  void shouldWrapBooleanComparisonInCaseWhen() {
+    // { $addFields: { isActive: { $gt: ["$score", 0] } } }
+    // Oracle doesn't support boolean as column value, must use CASE WHEN
+    Map<String, Expression> fields = new LinkedHashMap<>();
+    fields.put(
+        "isActive",
+        new ComparisonExpression(
+            ComparisonOp.GT,
+            FieldPathExpression.of("score", JsonReturnType.NUMBER),
+            LiteralExpression.of(0)));
+
+    var stage = new AddFieldsStage(fields);
+    stage.render(context);
+
+    String sql = context.toSql();
+    // Should wrap boolean in CASE WHEN ... THEN 1 ELSE 0 END for Oracle compatibility
+    assertThat(sql).contains("CASE WHEN");
+    assertThat(sql).contains("THEN 1 ELSE 0 END");
+    assertThat(sql).contains("AS isActive");
   }
 }

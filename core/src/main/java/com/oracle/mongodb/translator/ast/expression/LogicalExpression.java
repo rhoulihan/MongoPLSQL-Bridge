@@ -89,6 +89,11 @@ public final class LogicalExpression implements Expression {
   }
 
   @Override
+  public boolean isBooleanExpression() {
+    return true;
+  }
+
+  @Override
   public boolean equals(Object obj) {
     if (this == obj) {
       return true;

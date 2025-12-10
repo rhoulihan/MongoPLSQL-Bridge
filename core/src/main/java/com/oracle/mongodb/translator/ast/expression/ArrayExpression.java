@@ -31,6 +31,7 @@ public final class ArrayExpression implements Expression {
   private final Expression arrayExpression;
   private final Expression indexExpression;
   private final List<Expression> additionalArgs;
+  private final String sortField; // For $sortArray with field-based sortBy
 
   /**
    * Creates an array expression.
@@ -49,10 +50,21 @@ public final class ArrayExpression implements Expression {
       Expression arrayExpression,
       Expression indexExpression,
       List<Expression> additionalArgs) {
+    this(op, arrayExpression, indexExpression, additionalArgs, null);
+  }
+
+  /** Creates an array expression with additional arguments and sort field. */
+  public ArrayExpression(
+      ArrayOp op,
+      Expression arrayExpression,
+      Expression indexExpression,
+      List<Expression> additionalArgs,
+      String sortField) {
     this.op = Objects.requireNonNull(op, "op must not be null");
     this.arrayExpression = arrayExpression; // Can be null for $concatArrays
     this.indexExpression = indexExpression;
     this.additionalArgs = additionalArgs != null ? new ArrayList<>(additionalArgs) : null;
+    this.sortField = sortField;
   }
 
   /** Creates a $arrayElemAt expression. */
@@ -230,6 +242,25 @@ public final class ArrayExpression implements Expression {
   }
 
   /**
+   * Creates a $sortArray expression with field-based sorting.
+   *
+   * <p>MongoDB: {$sortArray: {input: "$products", sortBy: {totalRevenue: -1}}}
+   *
+   * @param array the array to sort
+   * @param sortField the field name to sort by
+   * @param ascending true for ascending, false for descending
+   */
+  public static ArrayExpression sortArrayByField(
+      Expression array, String sortField, boolean ascending) {
+    return new ArrayExpression(
+        ArrayOp.SORT_ARRAY,
+        array,
+        LiteralExpression.of(ascending ? 1 : -1),
+        null,
+        sortField);
+  }
+
+  /**
    * Creates a $in expression that checks if a value is in an array.
    *
    * @param value the value to search for
@@ -336,6 +367,11 @@ public final class ArrayExpression implements Expression {
   /** Returns additional arguments (may be null). */
   public List<Expression> getAdditionalArgs() {
     return additionalArgs != null ? Collections.unmodifiableList(additionalArgs) : null;
+  }
+
+  /** Returns the sort field for field-based $sortArray (may be null). */
+  public String getSortField() {
+    return sortField;
   }
 
   @Override
@@ -471,10 +507,35 @@ public final class ArrayExpression implements Expression {
   }
 
   private void renderSize(SqlGenerationContext ctx, String path) {
+    // Normalize path by removing $ prefix if present
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+
     // Check if this is a $lookup result field - use correlated subquery instead
-    Expression lookupSizeExpr = ctx.getLookupSizeExpression(path);
+    Expression lookupSizeExpr = ctx.getLookupSizeExpression(normalizedPath);
     if (lookupSizeExpr != null) {
       ctx.visit(lookupSizeExpr);
+      return;
+    }
+
+    // Check if this is a pipeline form $lookup result field
+    // Pipeline lookups produce a JSON array column via LATERAL subquery
+    String pipelineLookupAlias = ctx.getPipelineLookupAlias(normalizedPath);
+    if (pipelineLookupAlias != null) {
+      // For pipeline lookup: JSON_VALUE(alias.columnName, '$.size()' RETURNING NUMBER)
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(pipelineLookupAlias);
+      ctx.sql(".");
+      ctx.sql(normalizedPath); // column name is the same as the "as" field
+      ctx.sql(", '$.size()' RETURNING NUMBER)");
+      return;
+    }
+
+    // In CTE context, the array is a direct column (e.g., from $addToSet accumulator)
+    // Reference the column directly: JSON_VALUE(columnName, '$.size()' RETURNING NUMBER)
+    if (ctx.isInCteContext()) {
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(normalizedPath);
+      ctx.sql(", '$.size()' RETURNING NUMBER)");
       return;
     }
 
@@ -483,7 +544,7 @@ public final class ArrayExpression implements Expression {
     ctx.sql("JSON_VALUE(");
     renderDataColumn(ctx);
     ctx.sql(", '$.");
-    ctx.sql(path);
+    ctx.sql(normalizedPath);
     ctx.sql(".size()' RETURNING NUMBER)");
   }
 
@@ -651,14 +712,23 @@ public final class ArrayExpression implements Expression {
             renderConditionWithFieldSubstitution(ctx, indexExpression, varField);
             ctx.sql(")");
           } else {
-            // Use COALESCE to return empty array instead of NULL when no matches
-            ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val), JSON_ARRAY()) FROM JSON_TABLE(");
-            ctx.sql(ctx.getBaseTableAlias());
-            ctx.sql(".data, '$.");
-            ctx.sql(fieldPath.getPath());
-            ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE ");
-            ctx.visit(indexExpression); // condition
-            ctx.sql(")");
+            // Try to extract ALL variable fields from the condition (for complex expressions)
+            java.util.Set<String> allVarFields = new java.util.LinkedHashSet<>();
+            collectVariableFieldsFromExpression(indexExpression, allVarFields);
+
+            if (!allVarFields.isEmpty()) {
+              // Generate JSON_TABLE with columns for all variable fields
+              renderFilterWithMultipleFields(ctx, fieldPath.getPath(), allVarFields);
+            } else {
+              // Use COALESCE to return empty array instead of NULL when no matches
+              ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val), JSON_ARRAY()) FROM JSON_TABLE(");
+              ctx.sql(ctx.getBaseTableAlias());
+              ctx.sql(".data, '$.");
+              ctx.sql(fieldPath.getPath());
+              ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE ");
+              ctx.visit(indexExpression); // condition
+              ctx.sql(")");
+            }
           }
         } else {
           // For non-field-path arrays (e.g., expression results), render fallback
@@ -684,6 +754,24 @@ public final class ArrayExpression implements Expression {
             ctx.sql(" VARCHAR2(4000) PATH '$.");
             ctx.sql(varField);
             ctx.sql("')))");
+          } else if (indexExpression instanceof InlineObjectExpression inlineObj) {
+            // Handle $map with object transformation
+            // Extract all variable field references from the object
+            java.util.Set<String> varFields = new java.util.LinkedHashSet<>();
+            collectVariableFieldsFromObject(inlineObj, varFields);
+
+            if (!varFields.isEmpty()) {
+              renderMapWithObjectTransformation(ctx, fieldPath.getPath(), inlineObj, varFields);
+            } else {
+              // Fallback for objects without variable fields
+              ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
+              ctx.visit(indexExpression);
+              ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
+              ctx.sql(ctx.getBaseTableAlias());
+              ctx.sql(".data, '$.");
+              ctx.sql(fieldPath.getPath());
+              ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+            }
           } else {
             // Use COALESCE to return empty array instead of NULL for empty input
             ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
@@ -760,6 +848,43 @@ public final class ArrayExpression implements Expression {
         ctx.sql("')))");
         return;
       }
+
+      // Detect sum with nested arithmetic: {$add: ["$$value", {$multiply: ["$$this.qty", ...]}]}
+      Expression sumExpr = extractNestedArithmeticPattern(arithExpr.getOperands());
+      if (sumExpr != null) {
+        // Extract all $$this.field references from the expression
+        java.util.Set<String> thisFields = new java.util.LinkedHashSet<>();
+        collectThisFieldReferences(sumExpr, thisFields);
+
+        if (!thisFields.isEmpty()) {
+          // Generate SUM with nested arithmetic expression
+          ctx.sql("(SELECT NVL(SUM(");
+          renderReduceArithmeticExpression(sumExpr, ctx);
+          ctx.sql("), ");
+          ctx.visit(indexExpression); // initialValue
+          ctx.sql(") FROM JSON_TABLE(");
+          ctx.sql(ctx.getBaseTableAlias());
+          ctx.sql(".data, '$.");
+          ctx.sql(path);
+          ctx.sql("[*]' COLUMNS (");
+
+          // Generate columns for each referenced field
+          boolean first = true;
+          for (String field : thisFields) {
+            if (!first) {
+              ctx.sql(", ");
+            }
+            ctx.sql(field);
+            ctx.sql(" NUMBER PATH '$.");
+            ctx.sql(field);
+            ctx.sql("'");
+            first = false;
+          }
+
+          ctx.sql(")))");
+          return;
+        }
+      }
     }
 
     // Detect concat pattern: {$concat: ["$$value", "$$this"]}
@@ -777,6 +902,104 @@ public final class ArrayExpression implements Expression {
 
     // For other patterns, render a descriptive placeholder
     ctx.sql("/* $reduce with custom expression not supported */ NULL");
+  }
+
+  /**
+   * Extracts the non-$$value operand from an ADD expression pattern like
+   * {$add: ["$$value", expr]}. Returns the expression to be summed, or null
+   * if not a valid pattern.
+   */
+  private Expression extractNestedArithmeticPattern(List<Expression> operands) {
+    if (operands == null || operands.size() != 2) {
+      return null;
+    }
+
+    Expression valueExpr = null;
+    Expression otherExpr = null;
+
+    for (Expression expr : operands) {
+      if (expr instanceof FieldPathExpression fp && "$value".equals(fp.getPath())) {
+        valueExpr = expr;
+      } else {
+        otherExpr = expr;
+      }
+    }
+
+    // Only return if we have both $$value and another expression (not just a simple field)
+    if (valueExpr != null && otherExpr != null && otherExpr instanceof ArithmeticExpression) {
+      return otherExpr;
+    }
+    return null;
+  }
+
+  /**
+   * Recursively collects all $$this.field references from an expression into the provided set.
+   * Field paths like "$this.qty" get added as "qty".
+   */
+  private void collectThisFieldReferences(Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        fields.add(exprPath.substring(6)); // Remove "$this."
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      for (Expression operand : arith.getOperands()) {
+        collectThisFieldReferences(operand, fields);
+      }
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectThisFieldReferences(comp.getLeft(), fields);
+      collectThisFieldReferences(comp.getRight(), fields);
+    }
+    // Add other expression types as needed
+  }
+
+  /**
+   * Renders an arithmetic expression for use inside a $reduce SUM aggregate.
+   * Substitutes $$this.field references with direct column references from JSON_TABLE.
+   */
+  private void renderReduceArithmeticExpression(Expression expr, SqlGenerationContext ctx) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        // Render as direct column reference
+        ctx.sql(exprPath.substring(6));
+      } else {
+        // Fallback: render as-is
+        ctx.visit(expr);
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      List<Expression> operands = arith.getOperands();
+      String sqlOp = getSqlArithmeticOp(arith.getOp());
+
+      ctx.sql("(");
+      for (int i = 0; i < operands.size(); i++) {
+        if (i > 0) {
+          ctx.sql(" ");
+          ctx.sql(sqlOp);
+          ctx.sql(" ");
+        }
+        renderReduceArithmeticExpression(operands.get(i), ctx);
+      }
+      ctx.sql(")");
+    } else if (expr instanceof LiteralExpression lit) {
+      ctx.visit(lit);
+    } else {
+      // Fallback for other expressions
+      ctx.visit(expr);
+    }
+  }
+
+  /** Returns the SQL operator for an arithmetic operation. */
+  private String getSqlArithmeticOp(ArithmeticOp op) {
+    return switch (op) {
+      case ADD -> "+";
+      case SUBTRACT -> "-";
+      case MULTIPLY -> "*";
+      case DIVIDE -> "/";
+      case MOD -> "MOD";
+      case FLOOR, CEIL, ABS, ROUND, TRUNC, SQRT, EXP, LN, LOG10, POW, MAX, MIN ->
+          throw new IllegalStateException("Unary op in multi-operand context: " + op);
+    };
   }
 
   /**
@@ -894,6 +1117,92 @@ public final class ArrayExpression implements Expression {
       // Fallback: just visit the expression normally
       ctx.visit(condition);
     }
+  }
+
+  /**
+   * Renders a $filter with multiple variable fields in the condition. Generates JSON_TABLE
+   * with columns for each variable field and a WHERE clause using column references.
+   */
+  private void renderFilterWithMultipleFields(
+      SqlGenerationContext ctx, String arrayPath, java.util.Set<String> varFields) {
+    ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val FORMAT JSON), JSON_ARRAY())");
+    ctx.sql(" FROM JSON_TABLE(");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(".data, '$.");
+    ctx.sql(arrayPath);
+    ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$'");
+
+    // Add columns for each variable field
+    for (String field : varFields) {
+      ctx.sql(", ");
+      ctx.sql(field);
+      ctx.sql(" NUMBER PATH '$.");
+      ctx.sql(field);
+      ctx.sql("'");
+    }
+    ctx.sql(")) WHERE ");
+
+    // Render the condition with column substitution
+    renderFilterConditionWithColumnSubstitution(ctx, indexExpression, varFields);
+    ctx.sql(")");
+  }
+
+  /**
+   * Renders a filter condition expression, substituting variable field references with column
+   * names. Handles nested expressions like:
+   * {@code {$gte: [{$multiply: ["$item.qty", "$item.price"]}, 100]}}.
+   */
+  private void renderFilterConditionWithColumnSubstitution(
+      SqlGenerationContext ctx, Expression condition, java.util.Set<String> varFields) {
+    if (condition instanceof ComparisonExpression compExpr) {
+      // Render left side
+      renderFilterExpressionWithColumnSubstitution(ctx, compExpr.getLeft(), varFields);
+      // Render operator
+      ctx.sql(" ");
+      ctx.sql(compExpr.getOp().getSqlOperator());
+      ctx.sql(" ");
+      // Render right side
+      renderFilterExpressionWithColumnSubstitution(ctx, compExpr.getRight(), varFields);
+    } else {
+      // Fallback: render with column substitution
+      renderFilterExpressionWithColumnSubstitution(ctx, condition, varFields);
+    }
+  }
+
+  /**
+   * Renders an expression within a $filter condition, substituting variable field references.
+   */
+  private void renderFilterExpressionWithColumnSubstitution(
+      SqlGenerationContext ctx, Expression expr, java.util.Set<String> varFields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      if (path != null && path.startsWith("$") && path.contains(".")) {
+        int dotIndex = path.indexOf('.');
+        String fieldName = path.substring(dotIndex + 1);
+        // Use the column reference
+        ctx.sql(fieldName);
+        return;
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      List<Expression> operands = arith.getOperands();
+      String sqlOp = getSqlArithmeticOp(arith.getOp());
+      ctx.sql("(");
+      for (int i = 0; i < operands.size(); i++) {
+        if (i > 0) {
+          ctx.sql(" ");
+          ctx.sql(sqlOp);
+          ctx.sql(" ");
+        }
+        renderFilterExpressionWithColumnSubstitution(ctx, operands.get(i), varFields);
+      }
+      ctx.sql(")");
+      return;
+    } else if (expr instanceof LiteralExpression) {
+      ctx.visit(expr);
+      return;
+    }
+    // Fallback: use default rendering
+    ctx.visit(expr);
   }
 
   /**
@@ -1073,8 +1382,9 @@ public final class ArrayExpression implements Expression {
   }
 
   /**
-   * Renders $sortArray operator. MongoDB: {$sortArray: {input: "$scores", sortBy: 1}} Oracle: Uses
-   * JSON_ARRAYAGG with ORDER BY to sort elements.
+   * Renders $sortArray operator. MongoDB: {$sortArray: {input: "$scores", sortBy: 1}} or
+   * {$sortArray: {input: "$products", sortBy: {totalRevenue: -1}}} Oracle: Uses JSON_ARRAYAGG with
+   * ORDER BY to sort elements.
    */
   private void renderSortArray(SqlGenerationContext ctx) {
     boolean ascending = true;
@@ -1082,6 +1392,13 @@ public final class ArrayExpression implements Expression {
       ascending = num.intValue() >= 0;
     }
 
+    // Field-based sorting: sortBy is a document like {totalRevenue: -1}
+    if (sortField != null) {
+      renderSortArrayByField(ctx, ascending);
+      return;
+    }
+
+    // Simple value-based sorting: sortBy is 1 or -1
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
       final String path = fieldPath.getPath();
       ctx.sql("(SELECT JSON_ARRAYAGG(val ORDER BY val ");
@@ -1097,6 +1414,55 @@ public final class ArrayExpression implements Expression {
       ctx.sql(") FROM JSON_TABLE(");
       ctx.visit(arrayExpression);
       ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+    }
+  }
+
+  /**
+   * Renders $sortArray with field-based sorting. MongoDB: {$sortArray: {input: "$products", sortBy:
+   * {totalRevenue: -1}}} Oracle: (SELECT JSON_ARRAYAGG(val FORMAT JSON ORDER BY sortCol DESC) FROM
+   * JSON_TABLE(data, '$.products[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', sortCol
+   * NUMBER PATH '$.totalRevenue')))
+   *
+   * <p>In CTE context, field references are plain column names (not data.field), so we use '$[*]'
+   * as the JSON path since the column itself IS the array.
+   */
+  private void renderSortArrayByField(SqlGenerationContext ctx, boolean ascending) {
+    if (arrayExpression instanceof FieldPathExpression fieldPath) {
+      final String path = fieldPath.getPath();
+      ctx.sql("(SELECT JSON_ARRAYAGG(val FORMAT JSON ORDER BY ");
+      ctx.sql(sortField);
+      ctx.sql(" ");
+      ctx.sql(ascending ? "ASC" : "DESC");
+      ctx.sql(") FROM JSON_TABLE(");
+
+      if (ctx.isInCteContext()) {
+        // In CTE context, the field path is a plain column name (the array itself)
+        // Use the column name directly and '$[*]' as the JSON path
+        ctx.sql(path);
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
+      } else {
+        // Normal context: access via data.field
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
+        ctx.sql(path);
+        ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
+      }
+      ctx.sql(sortField);
+      ctx.sql(" NUMBER PATH '$.");
+      ctx.sql(sortField);
+      ctx.sql("')))");
+    } else {
+      ctx.sql("(SELECT JSON_ARRAYAGG(val FORMAT JSON ORDER BY ");
+      ctx.sql(sortField);
+      ctx.sql(" ");
+      ctx.sql(ascending ? "ASC" : "DESC");
+      ctx.sql(") FROM JSON_TABLE(");
+      ctx.visit(arrayExpression);
+      ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
+      ctx.sql(sortField);
+      ctx.sql(" NUMBER PATH '$.");
+      ctx.sql(sortField);
+      ctx.sql("')))");
     }
   }
 
@@ -1491,13 +1857,30 @@ public final class ArrayExpression implements Expression {
    * all numeric values in the array path. Oracle: Uses JSON_TABLE with SUM aggregate.
    */
   private void renderSumArray(SqlGenerationContext ctx, String path) {
+    // Normalize path by removing $ prefix if present
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+
     // Handle nested field paths like "orders.payment.amount"
     // We need to extract the array portion and the nested field path
-    int firstDot = path.indexOf('.');
+    int firstDot = normalizedPath.indexOf('.');
     if (firstDot > 0) {
       // Nested path: split into array path and nested field
-      final String arrayPath = path.substring(0, firstDot);
-      final String nestedPath = path.substring(firstDot + 1);
+      final String arrayPath = normalizedPath.substring(0, firstDot);
+      final String nestedPath = normalizedPath.substring(firstDot + 1);
+
+      // Check if the array path is a pipeline lookup result
+      String pipelineLookupAlias = ctx.getPipelineLookupAlias(arrayPath);
+      if (pipelineLookupAlias != null) {
+        // For pipeline lookup: sum from the JSON array column
+        ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
+        ctx.sql(pipelineLookupAlias);
+        ctx.sql(".");
+        ctx.sql(arrayPath); // column name
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+        ctx.sql(nestedPath);
+        ctx.sql("')))");
+        return;
+      }
 
       ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
       renderDataColumn(ctx);
@@ -1508,10 +1891,22 @@ public final class ArrayExpression implements Expression {
       ctx.sql("')))");
     } else {
       // Simple array path: sum all elements directly
+      // Check if this is a pipeline lookup result
+      String pipelineLookupAlias = ctx.getPipelineLookupAlias(normalizedPath);
+      if (pipelineLookupAlias != null) {
+        // For pipeline lookup: sum all elements from the JSON array column
+        ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
+        ctx.sql(pipelineLookupAlias);
+        ctx.sql(".");
+        ctx.sql(normalizedPath); // column name
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+        return;
+      }
+
       ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
-      ctx.sql(path);
+      ctx.sql(normalizedPath);
       ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
     }
   }
@@ -1521,11 +1916,14 @@ public final class ArrayExpression implements Expression {
    * values in the array. Oracle: Uses JSON_TABLE with AVG aggregate.
    */
   private void renderAvgArray(SqlGenerationContext ctx, String path) {
+    // Normalize path by removing $ prefix if present
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+
     // Handle nested field paths similar to renderSumArray
-    int firstDot = path.indexOf('.');
+    int firstDot = normalizedPath.indexOf('.');
     if (firstDot > 0) {
-      final String arrayPath = path.substring(0, firstDot);
-      final String nestedPath = path.substring(firstDot + 1);
+      final String arrayPath = normalizedPath.substring(0, firstDot);
+      final String nestedPath = normalizedPath.substring(firstDot + 1);
 
       ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
       renderDataColumn(ctx);
@@ -1538,7 +1936,7 @@ public final class ArrayExpression implements Expression {
       ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
-      ctx.sql(path);
+      ctx.sql(normalizedPath);
       ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
     }
   }
@@ -1785,6 +2183,139 @@ public final class ArrayExpression implements Expression {
     } else {
       ctx.visit(defaultExpr);
     }
+  }
+
+  /**
+   * Collects all variable field references (e.g., $$item.product) from an InlineObjectExpression.
+   * These need to be defined as columns in the JSON_TABLE.
+   */
+  private void collectVariableFieldsFromObject(
+      InlineObjectExpression obj, java.util.Set<String> fields) {
+    for (java.util.Map.Entry<String, Expression> entry : obj.getFields().entrySet()) {
+      collectVariableFieldsFromExpression(entry.getValue(), fields);
+    }
+  }
+
+  /**
+   * Recursively collects variable field references from an expression. Field paths like
+   * "$item.product" get added as "product".
+   */
+  private void collectVariableFieldsFromExpression(Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      // Check for patterns like $item.field, $elem.field, $this.field
+      if (path != null && path.startsWith("$") && path.contains(".")) {
+        int dotIndex = path.indexOf('.');
+        fields.add(path.substring(dotIndex + 1));
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      for (Expression operand : arith.getOperands()) {
+        collectVariableFieldsFromExpression(operand, fields);
+      }
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectVariableFieldsFromExpression(comp.getLeft(), fields);
+      collectVariableFieldsFromExpression(comp.getRight(), fields);
+    } else if (expr instanceof InlineObjectExpression nested) {
+      collectVariableFieldsFromObject(nested, fields);
+    } else if (expr instanceof ConditionalExpression cond) {
+      if (cond.getCondition() != null) {
+        collectVariableFieldsFromExpression(cond.getCondition(), fields);
+      }
+      collectVariableFieldsFromExpression(cond.getThenExpr(), fields);
+      collectVariableFieldsFromExpression(cond.getElseExpr(), fields);
+    }
+    // Add other expression types as needed
+  }
+
+  /**
+   * Renders $map with object transformation. Creates JSON_TABLE with columns for each variable
+   * field, then renders JSON_OBJECT with those columns.
+   */
+  private void renderMapWithObjectTransformation(
+      SqlGenerationContext ctx,
+      String arrayPath,
+      InlineObjectExpression inlineObj,
+      java.util.Set<String> varFields) {
+
+    ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
+
+    // Render JSON_OBJECT with the fields, substituting variable references with column names
+    ctx.sql("JSON_OBJECT(");
+    boolean first = true;
+    for (java.util.Map.Entry<String, Expression> entry : inlineObj.getFields().entrySet()) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      first = false;
+
+      ctx.sql("'");
+      ctx.sql(entry.getKey());
+      ctx.sql("' VALUE ");
+
+      // Render the field value, substituting variable references
+      renderMapFieldExpression(ctx, entry.getValue(), varFields);
+    }
+    ctx.sql(")");
+
+    ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(".data, '$.");
+    ctx.sql(arrayPath);
+    ctx.sql("[*]' COLUMNS (");
+
+    // Generate columns for each variable field
+    boolean firstCol = true;
+    for (String field : varFields) {
+      if (!firstCol) {
+        ctx.sql(", ");
+      }
+      firstCol = false;
+      ctx.sql(field);
+      ctx.sql(" PATH '$.");
+      ctx.sql(field);
+      ctx.sql("'");
+    }
+    ctx.sql(")))");
+  }
+
+  /**
+   * Renders an expression used in $map, substituting variable field references with JSON_TABLE
+   * column names.
+   */
+  private void renderMapFieldExpression(
+      SqlGenerationContext ctx, Expression expr, java.util.Set<String> varFields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      // Check for patterns like $item.field, $elem.field, $this.field
+      if (path != null && path.startsWith("$") && path.contains(".")) {
+        int dotIndex = path.indexOf('.');
+        String fieldName = path.substring(dotIndex + 1);
+        // Output just the column name (defined in JSON_TABLE)
+        ctx.sql(fieldName);
+        return;
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      List<Expression> operands = arith.getOperands();
+      String sqlOp = getSqlArithmeticOp(arith.getOp());
+
+      ctx.sql("(");
+      for (int i = 0; i < operands.size(); i++) {
+        if (i > 0) {
+          ctx.sql(" ");
+          ctx.sql(sqlOp);
+          ctx.sql(" ");
+        }
+        renderMapFieldExpression(ctx, operands.get(i), varFields);
+      }
+      ctx.sql(")");
+      return;
+    } else if (expr instanceof LiteralExpression) {
+      ctx.visit(expr);
+      return;
+    }
+
+    // Fallback: render expression as-is
+    ctx.visit(expr);
   }
 
   @Override

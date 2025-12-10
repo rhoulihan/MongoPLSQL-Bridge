@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.InExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.exception.UnsupportedOperatorException;
 import com.oracle.mongodb.translator.generator.DefaultSqlGenerationContext;
@@ -367,5 +368,29 @@ class LookupStageTest {
     // Should be LEFT OUTER JOIN, not INNER JOIN
     assertThat(sql).contains("LEFT OUTER JOIN");
     assertThat(sql).doesNotContain("INNER JOIN");
+  }
+
+  @Test
+  void shouldRenderInExpressionWithInnerTableAliasInPipelineMatch() {
+    // Bug: When $lookup pipeline has a $match with $in, the IN expression should
+    // reference the inner (foreign) table, not the base table.
+    // Example: $lookup { from: "sales", pipeline: [{ $match: { status: { $in: ... }}}] }
+    // Generated SQL should use: sales_1_inner.data.status IN ('a', 'b')
+    // NOT: base.data.status IN ('a', 'b')
+
+    var inExpr =
+        InExpression.in(FieldPathExpression.of("status"), List.of("completed", "processing"));
+    var matchStage = new MatchStage(inExpr);
+    var stage =
+        LookupStage.withPipeline("sales", Map.of("custId", "$_id"), List.of(matchStage), "orders");
+
+    var contextWithBase =
+        new DefaultSqlGenerationContext(false, Oracle26aiDialect.INSTANCE, "base");
+    stage.render(contextWithBase);
+
+    String sql = contextWithBase.toSql();
+    // Should reference the inner table alias (sales_1_inner), not base
+    assertThat(sql).contains("JSON_VALUE(sales_1_inner.data, '$.status') IN (");
+    assertThat(sql).doesNotContain("JSON_VALUE(base.data");
   }
 }

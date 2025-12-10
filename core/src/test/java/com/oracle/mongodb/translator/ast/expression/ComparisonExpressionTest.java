@@ -214,4 +214,5 @@ class ComparisonExpressionTest {
 
     assertThat(expr1.hashCode()).isEqualTo(expr2.hashCode());
   }
+
 }

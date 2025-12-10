@@ -176,4 +176,25 @@ class ConditionalExpressionTest {
     assertThat(ConditionalType.isConditional("$ifNull")).isTrue();
     assertThat(ConditionalType.isConditional("$eq")).isFalse();
   }
+
+  @Test
+  void shouldRenderCondWithBooleanFieldPath() {
+    // {$cond: ["$isActive", 1, 0]} - field path used as boolean condition
+    // Oracle needs explicit comparison: field = true
+    var expr =
+        ConditionalExpression.cond(
+            FieldPathExpression.of("isActive"),
+            LiteralExpression.of(1),
+            LiteralExpression.of(0));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should render as "CASE WHEN ... = true THEN 1 ELSE 0 END"
+    // not "CASE WHEN JSON_QUERY(...) THEN 1 ELSE 0 END" which Oracle rejects
+    assertThat(sql).contains("= true");
+    assertThat(sql).contains("CASE WHEN");
+    assertThat(sql).contains("THEN");
+    assertThat(sql).contains("END");
+  }
 }

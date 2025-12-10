@@ -311,7 +311,7 @@ public final class SetWindowFieldsStage implements Stage {
 
     // Lower bound
     if (bounds.size() >= 1) {
-      renderBound(ctx, bounds.get(0));
+      renderBound(ctx, bounds.get(0), false);
     } else {
       ctx.sql("UNBOUNDED PRECEDING");
     }
@@ -320,15 +320,16 @@ public final class SetWindowFieldsStage implements Stage {
 
     // Upper bound
     if (bounds.size() >= 2) {
-      renderBound(ctx, bounds.get(1));
+      renderBound(ctx, bounds.get(1), true);
     } else {
       ctx.sql("CURRENT ROW");
     }
   }
 
-  private void renderBound(SqlGenerationContext ctx, String bound) {
+  private void renderBound(SqlGenerationContext ctx, String bound, boolean isUpperBound) {
     if (bound == null || "unbounded".equals(bound)) {
-      ctx.sql("UNBOUNDED PRECEDING");
+      // For upper bound, unbounded means FOLLOWING; for lower bound, PRECEDING
+      ctx.sql(isUpperBound ? "UNBOUNDED FOLLOWING" : "UNBOUNDED PRECEDING");
     } else if ("current".equals(bound)) {
       ctx.sql("CURRENT ROW");
     } else {
@@ -345,7 +346,7 @@ public final class SetWindowFieldsStage implements Stage {
         }
       } catch (NumberFormatException e) {
         // Unknown bound - treat as unbounded
-        ctx.sql("UNBOUNDED PRECEDING");
+        ctx.sql(isUpperBound ? "UNBOUNDED FOLLOWING" : "UNBOUNDED PRECEDING");
       }
     }
   }

@@ -5309,6 +5309,278 @@
       ],
       "expected_count": 4,
       "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX013",
+      "name": "Customer Lifetime Value with Order History",
+      "category": "complex",
+      "operator": "$lookup/pipeline/$addFields",
+      "description": "Calculate CLV by joining customers with their orders, computing total spend, average order value, and purchase frequency",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {"$lookup": {"from": "sales", "let": {"custId": "$_id"}, "pipeline": [{"$match": {"$expr": {"$eq": ["$customerId", "$$custId"]}}}, {"$match": {"status": {"$in": ["completed", "processing"]}}}], "as": "orders"}},
+        {"$addFields": {"totalOrders": {"$size": "$orders"}, "totalSpend": {"$sum": "$orders.amount"}, "avgOrderValue": {"$cond": [{"$gt": [{"$size": "$orders"}, 0]}, {"$divide": [{"$sum": "$orders.amount"}, {"$size": "$orders"}]}, 0]}}},
+        {"$project": {"_id": 1, "name": 1, "tier": 1, "totalOrders": 1, "totalSpend": {"$round": ["$totalSpend", 2]}, "avgOrderValue": {"$round": ["$avgOrderValue", 2]}}},
+        {"$sort": {"totalSpend": -1}}
+      ],
+      "expected_count": 7,
+      "sort_by": "totalSpend"
+    },
+    {
+      "id": "COMPLEX014",
+      "name": "Product Performance with Inventory Status",
+      "category": "complex",
+      "operator": "$lookup/$unwind/$group",
+      "description": "Analyze product performance by joining inventory levels and sales data, calculating sell-through rate",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$lookup": {"from": "inventory", "localField": "_id", "foreignField": "productId", "as": "inventoryRecords"}},
+        {"$addFields": {"totalInventory": {"$sum": "$inventoryRecords.quantity"}, "warehouseCount": {"$size": "$inventoryRecords"}}},
+        {"$lookup": {"from": "sales", "let": {"prodName": "$name"}, "pipeline": [{"$unwind": "$items"}, {"$match": {"$expr": {"$eq": ["$items.product", "$$prodName"]}}}, {"$group": {"_id": null, "totalSold": {"$sum": "$items.qty"}}}], "as": "salesData"}},
+        {"$addFields": {"totalSold": {"$ifNull": [{"$arrayElemAt": ["$salesData.totalSold", 0]}, 0]}}},
+        {"$addFields": {"sellThroughRate": {"$cond": [{"$gt": [{"$add": ["$totalInventory", "$totalSold"]}, 0]}, {"$multiply": [{"$divide": ["$totalSold", {"$add": ["$totalInventory", "$totalSold"]}]}, 100]}, 0]}}},
+        {"$project": {"_id": 1, "name": 1, "category": 1, "price": 1, "totalInventory": 1, "warehouseCount": 1, "totalSold": 1, "sellThroughRate": {"$round": ["$sellThroughRate", 1]}}},
+        {"$sort": {"sellThroughRate": -1}}
+      ],
+      "expected_count": 7,
+      "sort_by": "sellThroughRate"
+    },
+    {
+      "id": "COMPLEX015",
+      "name": "Support Ticket SLA Analysis",
+      "category": "complex",
+      "operator": "$addFields/$group/$project",
+      "description": "Calculate SLA metrics including resolution time, escalation rates, and satisfaction scores by category and priority",
+      "collection": "support_tickets",
+      "mongodb_pipeline": [
+        {"$addFields": {"resolutionTimeHours": {"$cond": [{"$ne": ["$resolvedAt", null]}, {"$divide": [{"$subtract": ["$resolvedAt", "$createdAt"]}, 3600000]}, null]}, "wasEscalated": {"$gt": [{"$size": "$escalations"}, 0]}, "escalationCount": {"$size": "$escalations"}, "messageCount": {"$size": "$messages"}}},
+        {"$group": {"_id": {"category": "$category", "priority": "$priority"}, "totalTickets": {"$sum": 1}, "resolvedTickets": {"$sum": {"$cond": [{"$in": ["$status", ["resolved", "closed"]]}, 1, 0]}}, "avgResolutionHours": {"$avg": "$resolutionTimeHours"}, "escalatedCount": {"$sum": {"$cond": ["$wasEscalated", 1, 0]}}, "avgSatisfaction": {"$avg": "$satisfaction.score"}, "avgMessages": {"$avg": "$messageCount"}}},
+        {"$addFields": {"resolutionRate": {"$multiply": [{"$divide": ["$resolvedTickets", "$totalTickets"]}, 100]}, "escalationRate": {"$multiply": [{"$divide": ["$escalatedCount", "$totalTickets"]}, 100]}}},
+        {"$project": {"_id": 0, "category": "$_id.category", "priority": "$_id.priority", "totalTickets": 1, "resolutionRate": {"$round": ["$resolutionRate", 1]}, "avgResolutionHours": {"$round": ["$avgResolutionHours", 1]}, "escalationRate": {"$round": ["$escalationRate", 1]}, "avgSatisfaction": {"$round": ["$avgSatisfaction", 1]}}},
+        {"$sort": {"category": 1, "priority": 1}}
+      ],
+      "expected_count": 8,
+      "sort_by": "category"
+    },
+    {
+      "id": "COMPLEX016",
+      "name": "Sales Trend Analysis with Moving Metrics",
+      "category": "complex",
+      "operator": "$setWindowFields",
+      "description": "Calculate running totals and rankings for sales using window functions partitioned by category",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": {"$ne": "cancelled"}}},
+        {"$sort": {"category": 1, "orderDate": 1}},
+        {"$setWindowFields": {"partitionBy": "$category", "sortBy": {"orderDate": 1}, "output": {"runningTotal": {"$sum": "$amount", "window": {"documents": ["unbounded", "current"]}}, "categoryRank": {"$rank": {}}, "orderNumber": {"$documentNumber": {}}}}},
+        {"$project": {"_id": 1, "orderId": 1, "category": 1, "amount": 1, "orderDate": 1, "runningTotal": 1, "categoryRank": 1, "orderNumber": 1}}
+      ],
+      "expected_count": 9,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX017",
+      "name": "Employee Hierarchy with Team Metrics",
+      "category": "complex",
+      "operator": "$graphLookup/$addFields",
+      "description": "Build org hierarchy using $graphLookup and calculate team-level metrics including headcount and total compensation",
+      "collection": "employees",
+      "mongodb_pipeline": [
+        {"$match": {"reportsTo": null}},
+        {"$graphLookup": {"from": "employees", "startWith": "$_id", "connectFromField": "_id", "connectToField": "reportsTo", "as": "directAndIndirectReports", "maxDepth": 5, "depthField": "level"}},
+        {"$addFields": {"teamSize": {"$size": "$directAndIndirectReports"}, "totalTeamSalary": {"$sum": "$directAndIndirectReports.salary"}, "totalTeamBonus": {"$sum": "$directAndIndirectReports.bonus"}, "avgTeamRating": {"$avg": "$directAndIndirectReports.rating"}}},
+        {"$project": {"_id": 1, "name": 1, "department": 1, "salary": 1, "teamSize": 1, "totalTeamSalary": 1, "totalTeamBonus": 1, "totalTeamCompensation": {"$add": ["$totalTeamSalary", "$totalTeamBonus"]}, "avgTeamRating": {"$round": ["$avgTeamRating", 2]}}}
+      ],
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX018",
+      "name": "Page View Session Analysis",
+      "category": "complex",
+      "operator": "$group/$addFields",
+      "description": "Analyze user sessions including page counts, total duration, conversion tracking, and device breakdown",
+      "collection": "page_views",
+      "mongodb_pipeline": [
+        {"$group": {"_id": "$sessionId", "userId": {"$first": "$userId"}, "pageCount": {"$sum": 1}, "totalDuration": {"$sum": "$duration"}, "hasConversion": {"$max": {"$cond": ["$isConversion", 1, 0]}}, "deviceType": {"$first": "$device.type"}, "browser": {"$first": "$device.browser"}, "firstPage": {"$first": "$page"}, "lastPage": {"$last": "$page"}, "sessionStart": {"$min": "$timestamp"}, "sessionEnd": {"$max": "$timestamp"}, "totalEvents": {"$sum": {"$size": "$events"}}}},
+        {"$addFields": {"avgPageDuration": {"$cond": [{"$gt": ["$pageCount", 0]}, {"$divide": ["$totalDuration", "$pageCount"]}, 0]}, "isAuthenticated": {"$ne": ["$userId", null]}}},
+        {"$project": {"_id": 0, "sessionId": "$_id", "userId": 1, "isAuthenticated": 1, "pageCount": 1, "totalDuration": 1, "avgPageDuration": {"$round": ["$avgPageDuration", 0]}, "hasConversion": {"$cond": [{"$eq": ["$hasConversion", 1]}, true, false]}, "deviceType": 1, "browser": 1, "firstPage": 1, "lastPage": 1, "totalEvents": 1}},
+        {"$sort": {"totalDuration": -1}}
+      ],
+      "expected_count": 8,
+      "sort_by": "totalDuration"
+    },
+    {
+      "id": "COMPLEX019",
+      "name": "Order Line Item Analysis with Aggregations",
+      "category": "complex",
+      "operator": "$unwind/$group/$addFields",
+      "description": "Analyze order line items to find top products by revenue, including discount impact and category performance",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$match": {"status": {"$ne": "cancelled"}}},
+        {"$unwind": "$lineItems"},
+        {"$group": {"_id": {"sku": "$lineItems.sku", "productName": "$lineItems.productName", "category": "$lineItems.category"}, "totalQuantity": {"$sum": "$lineItems.quantity"}, "orderCount": {"$sum": 1}, "grossRevenue": {"$sum": {"$multiply": ["$lineItems.quantity", "$lineItems.unitPrice"]}}, "totalDiscount": {"$sum": {"$multiply": ["$lineItems.quantity", {"$ifNull": ["$lineItems.discount", 0]}]}}, "avgUnitPrice": {"$avg": "$lineItems.unitPrice"}}},
+        {"$addFields": {"netRevenue": {"$subtract": ["$grossRevenue", "$totalDiscount"]}, "discountRate": {"$cond": [{"$gt": ["$grossRevenue", 0]}, {"$multiply": [{"$divide": ["$totalDiscount", "$grossRevenue"]}, 100]}, 0]}}},
+        {"$project": {"_id": 0, "sku": "$_id.sku", "productName": "$_id.productName", "category": "$_id.category", "totalQuantity": 1, "orderCount": 1, "grossRevenue": {"$round": ["$grossRevenue", 2]}, "netRevenue": {"$round": ["$netRevenue", 2]}, "discountRate": {"$round": ["$discountRate", 1]}, "avgUnitPrice": {"$round": ["$avgUnitPrice", 2]}}},
+        {"$sort": {"netRevenue": -1}},
+        {"$limit": 10}
+      ],
+      "expected_count": 8,
+      "sort_by": "netRevenue"
+    },
+    {
+      "id": "COMPLEX020",
+      "name": "Regional Sales Performance with Rankings",
+      "category": "complex",
+      "operator": "$group/$setWindowFields",
+      "description": "Rank regions by sales performance using window functions, with percentile calculations",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"status": "completed"}},
+        {"$group": {"_id": "$region", "totalSales": {"$sum": "$amount"}, "orderCount": {"$sum": 1}, "avgOrderValue": {"$avg": "$amount"}, "totalQuantity": {"$sum": "$quantity"}, "totalDiscount": {"$sum": {"$ifNull": ["$discount", 0]}}}},
+        {"$setWindowFields": {"sortBy": {"totalSales": -1}, "output": {"salesRank": {"$rank": {}}, "denseRank": {"$denseRank": {}}, "percentOfTotal": {"$sum": "$totalSales", "window": {"documents": ["unbounded", "unbounded"]}}}}},
+        {"$addFields": {"salesPercentage": {"$multiply": [{"$divide": ["$totalSales", "$percentOfTotal"]}, 100]}}},
+        {"$project": {"_id": 0, "region": "$_id", "totalSales": {"$round": ["$totalSales", 2]}, "orderCount": 1, "avgOrderValue": {"$round": ["$avgOrderValue", 2]}, "salesRank": 1, "salesPercentage": {"$round": ["$salesPercentage", 1]}}},
+        {"$sort": {"salesRank": 1}}
+      ],
+      "expected_count": 4,
+      "sort_by": "salesRank"
+    },
+    {
+      "id": "COMPLEX021",
+      "name": "Purchase Order Monthly Analysis",
+      "category": "complex",
+      "operator": "$addFields(date)/$group",
+      "description": "Analyze purchase orders by quarter with completion rate patterns",
+      "collection": "purchase_orders",
+      "mongodb_pipeline": [
+        {"$addFields": {"year": {"$year": "$orderedDate"}, "month": {"$month": "$orderedDate"}, "quarter": {"$ceil": {"$divide": [{"$month": "$orderedDate"}, 3]}}}},
+        {"$group": {"_id": {"year": "$year", "quarter": "$quarter"}, "totalAmount": {"$sum": "$amount"}, "orderCount": {"$sum": 1}, "avgAmount": {"$avg": "$amount"}, "completedOrders": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}}, "pendingOrders": {"$sum": {"$cond": [{"$eq": ["$status", "pending"]}, 1, 0]}}}},
+        {"$addFields": {"completionRate": {"$multiply": [{"$divide": ["$completedOrders", "$orderCount"]}, 100]}}},
+        {"$project": {"_id": 0, "year": "$_id.year", "quarter": "$_id.quarter", "totalAmount": {"$round": ["$totalAmount", 2]}, "orderCount": 1, "avgAmount": {"$round": ["$avgAmount", 2]}, "completionRate": {"$round": ["$completionRate", 1]}}},
+        {"$sort": {"year": 1, "quarter": 1}}
+      ],
+      "expected_count": 5,
+      "sort_by": "year"
+    },
+    {
+      "id": "COMPLEX022",
+      "name": "Multi-Dimensional Sales Facet Analysis",
+      "category": "complex",
+      "operator": "$facet",
+      "description": "Generate multiple analytical views of sales data in a single query using $facet",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$facet": {"byStatus": [{"$group": {"_id": "$status", "count": {"$sum": 1}, "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}], "byCategory": [{"$group": {"_id": "$category", "count": {"$sum": 1}, "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}], "byRegion": [{"$group": {"_id": "$region", "count": {"$sum": 1}, "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}], "topCustomers": [{"$group": {"_id": "$customerName", "orderCount": {"$sum": 1}, "totalSpend": {"$sum": "$amount"}}}, {"$sort": {"totalSpend": -1}}, {"$limit": 3}], "summary": [{"$group": {"_id": null, "totalOrders": {"$sum": 1}, "totalRevenue": {"$sum": "$amount"}, "avgOrderValue": {"$avg": "$amount"}}}]}},
+        {"$project": {"byStatus": 1, "byCategory": 1, "byRegion": 1, "topCustomers": 1, "summary": {"$arrayElemAt": ["$summary", 0]}}}
+      ],
+      "expected_count": 1,
+      "sort_by": "_id"
+    },
+    {
+      "id": "COMPLEX023",
+      "name": "Event Attendance Analysis with Date Bucketing",
+      "category": "complex",
+      "operator": "$bucket/$switch",
+      "description": "Bucket events by attendee ranges and analyze distribution patterns",
+      "collection": "events",
+      "mongodb_pipeline": [
+        {"$bucket": {"groupBy": "$attendees", "boundaries": [0, 50, 100, 250, 500, 1001], "default": "large", "output": {"count": {"$sum": 1}, "events": {"$push": "$title"}, "avgAttendees": {"$avg": "$attendees"}, "categories": {"$addToSet": "$category"}}}},
+        {"$addFields": {"sizeCategory": {"$switch": {"branches": [{"case": {"$lt": ["$_id", 50]}, "then": "Small (<50)"}, {"case": {"$lt": ["$_id", 100]}, "then": "Medium (50-99)"}, {"case": {"$lt": ["$_id", 250]}, "then": "Large (100-249)"}, {"case": {"$lt": ["$_id", 500]}, "then": "Very Large (250-499)"}, {"case": {"$lt": ["$_id", 1001]}, "then": "Massive (500+)"}], "default": "Unknown"}}}},
+        {"$project": {"_id": 0, "sizeCategory": 1, "eventCount": "$count", "events": 1, "avgAttendees": {"$round": ["$avgAttendees", 0]}, "uniqueCategories": {"$size": "$categories"}}}
+      ],
+      "expected_count": 4,
+      "sort_by": "sizeCategory"
+    },
+    {
+      "id": "COMPLEX024",
+      "name": "Order Fulfillment Pipeline Analysis",
+      "category": "complex",
+      "operator": "$addFields/$group",
+      "description": "Analyze fulfillment performance by warehouse and carrier, including shipping time calculations",
+      "collection": "orders_detailed",
+      "mongodb_pipeline": [
+        {"$match": {"fulfillment": {"$ne": null}}},
+        {"$addFields": {"processingTimeHours": {"$divide": [{"$subtract": ["$fulfillment.shippedDate", "$orderDate"]}, 3600000]}, "lineItemCount": {"$size": "$lineItems"}, "orderValue": "$payment.amount"}},
+        {"$group": {"_id": {"warehouse": "$fulfillment.warehouse", "carrier": "$fulfillment.carrier"}, "orderCount": {"$sum": 1}, "avgProcessingHours": {"$avg": "$processingTimeHours"}, "totalValue": {"$sum": "$orderValue"}, "avgLineItems": {"$avg": "$lineItemCount"}, "states": {"$addToSet": "$shippingAddress.state"}}},
+        {"$project": {"_id": 0, "warehouse": "$_id.warehouse", "carrier": "$_id.carrier", "orderCount": 1, "avgProcessingHours": {"$round": ["$avgProcessingHours", 1]}, "totalValue": {"$round": ["$totalValue", 2]}, "avgLineItems": {"$round": ["$avgLineItems", 1]}, "statesServed": {"$size": "$states"}}},
+        {"$sort": {"orderCount": -1}}
+      ],
+      "expected_count": 6,
+      "sort_by": "orderCount"
+    },
+    {
+      "id": "COMPLEX025",
+      "name": "Inventory Reorder Analysis with Thresholds",
+      "category": "complex",
+      "operator": "$lookup/pipeline/$switch",
+      "description": "Identify products needing reorder based on inventory levels and configured thresholds",
+      "collection": "products",
+      "mongodb_pipeline": [
+        {"$match": {"active": true}},
+        {"$lookup": {"from": "inventory", "let": {"productId": "$_id"}, "pipeline": [{"$match": {"$expr": {"$eq": ["$productId", "$$productId"]}}}, {"$group": {"_id": null, "totalQty": {"$sum": "$quantity"}, "warehouses": {"$push": {"wh": "$warehouse", "qty": "$quantity"}}, "lastRestock": {"$max": "$lastRestocked"}}}], "as": "inventorySummary"}},
+        {"$addFields": {"inventoryData": {"$arrayElemAt": ["$inventorySummary", 0]}}},
+        {"$addFields": {"currentStock": {"$ifNull": ["$inventoryData.totalQty", 0]}, "warehouseDistribution": {"$ifNull": ["$inventoryData.warehouses", []]}, "lastRestocked": "$inventoryData.lastRestock", "reorderPoint": {"$multiply": ["$stock", 0.2]}}},
+        {"$addFields": {"needsReorder": {"$lte": ["$currentStock", "$reorderPoint"]}, "stockStatus": {"$switch": {"branches": [{"case": {"$eq": ["$currentStock", 0]}, "then": "OUT_OF_STOCK"}, {"case": {"$lte": ["$currentStock", "$reorderPoint"]}, "then": "LOW_STOCK"}, {"case": {"$lte": ["$currentStock", {"$multiply": ["$stock", 0.5]}]}, "then": "MEDIUM_STOCK"}], "default": "IN_STOCK"}}}},
+        {"$project": {"_id": 1, "name": 1, "category": 1, "price": 1, "currentStock": 1, "reorderPoint": {"$round": ["$reorderPoint", 0]}, "stockStatus": 1, "needsReorder": 1, "lastRestocked": 1}},
+        {"$sort": {"currentStock": 1}}
+      ],
+      "expected_count": 7,
+      "sort_by": "currentStock"
+    },
+    {
+      "id": "COMPLEX026",
+      "name": "Customer Segmentation with RFM Analysis",
+      "category": "complex",
+      "operator": "$lookup/pipeline/$switch",
+      "description": "Segment customers using RFM (Recency, Frequency, Monetary) analysis pattern",
+      "collection": "customers",
+      "mongodb_pipeline": [
+        {"$lookup": {"from": "sales", "let": {"custId": "$_id"}, "pipeline": [{"$match": {"$expr": {"$eq": ["$customerId", "$$custId"]}}}, {"$match": {"status": "completed"}}, {"$group": {"_id": null, "orderCount": {"$sum": 1}, "totalSpend": {"$sum": "$amount"}, "lastOrderDate": {"$max": "$orderDate"}, "firstOrderDate": {"$min": "$orderDate"}}}], "as": "purchaseHistory"}},
+        {"$addFields": {"metrics": {"$arrayElemAt": ["$purchaseHistory", 0]}}},
+        {"$addFields": {"frequency": {"$ifNull": ["$metrics.orderCount", 0]}, "monetary": {"$ifNull": ["$metrics.totalSpend", 0]}, "lastOrder": "$metrics.lastOrderDate"}},
+        {"$addFields": {"segment": {"$switch": {"branches": [{"case": {"$and": [{"$gte": ["$frequency", 2]}, {"$gte": ["$monetary", 200]}]}, "then": "Champion"}, {"case": {"$gte": ["$monetary", 500]}, "then": "Big Spender"}, {"case": {"$gte": ["$frequency", 2]}, "then": "Loyal"}, {"case": {"$gt": ["$frequency", 0]}, "then": "New"}], "default": "Inactive"}}}},
+        {"$project": {"_id": 1, "name": 1, "email": 1, "tier": 1, "frequency": 1, "monetary": {"$round": ["$monetary", 2]}, "segment": 1}},
+        {"$sort": {"monetary": -1}}
+      ],
+      "expected_count": 7,
+      "sort_by": "monetary"
+    },
+    {
+      "id": "COMPLEX027",
+      "name": "Sales with Array Transformations",
+      "category": "complex",
+      "operator": "$map/$filter/$reduce",
+      "description": "Complex array transformations using $map, $filter, and $reduce on order items",
+      "collection": "sales",
+      "mongodb_pipeline": [
+        {"$match": {"items": {"$exists": true}, "items.0": {"$exists": true}}},
+        {"$addFields": {"itemCount": {"$size": "$items"}, "itemsWithTotal": {"$map": {"input": "$items", "as": "item", "in": {"product": "$$item.product", "qty": "$$item.qty", "price": "$$item.price", "lineTotal": {"$multiply": ["$$item.qty", "$$item.price"]}}}}, "highValueItems": {"$filter": {"input": "$items", "as": "item", "cond": {"$gte": [{"$multiply": ["$$item.qty", "$$item.price"]}, 100]}}}, "calculatedTotal": {"$reduce": {"input": "$items", "initialValue": 0, "in": {"$add": ["$$value", {"$multiply": ["$$this.qty", "$$this.price"]}]}}}}},
+        {"$addFields": {"highValueCount": {"$size": "$highValueItems"}, "avgItemPrice": {"$cond": [{"$gt": ["$itemCount", 0]}, {"$divide": ["$calculatedTotal", "$itemCount"]}, 0]}}},
+        {"$project": {"_id": 1, "orderId": 1, "customerName": 1, "itemCount": 1, "calculatedTotal": 1, "highValueCount": 1, "avgItemPrice": {"$round": ["$avgItemPrice", 2]}, "itemsWithTotal": 1}},
+        {"$sort": {"calculatedTotal": -1}}
+      ],
+      "expected_count": 8,
+      "sort_by": "calculatedTotal"
+    },
+    {
+      "id": "COMPLEX028",
+      "name": "Product Sales Analysis with Category Aggregation and Top Products",
+      "category": "complex",
+      "operator": "$unwind/$lookup/$group/$project/$slice/$sortArray",
+      "description": "Complex pipeline: unwind order items, lookup products, group by category/product, re-group by category with total revenue, project top 3 products per category using $slice and $sortArray",
+      "collection": "orders",
+      "mongodb_pipeline": [
+        {"$unwind": "$items"},
+        {"$lookup": {"from": "products", "localField": "items.productId", "foreignField": "_id", "as": "productInfo"}},
+        {"$unwind": "$productInfo"},
+        {"$group": {"_id": {"category": "$productInfo.category", "productId": "$productInfo._id", "productName": "$productInfo.name"}, "totalQuantitySold": {"$sum": "$items.quantity"}, "totalRevenue": {"$sum": {"$multiply": ["$items.quantity", "$productInfo.price"]}}}},
+        {"$group": {"_id": "$_id.category", "totalCategoryRevenue": {"$sum": "$totalRevenue"}, "products": {"$push": {"productId": "$_id.productId", "productName": "$_id.productName", "totalQuantitySold": "$totalQuantitySold", "totalRevenue": "$totalRevenue"}}}},
+        {"$project": {"_id": 0, "category": "$_id", "totalCategoryRevenue": 1, "topProducts": {"$slice": [{"$sortArray": {"input": "$products", "sortBy": {"totalRevenue": -1}}}, 3]}}}
+      ],
+      "sort_by": "category"
     }
   ]
 }

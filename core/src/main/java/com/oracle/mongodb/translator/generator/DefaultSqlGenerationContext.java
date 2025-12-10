@@ -13,6 +13,7 @@ import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import com.oracle.mongodb.translator.util.FieldNameValidator;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -155,6 +156,9 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final String baseTableAlias;
   private boolean jsonOutputMode = false;
   private boolean nestedPipeline = false;
+  private boolean inCteContext = false;
+  private String cteSourceTable = null;
+  private Set<String> compoundIdFields = Collections.emptySet();
 
   /** Stores metadata about a $lookup field for generating correlated subqueries. */
   private record LookupFieldInfo(String foreignTable, String localField, String foreignField) {}
@@ -274,6 +278,9 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     nested.unwoundPaths.putAll(this.unwoundPaths);
     nested.jsonOutputMode = this.jsonOutputMode;
     nested.nestedPipeline = this.nestedPipeline;
+    nested.inCteContext = this.inCteContext;
+    nested.cteSourceTable = this.cteSourceTable;
+    nested.compoundIdFields = this.compoundIdFields;
     return nested;
   }
 
@@ -397,5 +404,35 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public boolean isNestedPipeline() {
     return nestedPipeline;
+  }
+
+  @Override
+  public void setInCteContext(boolean inCte) {
+    this.inCteContext = inCte;
+  }
+
+  @Override
+  public boolean isInCteContext() {
+    return inCteContext;
+  }
+
+  @Override
+  public void setCteSourceTable(String sourceTable) {
+    this.cteSourceTable = sourceTable;
+  }
+
+  @Override
+  public String getCteSourceTable() {
+    return cteSourceTable;
+  }
+
+  @Override
+  public void registerCompoundIdFields(Set<String> fields) {
+    this.compoundIdFields = fields != null ? Set.copyOf(fields) : Collections.emptySet();
+  }
+
+  @Override
+  public boolean isCompoundIdField(String fieldName) {
+    return compoundIdFields.contains(fieldName);
   }
 }

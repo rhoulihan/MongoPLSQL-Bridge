@@ -428,6 +428,36 @@ PROMPT   Inserted 12 org_chart records
 CREATE INDEX idx_org_reportsTo ON org_chart(JSON_VALUE(data, '$.reportsTo'));
 CREATE INDEX idx_org_dept ON org_chart(JSON_VALUE(data, '$.department'));
 
+-- ============================================================
+-- Create Orders Table (for $lookup tests with products)
+-- ============================================================
+PROMPT Loading orders table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE orders CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE orders (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO orders (id, data) VALUES ('O001', '{"_id": "O001", "customerId": "C001", "orderDate": {"$date": "2024-01-15T10:00:00.000Z"}, "status": "completed", "items": [{"productId": "P001", "quantity": 3}, {"productId": "P002", "quantity": 1}]}');
+INSERT INTO orders (id, data) VALUES ('O002', '{"_id": "O002", "customerId": "C002", "orderDate": {"$date": "2024-01-16T14:30:00.000Z"}, "status": "completed", "items": [{"productId": "P003", "quantity": 1}, {"productId": "P007", "quantity": 5}]}');
+INSERT INTO orders (id, data) VALUES ('O003', '{"_id": "O003", "customerId": "C001", "orderDate": {"$date": "2024-01-18T09:15:00.000Z"}, "status": "pending", "items": [{"productId": "P006", "quantity": 2}]}');
+INSERT INTO orders (id, data) VALUES ('O004', '{"_id": "O004", "customerId": "C003", "orderDate": {"$date": "2024-01-20T16:00:00.000Z"}, "status": "completed", "items": [{"productId": "P004", "quantity": 10}, {"productId": "P001", "quantity": 2}, {"productId": "P002", "quantity": 3}]}');
+INSERT INTO orders (id, data) VALUES ('O005', '{"_id": "O005", "customerId": "C004", "orderDate": {"$date": "2024-01-22T11:45:00.000Z"}, "status": "shipped", "items": [{"productId": "P008", "quantity": 1}]}');
+INSERT INTO orders (id, data) VALUES ('O006', '{"_id": "O006", "customerId": "C002", "orderDate": {"$date": "2024-01-25T08:30:00.000Z"}, "status": "completed", "items": [{"productId": "P006", "quantity": 1}, {"productId": "P007", "quantity": 2}]}');
+INSERT INTO orders (id, data) VALUES ('O007', '{"_id": "O007", "customerId": "C005", "orderDate": {"$date": "2024-02-01T13:00:00.000Z"}, "status": "completed", "items": [{"productId": "P001", "quantity": 5}, {"productId": "P004", "quantity": 20}]}');
+INSERT INTO orders (id, data) VALUES ('O008', '{"_id": "O008", "customerId": "C006", "orderDate": {"$date": "2024-02-05T15:20:00.000Z"}, "status": "pending", "items": [{"productId": "P003", "quantity": 2}, {"productId": "P006", "quantity": 1}]}');
+
+PROMPT   Inserted 8 orders records
+
+CREATE INDEX idx_orders_customerId ON orders(JSON_VALUE(data, '$.customerId'));
+CREATE INDEX idx_orders_status ON orders(JSON_VALUE(data, '$.status'));
+
 COMMIT;
 
 -- ============================================================
@@ -451,7 +481,9 @@ SELECT 'events', COUNT(*) FROM events
 UNION ALL
 SELECT 'inventory', COUNT(*) FROM inventory
 UNION ALL
-SELECT 'org_chart', COUNT(*) FROM org_chart;
+SELECT 'org_chart', COUNT(*) FROM org_chart
+UNION ALL
+SELECT 'orders', COUNT(*) FROM orders;
 
 PROMPT ============================================================
 

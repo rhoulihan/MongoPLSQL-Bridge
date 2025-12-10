@@ -275,8 +275,72 @@ class TranslatorCliTest {
     Path inputFile = tempDir.resolve("pipeline.json");
     Files.writeString(inputFile, "[{\"$limit\": 10}]");
 
-    int exitCode = cli.run(new String[] {"-c", "test", "-i", "-p", inputFile.toString()});
+    int exitCode = cli.run(new String[] {"-c", "test", "-i", inputFile.toString()});
 
     assertThat(exitCode).isZero();
+  }
+
+  @Test
+  void shouldFailWhenExecuteOptionMissingValue() {
+    int exitCode = cli.run(new String[] {"--execute"});
+
+    assertThat(exitCode).isEqualTo(1);
+    assertThat(errStream.toString()).contains("--execute requires a value");
+  }
+
+  @Test
+  void shouldFailWhenExecuteConnectionFileNotFound() throws IOException {
+    Path inputFile = tempDir.resolve("pipeline.json");
+    Files.writeString(inputFile, "[{\"$limit\": 10}]");
+
+    int exitCode =
+        cli.run(
+            new String[] {
+              "--collection", "test",
+              "--execute", "/nonexistent/connection.json",
+              inputFile.toString()
+            });
+
+    assertThat(exitCode).isNotZero();
+    assertThat(errStream.toString()).contains("connection file");
+  }
+
+  @Test
+  void shouldParseConnectionFile() throws IOException {
+    Path inputFile = tempDir.resolve("pipeline.json");
+    Path connectionFile = tempDir.resolve("connection.json");
+    Files.writeString(inputFile, "[{\"$limit\": 10}]");
+    Files.writeString(
+        connectionFile,
+        """
+        {
+          "jdbcUrl": "jdbc:oracle:thin:@localhost:1521/FREEPDB1",
+          "user": "testuser",
+          "password": "testpass"
+        }
+        """);
+
+    // This will fail to connect (no database), but should parse the file correctly
+    int exitCode =
+        cli.run(
+            new String[] {
+              "--collection", "test",
+              "--execute", connectionFile.toString(),
+              inputFile.toString()
+            });
+
+    // Should fail with connection error, not file parsing error
+    String errOutput = errStream.toString();
+    assertThat(errOutput).doesNotContain("connection file");
+    // The error should be about database connection, not parsing
+  }
+
+  @Test
+  void shouldShowExecuteOptionInHelp() {
+    int exitCode = cli.run(new String[] {"--help"});
+
+    assertThat(exitCode).isZero();
+    assertThat(outStream.toString()).contains("--execute");
+    assertThat(outStream.toString()).contains("connection");
   }
 }

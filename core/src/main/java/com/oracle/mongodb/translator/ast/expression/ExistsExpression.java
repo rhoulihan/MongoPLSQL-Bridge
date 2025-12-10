@@ -55,8 +55,43 @@ public final class ExistsExpression implements Expression {
       ctx.sql(".");
     }
     ctx.sql("data, '$.");
-    ctx.sql(fieldPath);
+    ctx.sql(convertToOracleJsonPath(fieldPath));
     ctx.sql("')");
+  }
+
+  /**
+   * Converts a MongoDB field path to Oracle JSON path syntax. MongoDB uses dot notation for array
+   * indices (e.g., "items.0"), but Oracle JSON path requires bracket notation (e.g., "items[0]").
+   */
+  private String convertToOracleJsonPath(String path) {
+    String[] segments = path.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      String segment = segments[i];
+      if (isNumeric(segment)) {
+        // Convert numeric segment to bracket notation: .0 -> [0]
+        result.append("[").append(segment).append("]");
+      } else {
+        if (i > 0) {
+          result.append(".");
+        }
+        result.append(segment);
+      }
+    }
+    return result.toString();
+  }
+
+  /** Checks if a string represents a non-negative integer (array index). */
+  private boolean isNumeric(String str) {
+    if (str == null || str.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < str.length(); i++) {
+      if (!Character.isDigit(str.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override

@@ -260,4 +260,69 @@ class FieldPathExpressionTest {
 
     assertThat(context.toSql()).isEqualTo("JSON_VALUE(data, '$.\"_id\"' RETURNING NUMBER)");
   }
+
+  @Test
+  void shouldRenderPipelineLookupFieldAsColumnReference() {
+    // Pipeline form $lookup produces a JSON array column (e.g., orders) via JSON_ARRAYAGG
+    // When referencing $orders, it should access lateralAlias.orders (the column name)
+    // NOT lateralAlias.data.orders (which would be wrong for LATERAL join results)
+    context.registerPipelineLookupAlias("orders", "sales_1");
+
+    var expr = FieldPathExpression.of("orders");
+    expr.render(context);
+
+    // For pipeline lookup, the result is a column named after the "as" field
+    assertThat(context.toSql()).isEqualTo("sales_1.orders");
+  }
+
+  @Test
+  void shouldNotAccessNestedPathInPipelineLookupDirectly() {
+    // For pipeline form $lookup, the result is a JSON array
+    // Accessing nested paths like $orders.amount requires array processing
+    // But direct field reference should at least point to the column
+    context.registerPipelineLookupAlias("orders", "sales_1");
+
+    var expr = FieldPathExpression.of("orders.amount");
+    expr.render(context);
+
+    // Should access the column's JSON path, not .data
+    assertThat(context.toSql()).isEqualTo("sales_1.orders.amount");
+  }
+
+  @Test
+  void shouldRenderLookupFieldPathWithUnderscoreField() {
+    // When accessing _id from a $lookup result, it should be quoted
+    // Oracle dot notation requires quoting identifiers starting with underscore
+    context.registerLookupTableAlias("product", "products_1");
+
+    var expr = FieldPathExpression.of("product._id");
+    expr.render(context);
+
+    assertThat(context.toSql()).isEqualTo("products_1.data.\"_id\"");
+  }
+
+  @Test
+  void shouldRenderLookupFieldPathWithNestedUnderscoreField() {
+    // Nested paths with underscore-prefixed fields should also be quoted
+    context.registerLookupTableAlias("order", "orders_1");
+
+    var expr = FieldPathExpression.of("order.customer._id");
+    expr.render(context);
+
+    assertThat(context.toSql()).isEqualTo("orders_1.data.customer.\"_id\"");
+  }
+
+  @Test
+  void shouldQuoteUnderscoreColumnInCteContext() {
+    // In CTE context, column references to underscore-prefixed names must be quoted
+    // e.g., "$_id" in a project stage after a group with compound _id
+    var cteContext = new DefaultSqlGenerationContext();
+    cteContext.setInCteContext(true);
+
+    var expr = FieldPathExpression.of("_id");
+    expr.render(cteContext);
+
+    // Oracle requires quoting identifiers starting with underscore
+    assertThat(cteContext.toSql()).isEqualTo("\"_id\"");
+  }
 }
