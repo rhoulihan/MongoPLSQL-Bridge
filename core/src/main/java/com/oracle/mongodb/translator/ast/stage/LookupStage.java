@@ -6,6 +6,8 @@
 
 package com.oracle.mongodb.translator.ast.stage;
 
+import com.oracle.mongodb.translator.ast.expression.AccumulatorExpression;
+import com.oracle.mongodb.translator.ast.expression.AccumulatorOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
 import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.Expression;
@@ -218,8 +220,9 @@ public final class LookupStage implements Stage {
 
   private void renderPipelineForm(SqlGenerationContext ctx) {
     // Pipeline form with let/pipeline uses LATERAL join with correlated subquery
-    // Result pattern:
-    // , LATERAL (SELECT JSON_ARRAYAGG(f.data) FROM collection f WHERE ...) lookup_alias
+    // Result pattern depends on pipeline content:
+    // - Without $group: , LATERAL (SELECT JSON_ARRAYAGG(f.data) FROM collection f WHERE ...) alias
+    // - With $group: , LATERAL (SELECT JSON_ARRAY(JSON_OBJECT(...aggregations...)) ...) alias
 
     // Validate table name
     FieldNameValidator.validateTableName(from);
@@ -234,19 +237,33 @@ public final class LookupStage implements Stage {
       ctx.registerPipelineLookupAlias(as, alias);
     }
 
-    // Start LATERAL join - use comma join since LATERAL works as correlated subquery
-    ctx.sql(", LATERAL (SELECT JSON_ARRAYAGG(");
-    ctx.sql(alias);
-    ctx.sql("_inner.data");
+    // Check if pipeline contains a $group stage
+    GroupStage groupStage = findGroupStage();
 
-    // Add ORDER BY inside JSON_ARRAYAGG if we have a sort stage in the pipeline
-    SortStage sortStage = findSortStage();
-    if (sortStage != null) {
-      ctx.sql(" ORDER BY ");
-      renderSortFields(sortStage, alias + "_inner", ctx);
+    // Start LATERAL join - use comma join since LATERAL works as correlated subquery
+    ctx.sql(", LATERAL (SELECT ");
+
+    if (groupStage != null) {
+      // Pipeline with $group: render aggregated JSON object
+      // Result is JSON_ARRAY(JSON_OBJECT('_id' VALUE ..., 'field' VALUE AGG(...)))
+      renderGroupAggregation(groupStage, alias + "_inner", ctx);
+    } else {
+      // Pipeline without $group: collect raw documents
+      ctx.sql("JSON_ARRAYAGG(");
+      ctx.sql(alias);
+      ctx.sql("_inner.data");
+
+      // Add ORDER BY inside JSON_ARRAYAGG if we have a sort stage in the pipeline
+      SortStage sortStage = findSortStage();
+      if (sortStage != null) {
+        ctx.sql(" ORDER BY ");
+        renderSortFields(sortStage, alias + "_inner", ctx);
+      }
+
+      ctx.sql(")");
     }
 
-    ctx.sql(") AS ");
+    ctx.sql(" AS ");
     ctx.sql(as);
     ctx.sql(" FROM ");
     ctx.tableName(from);
@@ -272,12 +289,14 @@ public final class LookupStage implements Stage {
       }
     }
 
-    // Add FETCH FIRST for $limit stage in pipeline
-    LimitStage limitStage = findLimitStage();
-    if (limitStage != null) {
-      ctx.sql(" FETCH FIRST ");
-      ctx.sql(String.valueOf(limitStage.getLimit()));
-      ctx.sql(" ROWS ONLY");
+    // Add FETCH FIRST for $limit stage in pipeline (only if no $group)
+    if (groupStage == null) {
+      LimitStage limitStage = findLimitStage();
+      if (limitStage != null) {
+        ctx.sql(" FETCH FIRST ");
+        ctx.sql(String.valueOf(limitStage.getLimit()));
+        ctx.sql(" ROWS ONLY");
+      }
     }
 
     ctx.sql(") ");
@@ -302,6 +321,116 @@ public final class LookupStage implements Stage {
       }
     }
     return null;
+  }
+
+  /** Finds the $group stage in the pipeline, if present. */
+  private GroupStage findGroupStage() {
+    for (Stage stage : pipeline) {
+      if (stage instanceof GroupStage) {
+        return (GroupStage) stage;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Renders a $group aggregation in a pipeline lookup.
+   * Produces: JSON_ARRAY(JSON_OBJECT('_id' VALUE ..., 'field' VALUE AGG(...)))
+   */
+  private void renderGroupAggregation(
+      GroupStage groupStage, String innerAlias, SqlGenerationContext ctx) {
+    // For $group in pipeline lookup, we produce a single-element JSON array containing
+    // a JSON object with the aggregated values
+    ctx.sql("JSON_ARRAY(JSON_OBJECT(");
+
+    boolean first = true;
+
+    // Render _id field
+    Expression idExpr = groupStage.getIdExpression();
+    ctx.sql("'_id' VALUE ");
+    if (idExpr == null) {
+      ctx.sql("NULL");
+    } else {
+      renderGroupExpression(idExpr, innerAlias, ctx);
+    }
+    first = false;
+
+    // Render each accumulator
+    for (var entry : groupStage.getAccumulators().entrySet()) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      ctx.sql("'");
+      ctx.sql(entry.getKey());
+      ctx.sql("' VALUE ");
+      renderAccumulatorExpression(entry.getValue(), innerAlias, ctx);
+      first = false;
+    }
+
+    ctx.sql("))");
+  }
+
+  /**
+   * Renders an expression in group context with the given table alias.
+   */
+  private void renderGroupExpression(Expression expr, String tableAlias, SqlGenerationContext ctx) {
+    if (expr instanceof FieldPathExpression fieldExpr) {
+      String path = fieldExpr.getPath();
+      if (path.startsWith("$")) {
+        path = path.substring(1);
+      }
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(tableAlias);
+      ctx.sql(".data, '$.");
+      ctx.sql(path);
+      ctx.sql("')");
+    } else {
+      ctx.visit(expr);
+    }
+  }
+
+  /**
+   * Renders an accumulator expression in pipeline lookup context.
+   * Handles SUM, AVG, COUNT, MIN, MAX, etc. with proper table alias.
+   */
+  private void renderAccumulatorExpression(
+      AccumulatorExpression accumulator, String tableAlias, SqlGenerationContext ctx) {
+    AccumulatorOp op = accumulator.getOp();
+    Expression arg = accumulator.getArgument();
+
+    if (op == AccumulatorOp.COUNT) {
+      ctx.sql("COUNT(*)");
+    } else {
+      // Use NVL to handle NULL when no rows match
+      ctx.sql("NVL(");
+      ctx.sql(op.getSqlFunction());
+      ctx.sql("(");
+      if (arg != null) {
+        renderAccumulatorArgument(arg, tableAlias, ctx);
+      }
+      ctx.sql("), 0)");
+    }
+  }
+
+  /**
+   * Renders an accumulator argument with proper table alias and type handling.
+   */
+  private void renderAccumulatorArgument(
+      Expression arg, String tableAlias, SqlGenerationContext ctx) {
+    if (arg instanceof FieldPathExpression fieldExpr) {
+      String path = fieldExpr.getPath();
+      if (path.startsWith("$")) {
+        path = path.substring(1);
+      }
+      // Use RETURNING NUMBER for numeric aggregations
+      ctx.sql("JSON_VALUE(");
+      ctx.sql(tableAlias);
+      ctx.sql(".data, '$.");
+      ctx.sql(path);
+      ctx.sql("' RETURNING NUMBER)");
+    } else {
+      ctx.visit(arg);
+    }
   }
 
   /** Renders sort fields for ORDER BY inside JSON_ARRAYAGG. */

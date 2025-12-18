@@ -146,7 +146,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private final List<Object> bindVariables = new ArrayList<>();
   private final Map<String, Integer> tableAliasCounters = new HashMap<>();
   private final Map<String, Expression> virtualFields = new HashMap<>();
-  private final Map<String, LookupFieldInfo> lookupFields = new HashMap<>();
+  private final Map<String, SqlGenerationContext.LookupFieldInfo> lookupFields = new HashMap<>();
   private final Set<String> lookupsConsumedBySize = new HashSet<>();
   private final Map<String, String> lookupTableAliases = new HashMap<>();
   private final Map<String, String> pipelineLookupAliases = new HashMap<>();
@@ -160,8 +160,7 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private String cteSourceTable = null;
   private Set<String> compoundIdFields = Collections.emptySet();
 
-  /** Stores metadata about a $lookup field for generating correlated subqueries. */
-  private record LookupFieldInfo(String foreignTable, String localField, String foreignField) {}
+  // Uses SqlGenerationContext.LookupFieldInfo record for lookup metadata
 
   public DefaultSqlGenerationContext() {
     this(false, Oracle26aiDialect.INSTANCE, null);
@@ -211,8 +210,12 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
 
   @Override
   public void identifier(String name) {
-    // Quote if: doesn't match simple pattern, OR is a reserved word
-    if (SIMPLE_IDENTIFIER.matcher(name).matches() && !RESERVED_WORDS.contains(name.toUpperCase())) {
+    // Always quote in JSON output mode to preserve case for JSON_OBJECT(*)
+    // Otherwise: quote if doesn't match simple pattern OR is a reserved word
+    if (jsonOutputMode) {
+      sql.append("\"").append(name).append("\"");
+    } else if (SIMPLE_IDENTIFIER.matcher(name).matches()
+        && !RESERVED_WORDS.contains(name.toUpperCase())) {
       sql.append(name);
     } else {
       sql.append("\"").append(name).append("\"");
@@ -230,7 +233,14 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   public void tableName(String name) {
     // Validate table name to prevent SQL injection
     FieldNameValidator.validateTableName(name);
-    identifier(name);
+    // Table names should not be affected by jsonOutputMode - only quote if needed
+    // (starts with underscore, contains special chars, or is a reserved word)
+    if (SIMPLE_IDENTIFIER.matcher(name).matches()
+        && !RESERVED_WORDS.contains(name.toUpperCase())) {
+      sql.append(name);
+    } else {
+      sql.append("\"").append(name).append("\"");
+    }
   }
 
   @Override
@@ -297,18 +307,25 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public void registerLookupField(
       String asField, String foreignTable, String localField, String foreignField) {
-    lookupFields.put(asField, new LookupFieldInfo(foreignTable, localField, foreignField));
+    lookupFields.put(
+        asField, new SqlGenerationContext.LookupFieldInfo(foreignTable, localField, foreignField));
   }
 
   @Override
   public Expression getLookupSizeExpression(String fieldName) {
-    LookupFieldInfo info = lookupFields.get(fieldName);
+    SqlGenerationContext.LookupFieldInfo info = lookupFields.get(fieldName);
     if (info != null) {
       // Mark this lookup as consumed by $size - the JOIN won't be needed
       lookupsConsumedBySize.add(fieldName);
-      return new LookupSizeExpression(info.foreignTable, info.localField, info.foreignField);
+      return new LookupSizeExpression(
+          info.foreignTable(), info.localField(), info.foreignField());
     }
     return null;
+  }
+
+  @Override
+  public SqlGenerationContext.LookupFieldInfo getLookupFieldInfo(String fieldName) {
+    return lookupFields.get(fieldName);
   }
 
   @Override

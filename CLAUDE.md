@@ -392,14 +392,14 @@ Both databases contain matching test data:
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod` |
 | Conditional | `$cond`, `$ifNull` |
 | String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll` |
-| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` |
+| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear`, `$week`, `$isoWeek`, `$isoWeekYear` |
 | Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice` |
 | Type Conversion | `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate` |
 | Accumulators | `$sum`, `$avg`, `$count`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet` |
 
 **Test Coverage:**
-- Unit Tests: 90% line coverage, 78% branch coverage
-- Cross-Database Validation: 175 tests (MongoDB 8.0 ↔ Oracle 23.6)
+- Unit Tests: 89% instruction coverage, 77% branch coverage (1,609 tests)
+- Cross-Database Validation: 191 tests (166 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 - Large-Scale Tests: 10 complex pipelines with deeply nested documents (~4GB data)
 
 ## Development Guidelines

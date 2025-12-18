@@ -121,6 +121,18 @@ public interface SqlGenerationContext {
   Expression getLookupSizeExpression(String fieldName);
 
   /**
+   * Gets the lookup field info if the field is from a $lookup stage. Returns the foreign table
+   * name, local field, and foreign field for generating correlated subqueries.
+   *
+   * @param fieldName the field name to check (the "as" field of the lookup)
+   * @return LookupFieldInfo if this is a lookup field, null otherwise
+   */
+  LookupFieldInfo getLookupFieldInfo(String fieldName);
+
+  /** Information about a registered lookup field. */
+  record LookupFieldInfo(String foreignTable, String localField, String foreignField) {}
+
+  /**
    * Checks if a lookup field has been "consumed" by a $size operation. If a lookup is only used
    * with $size, the JOIN should be skipped since the correlated subquery replaces it.
    *

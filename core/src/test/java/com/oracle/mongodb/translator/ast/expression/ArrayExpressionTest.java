@@ -1299,4 +1299,88 @@ class ArrayExpressionTest {
         .as("Should use $.size() path since column IS the array")
         .contains("'$.size()'");
   }
+
+  @Test
+  void shouldRenderSumOnLookupResultWithNestedPath() {
+    // Test for $sum on lookup result field with nested path
+    // MongoDB: {$sum: "$orders.payment.amount"} where "orders" is from $lookup
+    // Should generate correlated subquery to sum from the joined table
+    DefaultSqlGenerationContext ctx = new DefaultSqlGenerationContext(false, null, "base");
+    // Register a lookup: orders comes from orders_detailed table
+    ctx.registerLookupField("orders", "orders_detailed", "_id", "customerId");
+
+    // $sum: "$orders.payment.amount"
+    var expr = ArrayExpression.sumArray(FieldPathExpression.of("orders.payment.amount"));
+    expr.render(ctx);
+
+    String sql = ctx.toSql();
+
+    // Should generate correlated subquery, NOT JSON_TABLE on base.data
+    assertThat(sql)
+        .as("Should NOT reference base.data.orders (lookup result doesn't exist in source)")
+        .doesNotContain("base.data, '$.orders");
+    assertThat(sql)
+        .as("Should query from the foreign table")
+        .contains("orders_detailed");
+    assertThat(sql)
+        .as("Should sum the nested field")
+        .containsIgnoringCase("SUM");
+  }
+
+  @Test
+  void shouldRenderIsArrayUsingTypeFunction() {
+    // $isArray should use JSON_VALUE with .type() to properly detect arrays
+    // The previous implementation using JSON_EXISTS with [0] was incorrect because
+    // Oracle treats scalars as single-element arrays
+    var expr = ArrayExpression.isArray(FieldPathExpression.of("tags"));
+    expr.render(context);
+    String sql = context.toSql();
+
+    // Should use .type() = 'array' for proper detection
+    assertThat(sql)
+        .as("Should use .type() JSON path function for array detection")
+        .contains(".type()");
+    assertThat(sql)
+        .as("Should compare type to 'array'")
+        .contains("'array'");
+    // Must return SQL boolean literals TRUE/FALSE for proper JSON serialization
+    // as JSON booleans instead of strings
+    assertThat(sql)
+        .as("Should return SQL TRUE for JSON boolean serialization")
+        .contains("THEN TRUE");
+    assertThat(sql)
+        .as("Should return SQL FALSE for JSON boolean serialization")
+        .contains("ELSE FALSE");
+  }
+
+  @Test
+  void shouldRenderReduceConcatWithJsonTypeForEmptyArrays() {
+    // $reduce with concat pattern should return empty string (not null) for empty arrays
+    // MongoDB: $reduce: {input: "$tags", initialValue: "", in: {$concat: ["$$value", "$$this"]}}
+    // Oracle treats '' as NULL, so we use JSON('""') for proper empty string output
+    var inExpr =
+        new StringExpression(
+            StringOp.CONCAT,
+            List.of(FieldPathExpression.of("$value"), FieldPathExpression.of("$this")));
+    var expr =
+        new ArrayExpression(
+            ArrayOp.REDUCE,
+            FieldPathExpression.of("tags"),
+            LiteralExpression.of(""),
+            List.of(inExpr));
+
+    expr.render(context);
+    String sql = context.toSql();
+
+    // Should use JSON type to ensure empty string is properly serialized
+    assertThat(sql)
+        .as("Should use CASE with JSON for empty arrays")
+        .contains("CASE WHEN listagg_result IS NULL THEN JSON");
+    assertThat(sql)
+        .as("Should output JSON empty string literal for NULL")
+        .contains("JSON('\"\"')");
+    assertThat(sql)
+        .as("Should wrap non-null result in JSON quotes")
+        .contains("JSON('\"' || listagg_result || '\"')");
+  }
 }

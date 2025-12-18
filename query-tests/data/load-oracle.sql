@@ -281,16 +281,16 @@ CREATE TABLE employees (
     data JSON
 );
 
-INSERT INTO employees (id, data) VALUES ('E001', '{"_id": "E001", "name": "Alice", "department": "Engineering", "team": "Backend", "salary": 95000, "bonus": 10000, "yearsOfService": 5, "active": true, "rating": 4.5}');
-INSERT INTO employees (id, data) VALUES ('E002', '{"_id": "E002", "name": "Bob", "department": "Engineering", "team": "Frontend", "salary": 85000, "bonus": 8000, "yearsOfService": 3, "active": true, "rating": 4.0}');
-INSERT INTO employees (id, data) VALUES ('E003', '{"_id": "E003", "name": "Carol", "department": "Engineering", "team": "Backend", "salary": 105000, "bonus": 15000, "yearsOfService": 7, "active": true, "rating": 4.8}');
-INSERT INTO employees (id, data) VALUES ('E004', '{"_id": "E004", "name": "David", "department": "Sales", "team": "Enterprise", "salary": 75000, "bonus": 25000, "yearsOfService": 4, "active": true, "rating": 4.2}');
-INSERT INTO employees (id, data) VALUES ('E005', '{"_id": "E005", "name": "Eve", "department": "Sales", "team": "SMB", "salary": 65000, "bonus": 15000, "yearsOfService": 2, "active": true, "rating": 3.8}');
-INSERT INTO employees (id, data) VALUES ('E006', '{"_id": "E006", "name": "Frank", "department": "Sales", "team": "Enterprise", "salary": 80000, "bonus": 30000, "yearsOfService": 6, "active": false, "rating": 4.5}');
-INSERT INTO employees (id, data) VALUES ('E007', '{"_id": "E007", "name": "Grace", "department": "Marketing", "team": "Digital", "salary": 70000, "bonus": 5000, "yearsOfService": 1, "active": true, "rating": 3.5}');
-INSERT INTO employees (id, data) VALUES ('E008', '{"_id": "E008", "name": "Henry", "department": "Marketing", "team": "Content", "salary": 72000, "bonus": 6000, "yearsOfService": 2, "active": true, "rating": 4.0}');
-INSERT INTO employees (id, data) VALUES ('E009', '{"_id": "E009", "name": "Ivy", "department": "Engineering", "team": "DevOps", "salary": 98000, "bonus": 12000, "yearsOfService": 4, "active": true, "rating": 4.3}');
-INSERT INTO employees (id, data) VALUES ('E010', '{"_id": "E010", "name": "Jack", "department": "HR", "team": "Recruiting", "salary": 60000, "bonus": 3000, "yearsOfService": 1, "active": true, "rating": null}');
+INSERT INTO employees (id, data) VALUES ('E001', '{"_id": "E001", "name": "Alice", "department": "Engineering", "team": "Backend", "salary": 95000, "bonus": 10000, "yearsOfService": 5, "active": true, "rating": 4.5, "reportsTo": null}');
+INSERT INTO employees (id, data) VALUES ('E002', '{"_id": "E002", "name": "Bob", "department": "Engineering", "team": "Frontend", "salary": 85000, "bonus": 8000, "yearsOfService": 3, "active": true, "rating": 4.0, "reportsTo": "E001"}');
+INSERT INTO employees (id, data) VALUES ('E003', '{"_id": "E003", "name": "Carol", "department": "Engineering", "team": "Backend", "salary": 105000, "bonus": 15000, "yearsOfService": 7, "active": true, "rating": 4.8, "reportsTo": "E001"}');
+INSERT INTO employees (id, data) VALUES ('E004', '{"_id": "E004", "name": "David", "department": "Sales", "team": "Enterprise", "salary": 75000, "bonus": 25000, "yearsOfService": 4, "active": true, "rating": 4.2, "reportsTo": "E002"}');
+INSERT INTO employees (id, data) VALUES ('E005', '{"_id": "E005", "name": "Eve", "department": "Sales", "team": "SMB", "salary": 65000, "bonus": 15000, "yearsOfService": 2, "active": true, "rating": 3.8, "reportsTo": "E002"}');
+INSERT INTO employees (id, data) VALUES ('E006', '{"_id": "E006", "name": "Frank", "department": "Sales", "team": "Enterprise", "salary": 80000, "bonus": 30000, "yearsOfService": 6, "active": false, "rating": 4.5, "reportsTo": "E003"}');
+INSERT INTO employees (id, data) VALUES ('E007', '{"_id": "E007", "name": "Grace", "department": "Marketing", "team": "Digital", "salary": 70000, "bonus": 5000, "yearsOfService": 1, "active": true, "rating": 3.5, "reportsTo": "E003"}');
+INSERT INTO employees (id, data) VALUES ('E008', '{"_id": "E008", "name": "Henry", "department": "Marketing", "team": "Content", "salary": 72000, "bonus": 6000, "yearsOfService": 2, "active": true, "rating": 4.0, "reportsTo": "E004"}');
+INSERT INTO employees (id, data) VALUES ('E009', '{"_id": "E009", "name": "Ivy", "department": "Engineering", "team": "DevOps", "salary": 98000, "bonus": 12000, "yearsOfService": 4, "active": true, "rating": 4.3, "reportsTo": "E001"}');
+INSERT INTO employees (id, data) VALUES ('E010', '{"_id": "E010", "name": "Jack", "department": "HR", "team": "Recruiting", "salary": 60000, "bonus": 3000, "yearsOfService": 1, "active": true, "rating": null, "reportsTo": "E009"}');
 
 PROMPT   Inserted 10 employee records
 

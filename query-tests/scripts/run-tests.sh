@@ -101,13 +101,15 @@ echo '{"timestamp": "'$(date -Iseconds)'", "results": [' > "$JSON_REPORT_FILE"
 FIRST_RESULT=true
 
 # Function to run MongoDB query
+# Uses EJSON.stringify with relaxed mode to normalize BSON types (Long, ObjectId, Date)
+# to JSON-friendly formats for comparison with Oracle results
 run_mongodb_query() {
     local collection="$1"
     local pipeline="$2"
 
     docker exec mongo-translator-mongodb mongosh --quiet testdb \
         -u admin -p admin123 --authenticationDatabase admin \
-        --eval "JSON.stringify(db.${collection}.aggregate(${pipeline}).toArray())" 2>/dev/null
+        --eval "EJSON.stringify(db.${collection}.aggregate(${pipeline}).toArray(), {relaxed: true})" 2>/dev/null
 }
 
 # Function to wrap SQL to return JSON array using Oracle's JSON_ARRAYAGG
@@ -145,8 +147,16 @@ run_oracle_query_json() {
 
     # Check if SQL already outputs JSON_ARRAYAGG (type-preserving format from translator)
     # If so, use it directly; otherwise wrap with JSON_OBJECT(*) (loses types)
+    # Note: SQL may start with WITH (CTEs) followed by SELECT JSON_ARRAYAGG
+    # We check for:
+    #   1. SQL starting with SELECT JSON_ARRAYAGG (outer SELECT is JSON_ARRAYAGG)
+    #   2. CTE pattern: WITH ... ) SELECT JSON_ARRAYAGG (outer SELECT after CTE is JSON_ARRAYAGG)
+    # We must NOT match SQL that has SELECT JSON_ARRAYAGG only in subqueries (like FACET)
     if [[ "$sql" =~ ^[[:space:]]*SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
-        # SQL already produces JSON array - use directly
+        # Simple SELECT JSON_ARRAYAGG - use directly
+        json_sql="${sql%;}"
+    elif [[ "$sql" =~ ^[[:space:]]*WITH[[:space:]].*\)[[:space:]]+SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
+        # CTE followed by outer SELECT JSON_ARRAYAGG - use directly
         json_sql="${sql%;}"
     else
         # Legacy SQL - wrap with JSON_OBJECT(*) (may lose type information)

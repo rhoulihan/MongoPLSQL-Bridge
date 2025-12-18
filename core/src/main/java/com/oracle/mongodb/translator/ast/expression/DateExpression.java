@@ -87,6 +87,11 @@ public final class DateExpression implements Expression {
     return new DateExpression(DateOp.DAY_OF_YEAR, argument);
   }
 
+  /** Creates a $week expression (MongoDB Sunday-start week). */
+  public static DateExpression week(Expression argument) {
+    return new DateExpression(DateOp.WEEK, argument);
+  }
+
   /** Returns the date operator. */
   public DateOp getOp() {
     return op;
@@ -129,6 +134,24 @@ public final class DateExpression implements Expression {
     timestampExpr.append("')");
 
     String timestampStr = timestampExpr.toString();
+
+    // Special handling for $week: MongoDB uses Sunday-start weeks (0-53)
+    // Week 0 = days before first Sunday of year
+    // Week 1+ = starting from first Sunday
+    // This differs from Oracle's 'IW' (ISO week, Monday-start, 1-53)
+    if (op == DateOp.WEEK) {
+      ctx.sql("CASE WHEN TRUNC(");
+      ctx.sql(timestampStr);
+      ctx.sql(") < NEXT_DAY(TRUNC(");
+      ctx.sql(timestampStr);
+      ctx.sql(", 'YYYY') - INTERVAL '1' DAY, 'SUNDAY') THEN 0 ELSE ");
+      ctx.sql("FLOOR((TRUNC(");
+      ctx.sql(timestampStr);
+      ctx.sql(") - NEXT_DAY(TRUNC(");
+      ctx.sql(timestampStr);
+      ctx.sql(", 'YYYY') - INTERVAL '1' DAY, 'SUNDAY')) / 7) + 1 END");
+      return;
+    }
 
     if (op.isExtractBased()) {
       // EXTRACT(YEAR FROM timestamp)

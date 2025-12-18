@@ -212,6 +212,7 @@ public final class StringExpression implements Expression {
       case REPLACE_ONE -> renderReplaceOne(ctx);
       case REPLACE_ALL -> renderReplaceAll(ctx);
       case STRCASECMP -> renderStrcasecmp(ctx);
+      case STRLEN -> renderStrlen(ctx);
       default -> renderSimpleFunction(ctx);
     }
   }
@@ -410,6 +411,35 @@ public final class StringExpression implements Expression {
     ctx.sql(") > UPPER(");
     ctx.visit(arguments.get(1));
     ctx.sql(") THEN 1 ELSE 0 END");
+  }
+
+  private void renderStrlen(SqlGenerationContext ctx) {
+    // MongoDB: {$strLenCP: "$field"}
+    // Oracle: LENGTH(JSON_VALUE(data, '$.field'))
+    // IMPORTANT: LENGTH must operate on the raw string value extracted via JSON_VALUE.
+    // - JSON_QUERY returns quoted strings like "Widget" (8 chars) - WRONG
+    // - Dot notation (data.field) also returns quoted strings with padding - WRONG
+    // - JSON_VALUE returns the unquoted value "Widget" -> Widget (6 chars) - CORRECT
+    Expression arg = arguments.get(0);
+    ctx.sql("LENGTH(");
+
+    if (arg instanceof FieldPathExpression fieldPath) {
+      // Generate JSON_VALUE explicitly to get the unquoted string value
+      String baseAlias = ctx.getBaseTableAlias();
+      ctx.sql("JSON_VALUE(");
+      if (baseAlias != null && !baseAlias.isEmpty()) {
+        ctx.sql(baseAlias);
+        ctx.sql(".");
+      }
+      ctx.sql("data, '$.");
+      ctx.sql(fieldPath.getDotNotationPath());
+      ctx.sql("')");
+    } else {
+      // For non-field expressions (literals, nested expressions), just visit them
+      ctx.visit(arg);
+    }
+
+    ctx.sql(")");
   }
 
   @Override

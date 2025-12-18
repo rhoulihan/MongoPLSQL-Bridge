@@ -122,6 +122,30 @@ class DateExpressionTest {
   }
 
   @Test
+  void shouldRenderWeekWithMongoDbSundayStartConvention() {
+    // MongoDB $week: returns 0-53 where week starts on Sunday
+    // Week 0 = dates before the first Sunday of the year
+    // Week 1 = first full week starting on first Sunday of the year
+    // This differs from ISO week (IW) which starts on Monday
+    var expr = DateExpression.week(FieldPathExpression.of("eventDate"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should use NEXT_DAY to find first Sunday of year and calculate week number
+    assertThat(sql)
+        .as("Should calculate week based on first Sunday of year")
+        .contains("NEXT_DAY");
+    assertThat(sql)
+        .as("Should reference SUNDAY for week boundary")
+        .containsIgnoringCase("SUNDAY");
+    // Should NOT use 'IW' (ISO week) which starts on Monday
+    assertThat(sql)
+        .as("Should not use ISO week format")
+        .doesNotContain("'IW'");
+  }
+
+  @Test
   void shouldReturnOp() {
     var expr = DateExpression.year(FieldPathExpression.of("x"));
     assertThat(expr.getOp()).isEqualTo(DateOp.YEAR);

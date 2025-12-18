@@ -4803,7 +4803,7 @@
           }
         }
       ],
-      "expected_count": 10,
+      "expected_count": 8,
       "sort_by": "name"
     },
     {
@@ -4833,8 +4833,8 @@
           }
         }
       ],
-      "skip": true,
-      "skip_reason": "$graphLookup requires hierarchical test data with reportsTo field - unit tests in PipelineRendererTest cover recursive CTE generation"
+      "expected_count": 10,
+      "sort_by": "_id"
     },
     {
       "id": "ARR015",
@@ -5179,7 +5179,7 @@
         {"$project": {"_id": 1, "name": 1, "tag": "$tags", "tagPosition": "$tagIndex"}},
         {"$sort": {"_id": 1, "tagPosition": 1}}
       ],
-      "expected_count": 12,
+      "expected_count": 10,
       "sort_by": null
     },
     {
@@ -5445,7 +5445,7 @@
         {"$project": {"_id": 0, "region": "$_id", "totalSales": {"$round": ["$totalSales", 2]}, "orderCount": 1, "avgOrderValue": {"$round": ["$avgOrderValue", 2]}, "salesRank": 1, "salesPercentage": {"$round": ["$salesPercentage", 1]}}},
         {"$sort": {"salesRank": 1}}
       ],
-      "expected_count": 4,
+      "expected_count": 3,
       "sort_by": "salesRank"
     },
     {
@@ -5562,7 +5562,7 @@
         {"$project": {"_id": 1, "orderId": 1, "customerName": 1, "itemCount": 1, "calculatedTotal": 1, "highValueCount": 1, "avgItemPrice": {"$round": ["$avgItemPrice", 2]}, "itemsWithTotal": 1}},
         {"$sort": {"calculatedTotal": -1}}
       ],
-      "expected_count": 8,
+      "expected_count": 9,
       "sort_by": "calculatedTotal"
     },
     {
@@ -5580,6 +5580,7 @@
         {"$group": {"_id": "$_id.category", "totalCategoryRevenue": {"$sum": "$totalRevenue"}, "products": {"$push": {"productId": "$_id.productId", "productName": "$_id.productName", "totalQuantitySold": "$totalQuantitySold", "totalRevenue": "$totalRevenue"}}}},
         {"$project": {"_id": 0, "category": "$_id", "totalCategoryRevenue": 1, "topProducts": {"$slice": [{"$sortArray": {"input": "$products", "sortBy": {"totalRevenue": -1}}}, 3]}}}
       ],
+      "expected_count": 3,
       "sort_by": "category"
     }
   ]

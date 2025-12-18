@@ -167,7 +167,7 @@ class AggregationTranslatorTest {
 
     var result = translator.translate(pipeline);
 
-    assertThat(result.sql()).contains("AS name").contains("AS price");
+    assertThat(result.sql()).contains("AS \"name\"").contains("AS \"price\"");
   }
 
   @Test

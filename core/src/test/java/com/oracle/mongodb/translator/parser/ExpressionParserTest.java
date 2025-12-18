@@ -1088,7 +1088,8 @@ class ExpressionParserTest {
     var doc = Document.parse("{\"$isArray\": \"$items\"}");
     Expression expr = parser.parseValue(doc);
     expr.render(context);
-    assertThat(context.toSql()).contains("CASE WHEN").contains("JSON_EXISTS");
+    // $isArray uses JSON_VALUE with .type() to check if value is an array
+    assertThat(context.toSql()).contains("CASE WHEN").contains("JSON_VALUE").contains("type()");
   }
 
   @Test

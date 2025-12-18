@@ -65,6 +65,8 @@ class BucketAutoStageTest {
 
   @Test
   void shouldRenderNtileExpression() {
+    // Note: The render method on BucketAutoStage itself just provides basic NTILE output.
+    // The full rendering with JSON_OBJECT for _id is done in PipelineRenderer.
     var stage = new BucketAutoStage(FieldPathExpression.of("price"), 4, Map.of(), null);
 
     stage.render(context);

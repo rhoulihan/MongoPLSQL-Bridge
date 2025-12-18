@@ -136,6 +136,14 @@ public final class PipelineRenderer {
       }
     }
 
+    // Pre-register graphLookup aliases so field paths can resolve correctly
+    // GraphLookup produces a JSON array column similar to pipeline lookups
+    // This allows $size: "$colleagues" to reference the LATERAL/CTE result
+    for (GraphLookupStage graphLookup : components.graphLookupStages) {
+      String alias = graphLookup.getAs() + "_cte";
+      ctx.registerPipelineLookupAlias(graphLookup.getAs(), alias);
+    }
+
     // Pre-register unwind paths so field paths can resolve correctly
     // After $unwind: "$items", references like "$items.product" should access the JSON_TABLE column
     for (UnwindStage unwind : components.unwindStages) {
@@ -143,6 +151,28 @@ public final class PipelineRenderer {
       if (!isUnwindOnLookupField(unwind.getPath(), components)) {
         String alias = ctx.generateTableAlias("unwind");
         ctx.registerUnwoundPath(unwind.getPath(), alias);
+
+        // If includeArrayIndex is specified, register it as a virtual field
+        // that references the JSON_TABLE ORDINALITY column directly
+        String indexField = unwind.getIncludeArrayIndex();
+        if (indexField != null) {
+          final String unwindAlias = alias;
+          final String indexName = indexField;
+          // Register as virtual field that renders as "(alias.columnName - 1)"
+          // Subtract 1 because Oracle FOR ORDINALITY is 1-based, MongoDB index is 0-based
+          ctx.registerVirtualField(
+              indexField,
+              new Expression() {
+                @Override
+                public void render(SqlGenerationContext renderCtx) {
+                  renderCtx.sql("(");
+                  renderCtx.sql(unwindAlias);
+                  renderCtx.sql(".");
+                  renderCtx.sql(indexName);
+                  renderCtx.sql(" - 1)");
+                }
+              });
+        }
       }
     }
 
@@ -195,6 +225,14 @@ public final class PipelineRenderer {
         && components.unionWithStages.isEmpty()
         && !ctx.isNestedPipeline()) {
       renderProjectWithSubquery(components, ctx);
+      return;
+    }
+
+    // $count needs subquery pattern to avoid nested aggregate functions error (ORA-00978)
+    // Output: SELECT JSON_ARRAYAGG(JSON_OBJECT('field' VALUE cnt) RETURNING CLOB)
+    //         FROM (SELECT COUNT(*) AS cnt FROM table [WHERE ...])
+    if (components.countStage != null && !ctx.isNestedPipeline()) {
+      renderCountWithSubquery(components, ctx);
       return;
     }
 
@@ -256,7 +294,7 @@ public final class PipelineRenderer {
     ctx.sql("SELECT ");
     ctx.setJsonOutputMode(true);
 
-    // Collect computed field names from $addFields and $setWindowFields
+    // Collect computed field names from $addFields, $setWindowFields, and $graphLookup
     Set<String> computedFieldNames = new HashSet<>();
     for (AddFieldsStage addFields : components.addFieldsStages) {
       computedFieldNames.addAll(addFields.getFields().keySet());
@@ -264,9 +302,18 @@ public final class PipelineRenderer {
     for (SetWindowFieldsStage swf : components.setWindowFieldsStages) {
       computedFieldNames.addAll(swf.getOutput().keySet());
     }
+    // Also add $graphLookup output field names - these are rendered separately below
+    for (GraphLookupStage graphLookup : components.graphLookupStages) {
+      computedFieldNames.add(graphLookup.getAs());
+      if (graphLookup.getDepthField() != null) {
+        computedFieldNames.add(graphLookup.getDepthField());
+      }
+    }
 
     // Track which computed fields $project transformed (so $addFields skips them)
     Set<String> projectTransformedFields = new HashSet<>();
+    // Track which computed fields are included in $project (simple inclusion or transformed)
+    Set<String> projectIncludedComputedFields = new HashSet<>();
 
     boolean first = true;
     for (var entry : project.getProjections().entrySet()) {
@@ -279,12 +326,15 @@ public final class PipelineRenderer {
 
       // Skip fields computed by $addFields/$setWindowFields if just passing through
       if (computedFieldNames.contains(alias) && isSimpleFieldInclusion(field, alias)) {
+        // Track this field as included so it gets rendered by renderAddFieldsExcluding
+        projectIncludedComputedFields.add(alias);
         continue;
       }
 
       // Track transformed computed fields so $addFields doesn't re-render them
       if (computedFieldNames.contains(alias)) {
         projectTransformedFields.add(alias);
+        projectIncludedComputedFields.add(alias);
       }
 
       if (!first) {
@@ -306,9 +356,11 @@ public final class PipelineRenderer {
 
     ctx.setJsonOutputMode(false);
 
-    // Render $addFields computed columns, skipping those already transformed by $project
+    // Render $addFields computed columns that are included in $project but not transformed
+    // (i.e., simple inclusions like "nameParts: 1")
     for (AddFieldsStage addFields : components.addFieldsStages) {
-      renderAddFieldsExcluding(addFields, projectTransformedFields, ctx);
+      renderAddFieldsIncluding(
+          addFields, projectIncludedComputedFields, projectTransformedFields, ctx);
     }
 
     // Render $setWindowFields window function columns
@@ -317,21 +369,30 @@ public final class PipelineRenderer {
       ctx.visit(setWindowFields);
     }
 
-    // Render $graphLookup result columns
+    // Render $graphLookup result columns only if included in $project
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
-      ctx.sql(", ");
-      ctx.identifier(graphLookup.getAs() + "_cte");
-      ctx.sql(".");
-      ctx.identifier(graphLookup.getAs());
-      ctx.sql(" AS ");
-      ctx.identifier(graphLookup.getAs());
-      if (graphLookup.getDepthField() != null) {
+      String asField = graphLookup.getAs();
+      // Only include if project actually wants this field (direct inclusion or transformation)
+      if (projectIncludedComputedFields.contains(asField)
+          && !projectTransformedFields.contains(asField)) {
         ctx.sql(", ");
-        ctx.identifier(graphLookup.getAs() + "_cte");
+        ctx.identifier(asField + "_cte");
         ctx.sql(".");
-        ctx.identifier(graphLookup.getDepthField());
+        ctx.identifier(asField);
         ctx.sql(" AS ");
-        ctx.identifier(graphLookup.getDepthField());
+        ctx.identifier(asField);
+      }
+      if (graphLookup.getDepthField() != null) {
+        String depthField = graphLookup.getDepthField();
+        if (projectIncludedComputedFields.contains(depthField)
+            && !projectTransformedFields.contains(depthField)) {
+          ctx.sql(", ");
+          ctx.identifier(asField + "_cte");
+          ctx.sql(".");
+          ctx.identifier(depthField);
+          ctx.sql(" AS ");
+          ctx.identifier(depthField);
+        }
       }
     }
 
@@ -358,6 +419,43 @@ public final class PipelineRenderer {
 
     // Close subquery
     ctx.sql(") sub");
+  }
+
+  /**
+   * Renders a $count stage using a subquery pattern to avoid Oracle's nested aggregate error
+   * (ORA-00978). The pattern wraps the COUNT(*) in a subquery and aggregates the result:
+   *
+   * <pre>
+   * SELECT JSON_ARRAYAGG(JSON_OBJECT('fieldName' VALUE cnt) RETURNING CLOB)
+   * FROM (
+   *   SELECT COUNT(*) AS cnt
+   *   FROM table base
+   *   WHERE ...
+   * )
+   * </pre>
+   */
+  private void renderCountWithSubquery(PipelineComponents components, SqlGenerationContext ctx) {
+    CountStage count = components.countStage;
+
+    // Outer query: wrap count result with JSON_ARRAYAGG
+    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT('");
+    ctx.sql(count.getFieldName());
+    ctx.sql("' VALUE cnt) RETURNING CLOB) FROM (");
+
+    // Inner query: SELECT COUNT(*)
+    ctx.sql("SELECT COUNT(*) AS cnt");
+
+    // FROM clause
+    renderFromClause(components, ctx);
+
+    // JOIN clauses ($lookup stages) - rare but possible before $count
+    renderJoinClauses(components, ctx);
+
+    // WHERE clause (combined $match stages)
+    renderWhereClause(components, ctx);
+
+    // Close subquery (no alias needed)
+    ctx.sql(")");
   }
 
   /**
@@ -855,32 +953,38 @@ public final class PipelineRenderer {
   }
 
   /**
-   * Renders a query with $bucketAuto. Since NTILE is a window function and cannot be used directly
-   * in GROUP BY, we use a subquery pattern:
+   * Renders a query with $bucketAuto. Uses NTILE to divide documents into N buckets, then computes
+   * boundaries using LEAD() to match MongoDB's boundary semantics where max = next bucket's min.
+   *
+   * <p>Note: NTILE distributes rows evenly by position, which may differ from MongoDB's $bucketAuto
+   * algorithm that considers value distribution. The bucket assignments may vary, but the boundary
+   * semantics (max = next bucket's min) will match MongoDB's output format.
    *
    * <pre>
-   * SELECT bucket_id, COUNT(*) AS cnt, aggregations...
-   * FROM (
-   *   SELECT field AS field_alias, NTILE(n) OVER (ORDER BY field) AS bucket_id
-   *   FROM table WHERE ...
+   * WITH buckets AS (
+   *   SELECT bucket_id, MIN(val) AS bucket_min, MAX(val) AS bucket_max, COUNT(*), AVG(val)...
+   *   FROM (SELECT field AS val, NTILE(n) OVER (ORDER BY field) AS bucket_id FROM table)
+   *   GROUP BY bucket_id
    * )
-   * GROUP BY bucket_id
-   * ORDER BY bucket_id
+   * SELECT JSON_OBJECT('min' VALUE bucket_min,
+   *                    'max' VALUE NVL(LEAD(bucket_min) OVER (ORDER BY bucket_id), bucket_max))
+   *        AS "_id", ...
+   * FROM buckets ORDER BY bucket_id
    * </pre>
    */
   private void renderWithBucketAuto(PipelineComponents components, SqlGenerationContext ctx) {
     BucketAutoStage bucketAuto = components.bucketAutoStage;
 
-    // Outer SELECT: bucket_id and aggregations
-    ctx.sql("SELECT bucket_id");
+    // CTE to compute bucket aggregations
+    ctx.sql("WITH buckets AS (SELECT bucket_id, MIN(groupby_value) AS bucket_min, ");
+    ctx.sql("MAX(groupby_value) AS bucket_max");
 
-    // Render output accumulators
+    // Render output accumulators in CTE
     for (Map.Entry<String, AccumulatorExpression> entry : bucketAuto.getOutput().entrySet()) {
       ctx.sql(", ");
       String alias = entry.getKey();
       AccumulatorExpression acc = entry.getValue();
 
-      // Render the accumulator with the correct field reference
       switch (acc.getOp()) {
         case SUM:
           if (acc.getArgument() instanceof LiteralExpression lit
@@ -912,10 +1016,8 @@ public final class PipelineRenderer {
       ctx.identifier(alias);
     }
 
-    // FROM subquery
+    // Inner subquery with NTILE
     ctx.sql(" FROM (SELECT ");
-
-    // Inner query: the groupBy field value and NTILE
     ctx.visit(bucketAuto.getGroupBy());
     ctx.sql(" AS groupby_value, NTILE(");
     ctx.sql(String.valueOf(bucketAuto.getBuckets()));
@@ -942,13 +1044,21 @@ public final class PipelineRenderer {
       }
     }
 
-    ctx.sql(")"); // Close subquery
+    ctx.sql(") GROUP BY bucket_id) "); // Close CTE
 
-    // GROUP BY bucket_id
-    ctx.sql(" GROUP BY bucket_id");
+    // Outer SELECT with LEAD() for proper boundary calculation
+    // MongoDB's max = next bucket's min (or actual max for last bucket)
+    ctx.sql("SELECT JSON_OBJECT('min' VALUE bucket_min, ");
+    ctx.sql("'max' VALUE NVL(LEAD(bucket_min) OVER (ORDER BY bucket_id), bucket_max)) AS ");
+    ctx.identifier("_id");
 
-    // ORDER BY bucket_id
-    ctx.sql(" ORDER BY bucket_id");
+    // Project the accumulator columns from CTE
+    for (Map.Entry<String, AccumulatorExpression> entry : bucketAuto.getOutput().entrySet()) {
+      ctx.sql(", ");
+      ctx.identifier(entry.getKey());
+    }
+
+    ctx.sql(" FROM buckets ORDER BY bucket_id");
   }
 
   /**
@@ -1247,13 +1357,15 @@ public final class PipelineRenderer {
     }
 
     // Render accumulator fields
+    // Only quote aliases when this is the final output (isJsonOutputMode = true)
+    // because intermediate GROUP BY aliases shouldn't be quoted (breaks outer references)
     for (Map.Entry<String, AccumulatorExpression> entry : group.getAccumulators().entrySet()) {
       if (!first) {
         ctx.sql(", ");
       }
       entry.getValue().render(ctx);
       ctx.sql(" AS ");
-      ctx.sql(entry.getKey());
+      ctx.identifier(entry.getKey());
       first = false;
     }
 
@@ -1326,6 +1438,25 @@ public final class PipelineRenderer {
       if (!isUnwindOnLookupField(unwind.getPath(), components)) {
         String alias = ctx.generateTableAlias("unwind");
         ctx.registerUnwoundPath(unwind.getPath(), alias);
+
+        // Register includeArrayIndex field as virtual field
+        String indexField = unwind.getIncludeArrayIndex();
+        if (indexField != null) {
+          final String unwindAlias = alias;
+          final String indexName = indexField;
+          ctx.registerVirtualField(
+              indexField,
+              new Expression() {
+                @Override
+                public void render(SqlGenerationContext renderCtx) {
+                  renderCtx.sql("(");
+                  renderCtx.sql(unwindAlias);
+                  renderCtx.sql(".");
+                  renderCtx.sql(indexName);
+                  renderCtx.sql(" - 1)");
+                }
+              });
+        }
       }
     }
 
@@ -1399,6 +1530,25 @@ public final class PipelineRenderer {
       if (!isUnwindOnLookupField(unwind.getPath(), components)) {
         String alias = ctx.generateTableAlias("unwind");
         ctx.registerUnwoundPath(unwind.getPath(), alias);
+
+        // Register includeArrayIndex field as virtual field
+        String indexField = unwind.getIncludeArrayIndex();
+        if (indexField != null) {
+          final String unwindAlias = alias;
+          final String indexName = indexField;
+          ctx.registerVirtualField(
+              indexField,
+              new Expression() {
+                @Override
+                public void render(SqlGenerationContext renderCtx) {
+                  renderCtx.sql("(");
+                  renderCtx.sql(unwindAlias);
+                  renderCtx.sql(".");
+                  renderCtx.sql(indexName);
+                  renderCtx.sql(" - 1)");
+                }
+              });
+        }
       }
     }
 
@@ -1943,8 +2093,159 @@ public final class PipelineRenderer {
   }
 
   private void renderCteClause(PipelineComponents components, SqlGenerationContext ctx) {
-    // GraphLookup uses LATERAL joins, not CTEs (since CTEs can't reference outer query columns)
-    // So we don't render CTE clause for graphLookup stages
+    // Recursive $graphLookup stages need top-level CTEs with start_id tracking
+    // This avoids the ORA-00904 limitation of recursive CTEs inside LATERAL
+    List<GraphLookupStage> recursiveGraphLookups = components.graphLookupStages.stream()
+        .filter(gl -> gl.getMaxDepth() == null || gl.getMaxDepth() > 0)
+        .toList();
+
+    if (recursiveGraphLookups.isEmpty()) {
+      return;
+    }
+
+    ctx.sql("WITH ");
+    boolean first = true;
+
+    for (GraphLookupStage graphLookup : recursiveGraphLookups) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      first = false;
+
+      renderRecursiveGraphLookupCte(graphLookup, components, ctx);
+    }
+
+    ctx.sql(" ");
+  }
+
+  /**
+   * Renders a recursive $graphLookup as a top-level CTE with start_id tracking.
+   * This generates two CTEs:
+   * 1. graph_paths_{as} - recursive CTE that tracks start_id through the traversal
+   * 2. graph_{as} - aggregation CTE that groups results by start_id
+   */
+  private void renderRecursiveGraphLookupCte(
+      GraphLookupStage graphLookup,
+      PipelineComponents components,
+      SqlGenerationContext ctx) {
+    String as = graphLookup.getAs();
+    String from = graphLookup.getFrom();
+    String startWith = FieldNameValidator.validateAndNormalizeFieldPath(
+        graphLookup.getStartWith().startsWith("$")
+            ? graphLookup.getStartWith().substring(1)
+            : graphLookup.getStartWith());
+    final String connectFromField = FieldNameValidator.validateAndNormalizeFieldPath(
+        graphLookup.getConnectFromField());
+    final String connectToField = FieldNameValidator.validateAndNormalizeFieldPath(
+        graphLookup.getConnectToField());
+
+    // CTE 1: Recursive path traversal with start_id tracking
+    ctx.sql("graph_paths_");
+    ctx.sql(as);
+    ctx.sql(" (start_id, id, data, graph_depth) AS (");
+
+    // Base case: each row in the source starts its own traversal
+    ctx.sql("SELECT ");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(".data.");
+    ctx.sql(quotePath(startWith));
+    ctx.sql(" AS start_id, g.id, g.data, 0 AS graph_depth FROM ");
+    ctx.tableName(from);
+    ctx.sql(" g, ");
+    ctx.tableName(components.collectionName);
+    ctx.sql(" ");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(" WHERE g.data.");
+    ctx.sql(quotePath(connectToField));
+    ctx.sql(" = ");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(".data.");
+    ctx.sql(quotePath(startWith));
+
+    // Add restrictSearchWithMatch filter if specified
+    if (graphLookup.getRestrictSearchWithMatch() != null
+        && !graphLookup.getRestrictSearchWithMatch().isEmpty()) {
+      renderRestrictMatchConditions(graphLookup, ctx, "g");
+    }
+
+    ctx.sql(" UNION ALL ");
+
+    // Recursive case: follow connections
+    // NOTE: For CTE columns, we must use JSON_VALUE() since Oracle's dot notation
+    // doesn't work on CLOB columns in CTE results
+    ctx.sql("SELECT p.start_id, c.id, c.data, p.graph_depth + 1 FROM ");
+    ctx.tableName(from);
+    ctx.sql(" c JOIN graph_paths_");
+    ctx.sql(as);
+    ctx.sql(" p ON c.data.");
+    ctx.sql(quotePath(connectToField));
+    ctx.sql(" = JSON_VALUE(p.data, '$.");
+    ctx.sql(connectFromField);
+    ctx.sql("')");
+
+    // Add depth limit if specified
+    if (graphLookup.getMaxDepth() != null) {
+      ctx.sql(" WHERE p.graph_depth < ");
+      ctx.sql(String.valueOf(graphLookup.getMaxDepth()));
+    }
+
+    // Add restrictSearchWithMatch filter to recursive case
+    if (graphLookup.getRestrictSearchWithMatch() != null
+        && !graphLookup.getRestrictSearchWithMatch().isEmpty()) {
+      if (graphLookup.getMaxDepth() != null) {
+        renderRestrictMatchConditions(graphLookup, ctx, "c");
+      } else {
+        ctx.sql(" WHERE 1=1");
+        renderRestrictMatchConditions(graphLookup, ctx, "c");
+      }
+    }
+
+    ctx.sql("), ");
+
+    // CTE 2: Aggregate by start_id
+    ctx.sql("graph_");
+    ctx.sql(as);
+    ctx.sql(" AS (SELECT start_id, JSON_ARRAYAGG(data RETURNING CLOB) AS ");
+    ctx.identifier(as);
+    if (graphLookup.getDepthField() != null) {
+      ctx.sql(", MAX(graph_depth) AS ");
+      ctx.identifier(graphLookup.getDepthField());
+    }
+    ctx.sql(" FROM graph_paths_");
+    ctx.sql(as);
+    ctx.sql(" GROUP BY start_id)");
+  }
+
+  /** Renders restrictSearchWithMatch conditions for $graphLookup. */
+  private void renderRestrictMatchConditions(
+      GraphLookupStage graphLookup, SqlGenerationContext ctx, String alias) {
+    for (Map.Entry<String, Object> entry :
+        graphLookup.getRestrictSearchWithMatch().entrySet()) {
+      final String field = FieldNameValidator.validateAndNormalizeFieldPath(entry.getKey());
+      final Object value = entry.getValue();
+
+      ctx.sql(" AND ");
+      ctx.sql(alias);
+      ctx.sql(".data.");
+      ctx.sql(quotePath(field));
+      ctx.sql(" = ");
+      renderLiteralValueForGraphLookup(ctx, value);
+    }
+  }
+
+  /** Renders a literal value for $graphLookup restrict conditions. */
+  private void renderLiteralValueForGraphLookup(SqlGenerationContext ctx, Object value) {
+    if (value == null) {
+      ctx.sql("NULL");
+    } else if (value instanceof String str) {
+      ctx.sql("'");
+      ctx.sql(str.replace("'", "''"));
+      ctx.sql("'");
+    } else if (value instanceof Boolean bool) {
+      ctx.sql(bool ? "'true'" : "'false'");
+    } else {
+      ctx.sql(String.valueOf(value));
+    }
   }
 
   private void renderGraphLookupJoins(PipelineComponents components, SqlGenerationContext ctx) {
@@ -1976,16 +2277,9 @@ public final class PipelineRenderer {
   }
 
   /**
-   * Renders a recursive $graphLookup. Note: Recursive graph lookups (maxDepth > 0) have Oracle
-   * limitations:
-   *
-   * <ul>
-   *   <li>Recursive CTEs inside LATERAL cannot reference outer table columns (ORA-00904)
-   *   <li>CONNECT BY with PRIOR doesn't work with JSON dot notation (ORA-19200)
-   * </ul>
-   *
-   * <p>As a result, recursive $graphLookup produces a placeholder query that returns empty results.
-   * Tests using recursive $graphLookup should be marked as skipped.
+   * Renders a recursive $graphLookup using the top-level CTE approach.
+   * The CTE (graph_{as}) was rendered in renderCteClause with start_id tracking.
+   * Now we just need a simple LEFT JOIN to that CTE by matching start_id to the base data.
    */
   private void renderRecursiveGraphLookup(
       GraphLookupStage graphLookup,
@@ -1993,23 +2287,18 @@ public final class PipelineRenderer {
       String connectFromField,
       String startField,
       SqlGenerationContext ctx) {
-    // Due to Oracle limitations, recursive $graphLookup returns empty results:
-    // 1. Recursive CTEs inside LATERAL can't reference outer columns (ORA-00904)
-    // 2. CONNECT BY with PRIOR doesn't work with JSON dot notation (ORA-19200)
-    // Using a LATERAL subquery that returns an empty array as a placeholder
-    ctx.sql(" LEFT OUTER JOIN LATERAL (SELECT ");
-    ctx.sql("CAST(NULL AS JSON) AS ");
-    ctx.identifier(graphLookup.getAs());
-
-    // Add depth field if specified
-    if (graphLookup.getDepthField() != null) {
-      ctx.sql(", NULL AS ");
-      ctx.identifier(graphLookup.getDepthField());
-    }
-
-    ctx.sql(" FROM DUAL WHERE 1=0) ");
+    // The recursive CTE was rendered in renderCteClause
+    // Now join to the aggregated results by start_id
+    ctx.sql(" LEFT JOIN graph_");
+    ctx.sql(graphLookup.getAs());
+    ctx.sql(" ");
     ctx.identifier(graphLookup.getAs() + "_cte");
-    ctx.sql(" ON 1=1");
+    ctx.sql(" ON ");
+    ctx.identifier(graphLookup.getAs() + "_cte");
+    ctx.sql(".start_id = ");
+    ctx.sql(ctx.getBaseTableAlias());
+    ctx.sql(".data.");
+    ctx.sql(quotePath(startField));
   }
 
   /** Renders a simple (non-recursive) $graphLookup using a direct LATERAL join. */
@@ -2183,10 +2472,11 @@ public final class PipelineRenderer {
 
     if (components.countStage != null) {
       // $count returns a single document with the count
-      ctx.sql("JSON_OBJECT('");
+      // The actual JSON_ARRAYAGG wrapping is done by renderCountWithSubquery
+      // This just outputs the field reference for the inner subquery result
+      ctx.sql("JSON_ARRAYAGG(JSON_OBJECT('");
       ctx.sql(components.countStage.getFieldName());
-      ctx.sql("' VALUE COUNT(*)) AS ");
-      ctx.sql(config.dataColumnName());
+      ctx.sql("' VALUE cnt) RETURNING CLOB)");
       return; // $count replaces the entire query
     } else if (components.facetStage != null) {
       // $facet creates a JSON object with multiple subquery results
@@ -2271,6 +2561,13 @@ public final class PipelineRenderer {
     }
     for (SetWindowFieldsStage swf : components.setWindowFieldsStages) {
       computedFieldNames.addAll(swf.getOutput().keySet());
+    }
+    // Also add $graphLookup output field names - these are rendered by renderAddFieldsClauses
+    for (GraphLookupStage graphLookup : components.graphLookupStages) {
+      computedFieldNames.add(graphLookup.getAs());
+      if (graphLookup.getDepthField() != null) {
+        computedFieldNames.add(graphLookup.getDepthField());
+      }
     }
 
     // Determine if we need row-by-row output (for UNIONs or nested pipelines)
@@ -2417,6 +2714,48 @@ public final class PipelineRenderer {
   }
 
   /**
+   * Renders $addFields computed columns that are included in $project but not transformed.
+   * Only fields in includeFields and NOT in excludeFields are rendered.
+   */
+  private void renderAddFieldsIncluding(
+      AddFieldsStage addFields,
+      Set<String> includeFields,
+      Set<String> excludeFields,
+      SqlGenerationContext ctx) {
+    for (Map.Entry<String, Expression> entry : addFields.getFields().entrySet()) {
+      String fieldName = entry.getKey();
+
+      // Only render fields that are included in $project
+      if (!includeFields.contains(fieldName)) {
+        continue;
+      }
+
+      // Skip fields already transformed by $project
+      if (excludeFields.contains(fieldName)) {
+        continue;
+      }
+
+      ctx.sql(", ");
+
+      Expression expr = entry.getValue();
+      // Oracle doesn't support boolean as column value, wrap in CASE WHEN
+      if (expr.isBooleanExpression()) {
+        ctx.sql("CASE WHEN ");
+        ctx.visit(expr);
+        ctx.sql(" THEN 1 ELSE 0 END");
+      } else {
+        ctx.visit(expr);
+      }
+      ctx.sql(" AS ");
+      // Enable JSON output mode to quote the alias and preserve case for JSON_OBJECT(*)
+      boolean wasJsonMode = ctx.isJsonOutputMode();
+      ctx.setJsonOutputMode(true);
+      ctx.identifier(fieldName);
+      ctx.setJsonOutputMode(wasJsonMode);
+    }
+  }
+
+  /**
    * Renders $replaceRoot SELECT clause. When newRoot is an InlineObjectExpression (document with
    * field-to-expression mappings), each field becomes a separate column. When it's a
    * FieldPathExpression (subdocument promotion), the subdocument becomes the data column.
@@ -2488,7 +2827,9 @@ public final class PipelineRenderer {
       return;
     }
 
-    ctx.sql("JSON_OBJECT(");
+    // Wrap in JSON_ARRAYAGG so the result is a JSON array (matches other pipeline outputs)
+    // This ensures the test harness uses the SQL directly without wrapping in JSON_OBJECT(*)
+    ctx.sql("JSON_ARRAYAGG(JSON_OBJECT(");
     boolean first = true;
 
     for (Map.Entry<String, List<Stage>> entry : facet.getFacets().entrySet()) {
@@ -2506,7 +2847,7 @@ public final class PipelineRenderer {
       first = false;
     }
 
-    ctx.sql(") AS ");
+    ctx.sql(")) AS ");
     ctx.sql(config.dataColumnName());
   }
 
@@ -2522,7 +2863,8 @@ public final class PipelineRenderer {
     ProjectStage postProject = components.postFacetProjectStage;
     String collectionName = components.collectionName;
 
-    ctx.sql("JSON_OBJECT(");
+    // Wrap in JSON_ARRAYAGG so the result is a JSON array (matches other pipeline outputs)
+    ctx.sql("JSON_ARRAYAGG(JSON_OBJECT(");
     boolean first = true;
 
     for (var entry : postProject.getProjections().entrySet()) {
@@ -2547,7 +2889,7 @@ public final class PipelineRenderer {
       first = false;
     }
 
-    ctx.sql(") AS ");
+    ctx.sql(")) AS ");
     ctx.sql(config.dataColumnName());
   }
 
@@ -2672,14 +3014,14 @@ public final class PipelineRenderer {
         if (isCountFacet && fieldName != null) {
           // For count facet: extract the scalar value directly
           // The count subquery returns JSON_ARRAYAGG([{count: N}])
-          // We need JSON_VALUE(..., '$[0].count')
+          // We need JSON_VALUE(..., '$[0].count' RETURNING NUMBER)
           ctx.sql("JSON_VALUE((");
           renderFacetPipeline(collectionName, pipeline, components, ctx);
           ctx.sql("), '$[");
           ctx.sql(String.valueOf(index));
           ctx.sql("].");
           ctx.sql(fieldName);
-          ctx.sql("')");
+          ctx.sql("' RETURNING NUMBER)");
         } else {
           // Generic case: extract element at index
           ctx.sql("JSON_QUERY((");
@@ -3128,8 +3470,27 @@ public final class PipelineRenderer {
     ctx.sql("SELECT ");
 
     // Render the _id expression
-    if (groupStage.getIdExpression() != null) {
-      ctx.visit(groupStage.getIdExpression());
+    Expression idExpr = groupStage.getIdExpression();
+    if (idExpr != null) {
+      if (idExpr instanceof CompoundIdExpression compoundId) {
+        // Compound _id: render as JSON_OBJECT to preserve structure
+        // e.g., JSON_OBJECT('field1' VALUE expr1, 'field2' VALUE expr2)
+        ctx.sql("JSON_OBJECT(");
+        boolean first = true;
+        for (var entry : compoundId.getFields().entrySet()) {
+          if (!first) {
+            ctx.sql(", ");
+          }
+          ctx.sql("'");
+          ctx.sql(entry.getKey());
+          ctx.sql("' VALUE ");
+          ctx.visit(entry.getValue());
+          first = false;
+        }
+        ctx.sql(")");
+      } else {
+        ctx.visit(idExpr);
+      }
       ctx.sql(" AS ");
       ctx.identifier("_id");
     } else {
@@ -3164,9 +3525,9 @@ public final class PipelineRenderer {
     }
 
     // GROUP BY clause
-    if (groupStage.getIdExpression() != null) {
+    if (idExpr != null) {
       ctx.sql(" GROUP BY ");
-      ctx.visit(groupStage.getIdExpression());
+      ctx.visit(idExpr);
     }
   }
 
@@ -3376,13 +3737,54 @@ public final class PipelineRenderer {
           || components.bucketAutoStage != null) {
         ctx.identifier(field.getFieldPath().getPath());
       } else {
-        ctx.visit(field.getFieldPath());
+        // Check if this is a computed field from $project
+        Expression computedExpr = getComputedProjectExpression(components, field.getFieldPath());
+        if (computedExpr != null) {
+          // Use the computed expression for sorting
+          ctx.visit(computedExpr);
+        } else {
+          ctx.visit(field.getFieldPath());
+        }
       }
       if (field.getDirection() == SortStage.SortDirection.DESC) {
         ctx.sql(" DESC");
       }
       first = false;
     }
+  }
+
+  /**
+   * Returns the computed expression from $project if the sort field is a computed field (not a
+   * simple field reference). Returns null if there's no $project, the field isn't in the project,
+   * or the field is a simple field reference (not computed).
+   */
+  private Expression getComputedProjectExpression(
+      PipelineComponents components, FieldPathExpression sortField) {
+    if (components.projectStage == null) {
+      return null;
+    }
+
+    String fieldName = sortField.getPath();
+    ProjectStage.ProjectionField projection =
+        components.projectStage.getProjections().get(fieldName);
+
+    if (projection == null || projection.isExcluded()) {
+      return null;
+    }
+
+    Expression projExpr = projection.getExpression();
+
+    // Check if it's a simple field reference (not computed)
+    // A simple reference is like { name: 1 } which translates to FieldPathExpression("name")
+    if (projExpr instanceof FieldPathExpression fieldPathExpr) {
+      // If the projection just references the same field, it's not computed
+      if (fieldPathExpr.getPath().equals(fieldName)) {
+        return null;
+      }
+    }
+
+    // This is a computed field - return the expression
+    return projExpr;
   }
 
   private void renderOffsetClause(PipelineComponents components, SqlGenerationContext ctx) {
@@ -3452,6 +3854,10 @@ public final class PipelineRenderer {
     // Render ORDER BY for post-union sort
     if (components.postUnionSortStage != null) {
       ctx.sql(" ORDER BY ");
+      // Enable JSON output mode to quote identifiers consistently with UNION SELECT aliases
+      // UNION queries use quoted column aliases, so ORDER BY must also use quoted identifiers
+      boolean wasJsonMode = ctx.isJsonOutputMode();
+      ctx.setJsonOutputMode(true);
       boolean first = true;
       for (SortStage.SortField sortField : components.postUnionSortStage.getSortFields()) {
         if (!first) {
@@ -3462,6 +3868,7 @@ public final class PipelineRenderer {
         ctx.sql(sortField.getDirection() == SortStage.SortDirection.ASC ? " ASC" : " DESC");
         first = false;
       }
+      ctx.setJsonOutputMode(wasJsonMode);
     }
 
     // Render FETCH FIRST for post-union limit

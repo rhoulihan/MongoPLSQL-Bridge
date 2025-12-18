@@ -481,12 +481,81 @@ public final class ArrayExpression implements Expression {
     // Use JSON_QUERY with array subscript to preserve types (numbers, strings, booleans)
     // Unlike JSON_VALUE which returns VARCHAR2, JSON_QUERY returns native JSON types
     // Oracle dot notation doesn't support array subscripts like data.items[0]
+
+    // Normalize path by removing $ prefix if present
+    String normalizedPath = path.startsWith("$") ? path.substring(1) : path;
+
+    // Extract the root field name (e.g., "customerInfo" from "customerInfo.tier")
+    int dotIndex = normalizedPath.indexOf('.');
+    String rootField = dotIndex >= 0 ? normalizedPath.substring(0, dotIndex) : normalizedPath;
+
+    // Check if this is a pipeline form $lookup
+    // Pipeline lookups produce a JSON array via LATERAL subquery
+    String pipelineLookupAlias = ctx.getPipelineLookupAlias(rootField);
+    if (pipelineLookupAlias != null) {
+      // Pipeline lookup: access the LATERAL result column
+      // e.g., $arrayElemAt: ["$inventoryData.totalStock", 0]
+      // -> JSON_QUERY(inventory_1.inventoryData, '$[0].totalStock')
+      if (indexExpression instanceof LiteralExpression lit
+          && lit.getValue() instanceof Number num) {
+        final int idx = num.intValue();
+        ctx.sql("JSON_QUERY(");
+        ctx.sql(pipelineLookupAlias);
+        ctx.sql(".");
+        ctx.sql(rootField);
+        ctx.sql(", '$[");
+        if (idx >= 0) {
+          ctx.sql(String.valueOf(idx));
+        } else if (idx == -1) {
+          ctx.sql("last");
+        } else {
+          ctx.sql("last");
+          ctx.sql(String.valueOf(idx + 1));
+        }
+        ctx.sql("]");
+        // Append remaining path after the root field if present
+        if (dotIndex >= 0) {
+          ctx.sql(".");
+          ctx.sql(normalizedPath.substring(dotIndex + 1));
+        }
+        ctx.sql("')");
+        return;
+      }
+    }
+
+    // Check if this path references an equality form $lookup result field
+    // e.g., "customerInfo.tier" where "customerInfo" is from $lookup
+    // For equality lookups with index 0, we can directly access the joined table's field
+    // since the LEFT JOIN produces one row per match
+    String lookupAlias = ctx.getLookupTableAlias(normalizedPath);
+    if (lookupAlias != null) {
+      if (indexExpression instanceof LiteralExpression lit
+          && lit.getValue() instanceof Number num
+          && num.intValue() == 0) {
+        // Extract the remaining path after the lookup alias
+        // e.g., "customerInfo.tier" -> "tier"
+        String remainingPath = dotIndex >= 0 ? normalizedPath.substring(dotIndex + 1) : "";
+
+        // For index 0, just access the joined table's data column directly
+        // The LEFT JOIN gives us the matching row, so no array access needed
+        ctx.sql(lookupAlias);
+        ctx.sql(".data");
+        if (!remainingPath.isEmpty()) {
+          ctx.sql(".");
+          ctx.sql(remainingPath);
+        }
+        return;
+      }
+      // For non-zero indices, fall through to generate array subscript
+      // (though this is rare for equality lookups which typically match 0 or 1 row)
+    }
+
     if (indexExpression instanceof LiteralExpression lit && lit.getValue() instanceof Number num) {
       final int idx = num.intValue();
       ctx.sql("JSON_QUERY(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
-      ctx.sql(path);
+      ctx.sql(normalizedPath);
       ctx.sql("[");
       if (idx >= 0) {
         ctx.sql(String.valueOf(idx));
@@ -521,12 +590,14 @@ public final class ArrayExpression implements Expression {
     // Pipeline lookups produce a JSON array column via LATERAL subquery
     String pipelineLookupAlias = ctx.getPipelineLookupAlias(normalizedPath);
     if (pipelineLookupAlias != null) {
-      // For pipeline lookup: JSON_VALUE(alias.columnName, '$.size()' RETURNING NUMBER)
-      ctx.sql("JSON_VALUE(");
+      // For pipeline lookup: NVL(JSON_VALUE(alias.columnName, '$.size()' RETURNING NUMBER), 0)
+      // Use NVL to return 0 when array is null (LATERAL join with no matches)
+      // This matches MongoDB's behavior where $size of missing/null array returns 0
+      ctx.sql("NVL(JSON_VALUE(");
       ctx.sql(pipelineLookupAlias);
       ctx.sql(".");
       ctx.sql(normalizedPath); // column name is the same as the "as" field
-      ctx.sql(", '$.size()' RETURNING NUMBER)");
+      ctx.sql(", '$.size()' RETURNING NUMBER), 0)");
       return;
     }
 
@@ -573,6 +644,8 @@ public final class ArrayExpression implements Expression {
     // negative)
     // MongoDB: {$slice: ["$items", skip, n]} - skip elements, then take n
     // Oracle: JSON_QUERY with array slice syntax
+    // Use WITH ARRAY WRAPPER to ensure result is always an array (not scalar for single elements)
+    // Use EMPTY ARRAY ON EMPTY to return [] instead of null for empty slices
     ctx.sql("JSON_QUERY(");
     renderDataColumn(ctx);
     ctx.sql(", '$.");
@@ -591,7 +664,7 @@ public final class ArrayExpression implements Expression {
         ctx.sql(String.valueOf(skip));
         ctx.sql(" to ");
         ctx.sql(String.valueOf(skip + count - 1));
-        ctx.sql("]')");
+        ctx.sql("]' WITH ARRAY WRAPPER EMPTY ARRAY ON EMPTY)");
       } else {
         throw new IllegalArgumentException("$slice with skip requires literal numbers");
       }
@@ -604,12 +677,12 @@ public final class ArrayExpression implements Expression {
           // First n elements: $.items[0 to n-1]
           ctx.sql("[0 to ");
           ctx.sql(String.valueOf(count - 1));
-          ctx.sql("]')");
+          ctx.sql("]' WITH ARRAY WRAPPER EMPTY ARRAY ON EMPTY)");
         } else {
           // Last |n| elements: $.items[last-|n|+1 to last]
           ctx.sql("[last");
           ctx.sql(String.valueOf(count + 1));
-          ctx.sql(" to last]')");
+          ctx.sql(" to last]' WITH ARRAY WRAPPER EMPTY ARRAY ON EMPTY)");
         }
       } else {
         throw new IllegalArgumentException("$slice count must be a literal number");
@@ -891,12 +964,17 @@ public final class ArrayExpression implements Expression {
     if (inExpr instanceof StringExpression strExpr
         && strExpr.getOp() == StringOp.CONCAT
         && isValueAndThisPattern(strExpr.getArguments())) {
-      // Translate to LISTAGG aggregate
-      ctx.sql("(SELECT LISTAGG(val, '') WITHIN GROUP (ORDER BY ROWNUM) FROM JSON_TABLE(");
+      // Translate to LISTAGG with JSON type conversion for empty arrays.
+      // LISTAGG returns NULL for empty input; MongoDB returns initialValue ''.
+      // Oracle treats '' as NULL, so we use JSON('""') to output empty string.
+      ctx.sql("(SELECT CASE WHEN listagg_result IS NULL THEN JSON('\"\"') ");
+      ctx.sql("ELSE JSON('\"' || listagg_result || '\"') END FROM (");
+      ctx.sql("SELECT LISTAGG(val, '') WITHIN GROUP (ORDER BY ROWNUM) AS listagg_result ");
+      ctx.sql("FROM JSON_TABLE(");
       ctx.sql(ctx.getBaseTableAlias());
       ctx.sql(".data, '$.");
       ctx.sql(path);
-      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+      ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))");
       return;
     }
 
@@ -1576,23 +1654,26 @@ public final class ArrayExpression implements Expression {
   }
 
   /**
-   * Renders $isArray operator. MongoDB: {$isArray: "$field"} Oracle: Checks if the JSON value is an
-   * array type.
+   * Renders $isArray operator. MongoDB: {$isArray: "$field"} Oracle: Uses JSON_VALUE with .type()
+   * to check if the value is an array. This properly distinguishes arrays from scalars, unlike
+   * JSON_EXISTS which treats scalars as single-element arrays.
    */
   private void renderIsArray(SqlGenerationContext ctx) {
     if (arrayExpression instanceof FieldPathExpression fieldPath) {
       final String path = fieldPath.getPath();
-      // Use JSON_EXISTS with array test
-      ctx.sql("CASE WHEN JSON_EXISTS(");
+      // Use JSON_VALUE with .type() to get the actual type
+      // Returns 'array' for arrays, 'object', 'string', 'number', 'boolean', 'null' for others
+      // Return SQL boolean TRUE/FALSE so JSON_OBJECT serializes as JSON booleans, not strings
+      ctx.sql("CASE WHEN JSON_VALUE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
       ctx.sql(path);
-      ctx.sql("[0]') THEN 1 ELSE 0 END");
+      ctx.sql(".type()') = 'array' THEN TRUE ELSE FALSE END");
     } else {
-      // For expressions, check if it starts with '['
-      ctx.sql("CASE WHEN JSON_EXISTS(");
+      // For expressions, check the type of the expression result
+      ctx.sql("CASE WHEN JSON_VALUE(");
       ctx.visit(arrayExpression);
-      ctx.sql(", '$[0]') THEN 1 ELSE 0 END");
+      ctx.sql(", '$.type()') = 'array' THEN TRUE ELSE FALSE END");
     }
   }
 
@@ -1879,6 +1960,37 @@ public final class ArrayExpression implements Expression {
         ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
         ctx.sql(nestedPath);
         ctx.sql("')))");
+        return;
+      }
+
+      // Check if the array path is from a simple (equality) $lookup
+      SqlGenerationContext.LookupFieldInfo lookupInfo = ctx.getLookupFieldInfo(arrayPath);
+      if (lookupInfo != null) {
+        // For equality lookup: generate correlated subquery summing from foreign table
+        // (SELECT NVL(SUM(subq.data."nested"."field"), 0) FROM foreignTable subq
+        //  WHERE subq.data."foreignField" = base.data."localField")
+        String subqAlias = "sum_" + arrayPath.substring(0, Math.min(3, arrayPath.length()));
+        ctx.sql("(SELECT NVL(SUM(");
+        ctx.sql(subqAlias);
+        ctx.sql(".data.");
+        ctx.sql(quotePath(nestedPath));
+        ctx.sql("), 0) FROM ");
+        ctx.tableName(lookupInfo.foreignTable());
+        ctx.sql(" ");
+        ctx.sql(subqAlias);
+        ctx.sql(" WHERE ");
+        ctx.sql(subqAlias);
+        ctx.sql(".data.");
+        ctx.sql(quotePath(lookupInfo.foreignField()));
+        ctx.sql(" = ");
+        String alias = ctx.getBaseTableAlias();
+        if (alias != null && !alias.isEmpty()) {
+          ctx.sql(alias);
+          ctx.sql(".");
+        }
+        ctx.sql("data.");
+        ctx.sql(quotePath(lookupInfo.localField()));
+        ctx.sql(")");
         return;
       }
 

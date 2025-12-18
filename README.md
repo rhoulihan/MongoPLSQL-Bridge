@@ -12,12 +12,13 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 190 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
+**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 191 passing cross-database validation tests (166 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
 
 | Metric | Value |
 |--------|-------|
-| Unit Tests | 1,408 |
-| Cross-DB Validation | 190 |
+| Unit Tests | 1,609 |
+| Cross-DB Validation | 191 |
+| Strict Matches | 166 |
 | Large-Scale Tests | 10 |
 | Instruction Coverage | 89% |
 | Branch Coverage | 77% |
@@ -59,7 +60,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 | Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`, `$abs`, `$ceil`, `$floor`, `$round` |
 | Conditional | `$cond`, `$ifNull`, `$switch` |
 | String | `$concat`, `$toLower`, `$toUpper`, `$substr`, `$trim`, `$ltrim`, `$rtrim`, `$strLenCP`, `$split`, `$indexOfCP`, `$regexMatch`, `$regexFind`, `$replaceOne`, `$replaceAll` |
-| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear` |
+| Date | `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dayOfYear`, `$week`, `$isoWeek`, `$isoWeekYear` |
 | Array | `$arrayElemAt`, `$size`, `$first`, `$last`, `$filter`, `$map`, `$reduce`, `$concatArrays`, `$slice`, `$setUnion`, `$setIntersection`, `$reverseArray`, `$in` |
 | Type | `$type`, `$toInt`, `$toString`, `$toDouble`, `$toBool`, `$toDate` |
 | Object | `$mergeObjects`, `$objectToArray`, `$arrayToObject` |
@@ -197,7 +198,7 @@ System.out.println(result.sql());
 ./gradlew :core:test
 ```
 
-Runs 1,408 unit tests covering all operators, parsers, and pipeline scenarios.
+Runs 1,609 unit tests covering all operators, parsers, and pipeline scenarios.
 
 ### Integration Tests
 
@@ -262,7 +263,7 @@ mongo-oracle-translator/
 ├── core/                    # Main translation library
 │   └── src/
 │       ├── main/java/       # API, AST, parser, optimizer, generator, CLI
-│       └── test/java/       # Unit tests (1,408)
+│       └── test/java/       # Unit tests (1,609)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
 │   ├── tests/               # Test case definitions (191)

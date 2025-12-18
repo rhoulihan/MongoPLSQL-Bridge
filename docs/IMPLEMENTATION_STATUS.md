@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-17
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -69,7 +69,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-033 | $addFields/$set Stage Implementation | ✅ Done | Computed columns in SELECT |
 | IMPL-034 | Additional Accumulators | ✅ Done | $push (JSON_ARRAYAGG), $addToSet (DISTINCT) |
 | IMPL-035 | String Operators | ✅ Done | $concat, $toLower, $toUpper, $substr, $trim, $ltrim, $rtrim, $strLenCP, $split, $indexOfCP, $regexMatch, $regexFind, $replaceOne, $replaceAll |
-| IMPL-036 | Date Operators | ✅ Done | $year, $month, $dayOfMonth, $hour, $minute, $second, $dayOfWeek, $dayOfYear |
+| IMPL-036 | Date Operators | ✅ Done | $year, $month, $dayOfMonth, $hour, $minute, $second, $dayOfWeek, $dayOfYear, $week, $isoWeek, $isoWeekYear |
 | IMPL-037 | Array Operators | ✅ Done | $arrayElemAt, $size, $first, $last, $filter, $map, $reduce, $concatArrays, $slice |
 | IMPL-038 | Predicate Pushdown Optimizer | ✅ Done | Moves $match before $project/$limit/$sort |
 | IMPL-039 | Sort-Limit Optimization | ✅ Done | Top-N optimization with limit hints |
@@ -81,7 +81,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation with restrictSearchWithMatch |
 | IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
 | IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
-| IMPL-048 | Integration Test Suite | ✅ Done | 190 cross-validation tests (native JSON type) |
+| IMPL-048 | Integration Test Suite | ✅ Done | 191 cross-validation tests (166 strict matches, native JSON type) |
 | IMPL-049 | Type Conversion Operators | ✅ Done | $type, $toInt, $toString, $toDouble, $toBool, $toDate |
 | IMPL-050 | $redact Stage | ✅ Done | Document-level filtering with $$PRUNE/$$KEEP/$$DESCEND |
 | IMPL-051 | $sample Stage | ✅ Done | Random sampling with DBMS_RANDOM.VALUE |
@@ -292,12 +292,12 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1,408 test methods across 76+ test files
+**Unit Tests:** 1,609 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 190 tests (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 191 tests (166 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
-All tests passing: ✅ Yes (190/191 - 1 skipped)
+All tests passing: ✅ Yes (191/191)
 
 ### Unit Test Breakdown by Package
 
@@ -311,13 +311,13 @@ All tests passing: ✅ Yes (190/191 - 1 skipped)
 | `parser` | 398 | BSON to AST parsing tests |
 | `exception` | 7 | Error handling tests |
 | `util` | 16 | Utility function tests |
-| **Total** | **1,272** | |
+| **Total** | **1,609** | |
 
 ### Code Coverage (JaCoCo)
 
 | Package | Instruction Coverage | Branch Coverage |
 |---------|---------------------|-----------------|
-| **Overall** | **93%** | **83%** |
+| **Overall** | **89%** | **77%** |
 | `api` | 97% | 100% |
 | `ast.expression` | 94% | 78% |
 | `ast.stage` | 97% | 91% |
@@ -339,7 +339,7 @@ All tests passing: ✅ Yes (190/191 - 1 skipped)
 | Arithmetic operators | 5 | ✅ Pass |
 | Conditional operators | 3 | ✅ Pass |
 | String operators | 11 | ✅ Pass |
-| Date operators | 5 | ✅ Pass |
+| Date operators | 11 | ✅ Pass |
 | Array operators | 10 | ✅ Pass |
 | Type Conversion operators | 5 | ✅ Pass |
 | $lookup/$unwind | 4 | ✅ Pass |
@@ -356,7 +356,7 @@ All tests passing: ✅ Yes (190/191 - 1 skipped)
 | $count | 3 | ✅ Pass |
 | $graphLookup | 1 | ✅ Pass |
 | FACET_PAGINATION | 3 | ✅ Pass |
-| **Total** | **190** | **✅ 99%** |
+| **Total** | **191** | **✅ 100%** |
 
 ## Example Translations
 
@@ -572,7 +572,7 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 | Code Style | Checkstyle (Google Java Style, 2-space indent) | Pre-commit | ✅ Pass (maxWarnings=0) |
 | Static Analysis | SpotBugs with FindSecBugs | Pre-commit | ✅ Pass |
 | Dependency Security | OWASP Dependency Check | CI/CD | ✅ Configured |
-| Test Coverage | JaCoCo | CI/CD | ✅ 93% instruction, 83% branch |
+| Test Coverage | JaCoCo | CI/CD | ✅ 89% instruction, 77% branch |
 | Case Conflicts | check-case-conflict | Pre-commit | ✅ Pass |
 | Line Endings | mixed-line-ending (LF) | Pre-commit | ✅ Pass |
 | Branch Protection | no-commit-to-branch | Pre-commit | ✅ Configured |

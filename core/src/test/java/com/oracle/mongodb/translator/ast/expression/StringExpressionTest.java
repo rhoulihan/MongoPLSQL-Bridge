@@ -108,11 +108,38 @@ class StringExpressionTest {
 
   @Test
   void shouldRenderStrlen() {
+    // $strLenCP must use JSON_VALUE to extract the raw string value without quotes
+    // Oracle's dot notation (data.name) returns quoted strings like "Widget" (8 chars)
+    // but the actual length of "Widget" is 6 characters
     var expr = StringExpression.strlen(FieldPathExpression.of("name"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("LENGTH(data.name)");
+    // Must use JSON_VALUE to get unquoted string for correct length
+    assertThat(context.toSql()).isEqualTo("LENGTH(JSON_VALUE(data, '$.name'))");
+  }
+
+  @Test
+  void shouldRenderStrlenInJsonOutputModeUsingJsonValue() {
+    // When in JSON output mode (like $project), STRLEN must still use
+    // JSON_VALUE for the field, NOT JSON_QUERY or dot notation.
+    // JSON_QUERY returns quoted strings like "Widget" which gives wrong length.
+    // Dot notation also returns quoted strings with extra padding.
+    // LENGTH should operate on the raw string value from JSON_VALUE.
+    var ctx = new DefaultSqlGenerationContext(false, null, "base");
+    ctx.setJsonOutputMode(true);
+
+    var expr = StringExpression.strlen(FieldPathExpression.of("name"));
+
+    expr.render(ctx);
+
+    // Should NOT contain JSON_QUERY - that would give wrong length due to quotes
+    String sql = ctx.toSql();
+    assertThat(sql).doesNotContain("JSON_QUERY");
+    // Should NOT use dot notation - that also includes quotes
+    assertThat(sql).doesNotContain("base.data.name");
+    // Should use JSON_VALUE for the raw string value
+    assertThat(sql).isEqualTo("LENGTH(JSON_VALUE(base.data, '$.name'))");
   }
 
   @Test

@@ -225,8 +225,8 @@ class PipelineRendererTest {
 
     assertThat(context.toSql())
         .contains("SELECT")
-        .contains("AS name")
-        .contains("AS status")
+        .contains("AS \"name\"")
+        .contains("AS \"status\"")
         .doesNotContain("data FROM");
   }
 
@@ -365,6 +365,42 @@ class PipelineRendererTest {
   }
 
   @Test
+  void shouldRenderUnwindWithIncludeArrayIndexAccessibleInProject() {
+    // When $unwind has includeArrayIndex, the index field should be accessible
+    // in subsequent stages like $project
+    var projections = new LinkedHashMap<String, ProjectStage.ProjectionField>();
+    projections.put("_id", ProjectStage.ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("name", ProjectStage.ProjectionField.include(FieldPathExpression.of("name")));
+    projections.put("tag", ProjectStage.ProjectionField.include(FieldPathExpression.of("items")));
+    projections.put(
+        "tagPosition", ProjectStage.ProjectionField.include(FieldPathExpression.of("itemIdx")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "products",
+            new UnwindStage("items", "itemIdx", false),
+            new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should contain the index column from JSON_TABLE
+    assertThat(sql).contains("FOR ORDINALITY");
+    // The index field reference should NOT produce JSON_QUERY(base.data, '$.itemIdx')
+    // because itemIdx is defined by FOR ORDINALITY in the JSON_TABLE
+    // Instead it should reference the unwind table alias column directly like unwind_1.itemIdx
+    assertThat(sql)
+        .as(
+            "Index field should NOT be looked up via JSON_QUERY on base.data - "
+                + "it should reference the unwind table column directly")
+        .doesNotContain("'$.itemIdx'");
+    // Should contain the direct column reference
+    assertThat(sql)
+        .as("Index field should reference the unwind table column")
+        .containsPattern("unwind_\\d+\\.itemIdx");
+  }
+
+  @Test
   void shouldRenderAddFieldsStage() {
     var fields = new LinkedHashMap<String, Expression>();
     fields.put("fullName", FieldPathExpression.of("name"));
@@ -458,6 +494,8 @@ class PipelineRendererTest {
 
   @Test
   void shouldRenderBucketAutoStage() {
+    // MongoDB $bucketAuto returns _id as {min: X, max: Y}, not a simple integer.
+    // We must generate JSON_OBJECT('min' VALUE ..., 'max' VALUE ...) to match.
     var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("count", AccumulatorExpression.count());
 
@@ -469,7 +507,12 @@ class PipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    assertThat(context.toSql()).contains("NTILE(4)").contains("GROUP BY");
+    String sql = context.toSql();
+    assertThat(sql).contains("NTILE(4)").contains("GROUP BY");
+    // Verify _id is returned as JSON object with min/max boundaries
+    assertThat(sql).contains("JSON_OBJECT('min'");
+    assertThat(sql).contains("'max'");
+    assertThat(sql).contains("AS \"_id\"");
   }
 
   @Test
@@ -500,31 +543,70 @@ class PipelineRendererTest {
   }
 
   @Test
-  @Disabled("Recursive $graphLookup requires Oracle features not yet supported")
-  void shouldRenderGraphLookupStage() {
+  void shouldRenderRecursiveGraphLookupWithCte() {
+    // Recursive $graphLookup with unlimited depth uses top-level CTE with start_id tracking
     Pipeline pipeline =
         Pipeline.of(
             "employees",
             new GraphLookupStage(
-                "employees", "$reportsTo", "reportsTo", "name", "hierarchy", null, null));
+                "employees", "$_id", "reportsTo", "_id", "reportingChain", null, null));
 
     renderer.render(pipeline, context);
 
-    assertThat(context.toSql()).contains("LATERAL").contains("JSON_ARRAYAGG").contains("hierarchy");
+    String sql = context.toSql();
+    // Should use WITH clause for recursive CTE, not LATERAL
+    assertThat(sql).contains("WITH");
+    // Base case should select from source collection with start_id
+    assertThat(sql).contains("graph_paths_reportingChain");
+    assertThat(sql).contains("start_id");
+    // Recursive case with UNION ALL
+    assertThat(sql).contains("UNION ALL");
+    // Aggregation CTE groups by start_id
+    assertThat(sql).contains("graph_reportingChain");
+    assertThat(sql).contains("GROUP BY start_id");
+    // Final join by start_id, not LATERAL
+    assertThat(sql).doesNotContain("LATERAL");
+    assertThat(sql).contains("LEFT JOIN graph_reportingChain");
   }
 
   @Test
-  void shouldRenderGraphLookupWithDepthField() {
+  void shouldRenderRecursiveGraphLookupWithMaxDepth() {
+    // Recursive $graphLookup with maxDepth uses top-level CTE with depth limit
     Pipeline pipeline =
         Pipeline.of(
             "employees",
             new GraphLookupStage(
-                "employees", "$reportsTo", "reportsTo", "name", "hierarchy", 5, "level"));
+                "employees", "$_id", "reportsTo", "_id", "reportingChain", 3, null));
 
     renderer.render(pipeline, context);
 
-    // Note: depthField is not rendered in LATERAL join implementation for non-recursive case
-    assertThat(context.toSql()).contains("LATERAL").contains("hierarchy");
+    String sql = context.toSql();
+    // Should have WITH clause with recursive CTE
+    assertThat(sql).contains("WITH");
+    assertThat(sql).contains("UNION ALL");
+    // Depth limit in recursive case
+    assertThat(sql).contains("graph_depth < 3");
+    // No LATERAL - uses regular join
+    assertThat(sql).doesNotContain("LATERAL");
+  }
+
+  @Test
+  void shouldRenderRecursiveGraphLookupWithDepthField() {
+    Pipeline pipeline =
+        Pipeline.of(
+            "employees",
+            new GraphLookupStage(
+                "employees", "$_id", "reportsTo", "_id", "reportingChain", 5, "depth"));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should have WITH clause
+    assertThat(sql).contains("WITH");
+    // Depth field should be included in aggregation (max depth per path)
+    assertThat(sql).contains("graph_depth");
+    // No LATERAL for recursive case
+    assertThat(sql).doesNotContain("LATERAL");
   }
 
   @Test
@@ -537,7 +619,7 @@ class PipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    assertThat(context.toSql()).contains("AS name").doesNotContain("password");
+    assertThat(context.toSql()).contains("AS \"name\"").doesNotContain("password");
   }
 
   @Test
@@ -621,6 +703,7 @@ class PipelineRendererTest {
 
   @Test
   void shouldRenderMultipleGraphLookupStages() {
+    // Multiple recursive $graphLookup stages should each get their own CTE
     Pipeline pipeline =
         Pipeline.of(
             "employees",
@@ -631,7 +714,15 @@ class PipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    assertThat(context.toSql()).contains("LATERAL").contains("managers").contains("subordinates");
+    String sql = context.toSql();
+    // Should have WITH clause with both CTEs
+    assertThat(sql).contains("WITH");
+    assertThat(sql).contains("graph_paths_managers");
+    assertThat(sql).contains("graph_managers");
+    assertThat(sql).contains("graph_paths_subordinates");
+    assertThat(sql).contains("graph_subordinates");
+    // No LATERAL for recursive graphLookup
+    assertThat(sql).doesNotContain("LATERAL");
   }
 
   // ==================== $graphLookup Recursive Depth Tests ====================
@@ -2629,8 +2720,8 @@ class PipelineRendererTest {
     String sql = context.toSql();
     assertThat(sql).startsWith("INSERT INTO projectedOrders");
     assertThat(sql).contains("SELECT");
-    assertThat(sql).contains("AS name");
-    assertThat(sql).contains("AS status");
+    assertThat(sql).contains("AS \"name\"");
+    assertThat(sql).contains("AS \"status\"");
   }
 
   // ==================== $merge Stage Tests ====================
@@ -3730,5 +3821,72 @@ class PipelineRendererTest {
     assertThat(whereIdx)
         .as("WHERE should come before GROUP BY in CTE")
         .isLessThan(groupByIdx);
+  }
+
+  @Test
+  void shouldRenderSortOnComputedProjectField() {
+    // Test case: $project with computed field, then $sort on that computed field
+    // This is COMPLEX002: $project { totalComp: {$add: [$salary, $bonus]} },
+    //                     $sort { totalComp: -1 }
+    // The ORDER BY should use the computed expression, not base.data.totalComp
+
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("_id", ProjectionField.include(FieldPathExpression.of("_id")));
+    projections.put("name", ProjectionField.include(FieldPathExpression.of("name")));
+    projections.put(
+        "totalComp",
+        ProjectionField.include(
+            new ArithmeticExpression(
+                ArithmeticOp.ADD,
+                List.of(
+                    FieldPathExpression.of("salary", JsonReturnType.NUMBER),
+                    FieldPathExpression.of("bonus", JsonReturnType.NUMBER)))));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "employees",
+            new ProjectStage(projections),
+            new SortStage(
+                List.of(new SortField(FieldPathExpression.of("totalComp"), SortDirection.DESC))),
+            new LimitStage(5));
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The ORDER BY should use the computed expression (salary + bonus), NOT base.data.totalComp
+    // Since totalComp is computed in $project, it doesn't exist in the source data
+    assertThat(sql)
+        .as("ORDER BY should use computed expression for sort on computed field")
+        .contains("ORDER BY")
+        .doesNotContain("base.data.totalComp")
+        .containsPattern("ORDER BY.*(salary.*bonus|bonus.*salary)");
+  }
+
+  @Test
+  void shouldRenderGroupAccumulatorAliasesUnquotedForSubqueryCompatibility() {
+    // Note: Accumulator aliases are NOT quoted because:
+    // 1. Quoting breaks references in outer queries for complex pipelines
+    //    (e.g., $group followed by $addFields/$project)
+    // 2. Oracle uppercases unquoted aliases, causing JSON output field name casing issues
+    // This is a known limitation - field names in JSON output may be uppercase
+    // for pipelines that don't go through final JSON key transformation
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "highestPaidEmployee",
+        new AccumulatorExpression(AccumulatorOp.FIRST, FieldPathExpression.of("name")));
+
+    Pipeline pipeline = Pipeline.of(
+        "employees",
+        new GroupStage(FieldPathExpression.of("department"), accumulators));
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Accumulator alias is NOT quoted (allows outer query references to work)
+    // This means JSON output will have uppercase field names for simple GROUP pipelines
+    assertThat(sql)
+        .as("Accumulator aliases should NOT be quoted for subquery compatibility")
+        .contains("AS highestPaidEmployee")
+        .doesNotContain("AS \"highestPaidEmployee\"");
   }
 }
