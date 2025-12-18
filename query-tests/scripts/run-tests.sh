@@ -280,14 +280,13 @@ fi
 TEST_COUNT=$(echo "$TEST_IDS" | wc -l)
 echo -e "  Found ${TEST_COUNT} test(s) to run"
 
-# Check if fat JAR exists for CLI (build if needed)
-if [ ! -f "$PROJECT_ROOT/core/build/libs/core-1.0.0-SNAPSHOT-all.jar" ]; then
-    echo -e "  ${YELLOW}Building translator JAR...${NC}"
-    cd "$PROJECT_ROOT" && ./gradlew --quiet :core:fatJar || {
-        echo -e "${RED}Failed to build translator JAR${NC}"
-        exit 1
-    }
-fi
+# Always rebuild the fat JAR to ensure we're testing current code
+# This ensures any source code changes are reflected in test results
+echo -e "  ${YELLOW}Building translator JAR...${NC}"
+cd "$PROJECT_ROOT" && ./gradlew --quiet :core:fatJar || {
+    echo -e "${RED}Failed to build translator JAR${NC}"
+    exit 1
+}
 echo ""
 
 # Run each test
