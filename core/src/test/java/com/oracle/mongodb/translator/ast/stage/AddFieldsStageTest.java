@@ -126,7 +126,7 @@ class AddFieldsStageTest {
   @Test
   void shouldWrapBooleanComparisonInCaseWhen() {
     // { $addFields: { isActive: { $gt: ["$score", 0] } } }
-    // Oracle doesn't support boolean as column value, must use CASE WHEN
+    // Boolean expressions are wrapped in CASE WHEN with TRUE/FALSE for proper JSON serialization
     Map<String, Expression> fields = new LinkedHashMap<>();
     fields.put(
         "isActive",
@@ -139,9 +139,9 @@ class AddFieldsStageTest {
     stage.render(context);
 
     String sql = context.toSql();
-    // Should wrap boolean in CASE WHEN ... THEN 1 ELSE 0 END for Oracle compatibility
+    // Should wrap boolean in CASE WHEN ... THEN TRUE ELSE FALSE END for proper JSON boolean output
     assertThat(sql).contains("CASE WHEN");
-    assertThat(sql).contains("THEN 1 ELSE 0 END");
+    assertThat(sql).contains("THEN TRUE ELSE FALSE END");
     assertThat(sql).contains("AS isActive");
   }
 }

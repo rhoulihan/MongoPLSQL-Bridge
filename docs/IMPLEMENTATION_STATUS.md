@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-18
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -292,7 +292,7 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1,609 test methods across 76+ test files
+**Unit Tests:** 1,622 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
 **Cross-Database Validation:** 191 tests (166 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
@@ -311,7 +311,7 @@ All tests passing: ✅ Yes (191/191)
 | `parser` | 398 | BSON to AST parsing tests |
 | `exception` | 7 | Error handling tests |
 | `util` | 16 | Utility function tests |
-| **Total** | **1,609** | |
+| **Total** | **1,622** | |
 
 ### Code Coverage (JaCoCo)
 
@@ -583,6 +583,11 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 - Fixed all SpotBugs issues (EI_EXPOSE_REP, DB_DUPLICATE_BRANCHES, WMI_WRONG_MAP_ITERATOR)
 - Added defensive copies for mutable collections
 - Used entrySet() instead of keySet() for efficient map iteration
+
+**Bug Fixes Applied (2025-12-18):**
+- **JSON Null Handling**: Fixed post-group `$addFields` comparisons with null to properly handle Oracle's JSON null vs SQL NULL distinction. Uses `JSON_SERIALIZE()` to detect JSON null values in expressions like `{$ne: ["$userId", null]}`.
+- **Boolean Serialization**: Fixed boolean output in post-group computed fields to use Oracle's `TRUE`/`FALSE` literals instead of `1`/`0` for proper JSON boolean serialization.
+- **$avg with Pipeline Lookups**: Fixed `$avg` array operations on `$graphLookup` results to correctly use the CTE alias for lookup results.
 
 ## Next Steps
 

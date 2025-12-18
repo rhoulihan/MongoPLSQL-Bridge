@@ -240,13 +240,23 @@ public final class LookupStage implements Stage {
     // Check if pipeline contains a $group stage
     GroupStage groupStage = findGroupStage();
 
+    // Check if pipeline contains an $unwind stage
+    UnwindStage unwindStage = findUnwindStage();
+    String unwindAlias = unwindStage != null ? alias + "_unwind" : null;
+
     // Start LATERAL join - use comma join since LATERAL works as correlated subquery
     ctx.sql(", LATERAL (SELECT ");
 
     if (groupStage != null) {
       // Pipeline with $group: render aggregated JSON object
       // Result is JSON_ARRAY(JSON_OBJECT('_id' VALUE ..., 'field' VALUE AGG(...)))
-      renderGroupAggregation(groupStage, alias + "_inner", ctx);
+      if (unwindStage != null) {
+        // With $unwind: use the unwind alias for aggregations
+        String innerAlias = alias + "_inner";
+        renderGroupAggregationWithUnwind(groupStage, unwindStage, innerAlias, unwindAlias, ctx);
+      } else {
+        renderGroupAggregation(groupStage, alias + "_inner", ctx);
+      }
     } else {
       // Pipeline without $group: collect raw documents
       ctx.sql("JSON_ARRAYAGG(");
@@ -271,6 +281,24 @@ public final class LookupStage implements Stage {
     ctx.sql(alias);
     ctx.sql("_inner");
 
+    // Add JSON_TABLE for $unwind if present
+    if (unwindStage != null) {
+      String unwindPath = unwindStage.getPath();
+      // Remove leading $ from path
+      if (unwindPath.startsWith("$")) {
+        unwindPath = unwindPath.substring(1);
+      }
+      ctx.sql(", JSON_TABLE(");
+      ctx.sql(alias);
+      ctx.sql("_inner.data, '$.");
+      ctx.sql(unwindPath);
+      ctx.sql("[*]' COLUMNS (");
+      // Use a generic column that captures the whole element as JSON
+      ctx.sql("element VARCHAR2(4000) FORMAT JSON PATH '$'");
+      ctx.sql(")) ");
+      ctx.sql(unwindAlias);
+    }
+
     // Render WHERE clause from pipeline $match stages with let variable substitution
     boolean hasWhere = false;
 
@@ -284,8 +312,13 @@ public final class LookupStage implements Stage {
           ctx.sql(" AND ");
         }
         // Render the match expression with variable substitution
-        renderExpressionWithVarSubstitution(
-            matchStage.getFilter(), alias + "_inner", ctx);
+        if (unwindStage != null) {
+          renderExpressionWithVarSubstitutionAndUnwind(
+              matchStage.getFilter(), alias + "_inner", unwindStage, unwindAlias, ctx);
+        } else {
+          renderExpressionWithVarSubstitution(
+              matchStage.getFilter(), alias + "_inner", ctx);
+        }
       }
     }
 
@@ -308,6 +341,16 @@ public final class LookupStage implements Stage {
     for (Stage stage : pipeline) {
       if (stage instanceof SortStage) {
         return (SortStage) stage;
+      }
+    }
+    return null;
+  }
+
+  /** Finds the first $unwind stage in the pipeline, if present. */
+  private UnwindStage findUnwindStage() {
+    for (Stage stage : pipeline) {
+      if (stage instanceof UnwindStage) {
+        return (UnwindStage) stage;
       }
     }
     return null;
@@ -368,6 +411,108 @@ public final class LookupStage implements Stage {
     }
 
     ctx.sql("))");
+  }
+
+  /**
+   * Renders a $group aggregation in a pipeline lookup with $unwind.
+   * Uses the unwind alias for fields that reference the unwound array path.
+   */
+  private void renderGroupAggregationWithUnwind(
+      GroupStage groupStage,
+      UnwindStage unwindStage,
+      String innerAlias,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    String unwindPath = unwindStage.getPath();
+    if (unwindPath.startsWith("$")) {
+      unwindPath = unwindPath.substring(1);
+    }
+
+    ctx.sql("JSON_ARRAY(JSON_OBJECT(");
+
+    // Render _id field
+    Expression idExpr = groupStage.getIdExpression();
+    ctx.sql("'_id' VALUE ");
+    if (idExpr == null) {
+      ctx.sql("NULL");
+    } else {
+      renderGroupExpression(idExpr, innerAlias, ctx);
+    }
+
+    // Render each accumulator
+    for (var entry : groupStage.getAccumulators().entrySet()) {
+      ctx.sql(", ");
+      ctx.sql("'");
+      ctx.sql(entry.getKey());
+      ctx.sql("' VALUE ");
+      renderAccumulatorExpressionWithUnwind(
+          entry.getValue(), innerAlias, unwindPath, unwindAlias, ctx);
+    }
+
+    ctx.sql("))");
+  }
+
+  /**
+   * Renders an accumulator expression, using the unwind alias for fields that reference
+   * the unwound array path (e.g., items.qty when unwinding "items").
+   */
+  private void renderAccumulatorExpressionWithUnwind(
+      AccumulatorExpression accumulator,
+      String innerAlias,
+      String unwindPath,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    AccumulatorOp op = accumulator.getOp();
+    Expression arg = accumulator.getArgument();
+
+    if (op == AccumulatorOp.COUNT) {
+      ctx.sql("COUNT(*)");
+    } else {
+      ctx.sql("NVL(");
+      ctx.sql(op.getSqlFunction());
+      ctx.sql("(");
+      if (arg != null) {
+        renderAccumulatorArgumentWithUnwind(arg, innerAlias, unwindPath, unwindAlias, ctx);
+      }
+      ctx.sql("), 0)");
+    }
+  }
+
+  /**
+   * Renders an accumulator argument, routing to unwind alias if the field references
+   * the unwound array path.
+   */
+  private void renderAccumulatorArgumentWithUnwind(
+      Expression arg,
+      String innerAlias,
+      String unwindPath,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    if (arg instanceof FieldPathExpression fieldExpr) {
+      String path = fieldExpr.getPath();
+      if (path.startsWith("$")) {
+        path = path.substring(1);
+      }
+      // Check if path starts with unwindPath (e.g., "items.qty" starts with "items")
+      if (path.startsWith(unwindPath + ".")) {
+        // Extract the remaining path after the unwound array name
+        String remainingPath = path.substring(unwindPath.length() + 1);
+        ctx.sql("JSON_VALUE(");
+        ctx.sql(unwindAlias);
+        ctx.sql(".element, '$.");
+        ctx.sql(remainingPath);
+        ctx.sql("' RETURNING NUMBER)");
+      } else {
+        // Regular field from inner table
+        ctx.sql("JSON_VALUE(");
+        ctx.sql(innerAlias);
+        ctx.sql(".data, '$.");
+        ctx.sql(path);
+        ctx.sql("' RETURNING NUMBER)");
+      }
+    } else {
+      ctx.visit(arg);
+    }
   }
 
   /**
@@ -486,6 +631,154 @@ public final class LookupStage implements Stage {
     } else {
       // Fallback for other expressions - visit directly
       // This may not work for all cases but handles simple expressions
+      ctx.visit(expr);
+    }
+  }
+
+  /**
+   * Renders an expression with variable substitution AND unwind support.
+   * Fields that reference the unwound array path use the unwind alias.
+   */
+  private void renderExpressionWithVarSubstitutionAndUnwind(
+      Expression expr,
+      String innerAlias,
+      UnwindStage unwindStage,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    String unwindPath = unwindStage.getPath();
+    if (unwindPath.startsWith("$")) {
+      unwindPath = unwindPath.substring(1);
+    }
+
+    if (expr instanceof LogicalExpression logical) {
+      List<Expression> operands = logical.getOperands();
+      String sqlOperator = logical.getOp() == LogicalOp.AND ? " AND " : " OR ";
+
+      ctx.sql("(");
+      for (int i = 0; i < operands.size(); i++) {
+        if (i > 0) {
+          ctx.sql(sqlOperator);
+        }
+        renderExpressionWithVarSubstitutionAndUnwind(
+            operands.get(i), innerAlias, unwindStage, unwindAlias, ctx);
+      }
+      ctx.sql(")");
+    } else if (expr instanceof ComparisonExpression comp) {
+      renderComparisonWithVarSubstitutionAndUnwind(comp, innerAlias, unwindPath, unwindAlias, ctx);
+    } else if (expr instanceof InExpression inExpr) {
+      renderInExpressionWithVarSubstitutionAndUnwind(
+          inExpr, innerAlias, unwindPath, unwindAlias, ctx);
+    } else {
+      ctx.visit(expr);
+    }
+  }
+
+  /**
+   * Renders a comparison expression with variable substitution AND unwind support.
+   */
+  private void renderComparisonWithVarSubstitutionAndUnwind(
+      ComparisonExpression comp,
+      String innerAlias,
+      String unwindPath,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    Expression left = comp.getLeft();
+
+    // Left side - check if it references the unwound path
+    renderFieldReferenceWithUnwind(left, innerAlias, unwindPath, unwindAlias, ctx);
+
+    ctx.sql(" ");
+    ctx.sql(getSqlOperator(comp.getOp()));
+    ctx.sql(" ");
+
+    // Right side may be a $$variable reference
+    final Expression right = comp.getRight();
+    if (right instanceof FieldPathExpression rightField) {
+      String path = rightField.getPath();
+      if (path.startsWith("$")) {
+        String potentialVarName = path.substring(1);
+        String outerFieldPath = letVariables.get(potentialVarName);
+        if (outerFieldPath != null) {
+          // Variable reference - substitute with outer table field
+          String outerField =
+              outerFieldPath.startsWith("$") ? outerFieldPath.substring(1) : outerFieldPath;
+          ctx.sql("JSON_VALUE(");
+          ctx.sql(ctx.getBaseTableAlias());
+          ctx.sql(".data, '$.");
+          ctx.sql(outerField);
+          ctx.sql("')");
+        } else {
+          // Not a variable, treat as field reference (possibly from unwind)
+          renderFieldReferenceWithUnwind(right, innerAlias, unwindPath, unwindAlias, ctx);
+        }
+      } else {
+        renderFieldReferenceWithUnwind(right, innerAlias, unwindPath, unwindAlias, ctx);
+      }
+    } else {
+      ctx.visit(right);
+    }
+  }
+
+  /**
+   * Renders an IN expression with unwind support.
+   */
+  private void renderInExpressionWithVarSubstitutionAndUnwind(
+      InExpression inExpr,
+      String innerAlias,
+      String unwindPath,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    renderFieldReferenceWithUnwind(inExpr.getField(), innerAlias, unwindPath, unwindAlias, ctx);
+
+    if (inExpr.isNegated()) {
+      ctx.sql(" NOT IN (");
+    } else {
+      ctx.sql(" IN (");
+    }
+
+    var values = inExpr.getValues();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      ctx.bind(values.get(i));
+    }
+
+    ctx.sql(")");
+  }
+
+  /**
+   * Renders a field reference, using unwind alias if the field references the unwound path.
+   */
+  private void renderFieldReferenceWithUnwind(
+      Expression expr,
+      String innerAlias,
+      String unwindPath,
+      String unwindAlias,
+      SqlGenerationContext ctx) {
+    if (expr instanceof FieldPathExpression fieldExpr) {
+      String path = fieldExpr.getPath();
+      if (path.startsWith("$") && !path.startsWith("$$")) {
+        path = path.substring(1);
+      }
+
+      // Check if path references the unwound array
+      if (path.startsWith(unwindPath + ".")) {
+        String remainingPath = path.substring(unwindPath.length() + 1);
+        ctx.sql("JSON_VALUE(");
+        ctx.sql(unwindAlias);
+        ctx.sql(".element, '$.");
+        ctx.sql(remainingPath);
+        ctx.sql("')");
+      } else {
+        // Regular field from inner table
+        ctx.sql("JSON_VALUE(");
+        ctx.sql(innerAlias);
+        ctx.sql(".data, '$.");
+        ctx.sql(path);
+        ctx.sql("')");
+      }
+    } else {
       ctx.visit(expr);
     }
   }

@@ -16,7 +16,7 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 | Metric | Value |
 |--------|-------|
-| Unit Tests | 1,609 |
+| Unit Tests | 1,622 |
 | Cross-DB Validation | 191 |
 | Strict Matches | 166 |
 | Large-Scale Tests | 10 |
@@ -198,7 +198,7 @@ System.out.println(result.sql());
 ./gradlew :core:test
 ```
 
-Runs 1,609 unit tests covering all operators, parsers, and pipeline scenarios.
+Runs 1,622 unit tests covering all operators, parsers, and pipeline scenarios.
 
 ### Integration Tests
 
@@ -263,7 +263,7 @@ mongo-oracle-translator/
 ├── core/                    # Main translation library
 │   └── src/
 │       ├── main/java/       # API, AST, parser, optimizer, generator, CLI
-│       └── test/java/       # Unit tests (1,609)
+│       └── test/java/       # Unit tests (1,622)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
 │   ├── tests/               # Test case definitions (191)
@@ -308,6 +308,21 @@ MongoDB Pipeline (BSON)
 - **Type-preserving output**: Uses `JSON_QUERY` and `JSON_ARRAYAGG(JSON_OBJECT(*))` to preserve MongoDB types (numbers, booleans, arrays)
 - **Sealed interfaces**: Type-safe expression and stage hierarchies
 - **Specification-first**: Operator definitions in JSON drive code generation
+
+## Known Limitations
+
+### `$first` / `$last` Accumulators
+
+MongoDB's `$first` and `$last` accumulators return values based on document order within each group. Oracle doesn't have a direct equivalent for unordered groups, so the translator uses `MIN()` and `MAX()` as approximations:
+
+- **With explicit `$sort` before `$group`**: Results are deterministic and match MongoDB
+- **Without explicit `$sort`**: MongoDB uses insertion order, while Oracle uses lexicographic/numeric order
+
+For exact semantics, add a `$sort` stage before your `$group` to ensure consistent ordering.
+
+### JSON Null Handling
+
+Oracle's JSON type distinguishes between SQL NULL (missing value) and JSON null (explicit null in document). The translator uses `JSON_SERIALIZE()` to properly detect JSON nulls in post-aggregation comparisons like `{$ne: ["$field", null]}`.
 
 ## Requirements
 

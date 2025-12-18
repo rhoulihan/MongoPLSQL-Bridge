@@ -156,4 +156,111 @@ class ArithmeticExpressionTest {
     assertThat(ArithmeticOp.isArithmetic("$subtract")).isTrue();
     assertThat(ArithmeticOp.isArithmetic("$eq")).isFalse();
   }
+
+  @Test
+  void shouldRenderDateSubtractionAsMilliseconds() {
+    // COMPLEX015: When subtracting two explicitly typed date fields,
+    // MongoDB returns milliseconds. Use EXTRACT to convert INTERVAL to ms.
+    var expr =
+        ArithmeticExpression.subtract(
+            FieldPathExpression.of("resolvedAt", JsonReturnType.TIMESTAMP),
+            FieldPathExpression.of("createdAt", JsonReturnType.TIMESTAMP));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should use EXTRACT to convert INTERVAL to milliseconds
+    assertThat(sql)
+        .as("Date subtraction should use EXTRACT for DAY")
+        .containsIgnoringCase("EXTRACT(DAY FROM");
+    assertThat(sql)
+        .as("Date subtraction should use EXTRACT for HOUR")
+        .containsIgnoringCase("EXTRACT(HOUR FROM");
+    // Should access plain date path (Oracle stores dates as ISO strings)
+    assertThat(sql)
+        .as("Should access resolvedAt path")
+        .contains("$.resolvedAt'");
+    assertThat(sql)
+        .as("Should access createdAt path")
+        .contains("$.createdAt'");
+    // Should use TIMESTAMP for time precision
+    assertThat(sql)
+        .as("Should use TIMESTAMP")
+        .containsIgnoringCase("RETURNING TIMESTAMP");
+  }
+
+  @Test
+  void shouldUseRuntimeTypeDetectionForUntypedFieldSubtraction() {
+    // When subtracting two untyped fields, use runtime detection:
+    // CASE WHEN both are numbers THEN numeric ELSE date END
+    var expr =
+        ArithmeticExpression.subtract(
+            FieldPathExpression.of("field1"),
+            FieldPathExpression.of("field2"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should use CASE for runtime type detection
+    assertThat(sql)
+        .as("Should use CASE for runtime type detection")
+        .containsIgnoringCase("CASE WHEN");
+    // Should check if values are numeric
+    assertThat(sql)
+        .as("Should check for numeric type")
+        .containsIgnoringCase("RETURNING NUMBER");
+    // Should have date subtraction path with EXTRACT for milliseconds
+    assertThat(sql)
+        .as("Should use EXTRACT for date conversion")
+        .containsIgnoringCase("EXTRACT(DAY FROM");
+    // Date path uses plain paths (Oracle stores dates as ISO strings)
+    assertThat(sql)
+        .as("Should use TIMESTAMP for date subtraction")
+        .containsIgnoringCase("RETURNING TIMESTAMP");
+  }
+
+  @Test
+  void shouldUseNumericSubtractionForExplicitlyTypedNumbers() {
+    // When both operands are explicitly NUMBER typed, use simple subtraction
+    var expr =
+        ArithmeticExpression.subtract(
+            FieldPathExpression.of("amount", JsonReturnType.NUMBER),
+            FieldPathExpression.of("discount", JsonReturnType.NUMBER));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should NOT use date detection - just regular subtraction
+    assertThat(sql)
+        .as("Should not use CASE for explicitly typed numbers")
+        .doesNotContainIgnoringCase("CASE WHEN");
+    assertThat(sql)
+        .as("Should not convert to milliseconds for numbers")
+        .doesNotContainIgnoringCase("86400000");
+  }
+
+  @Test
+  void shouldUsePlainPathForDateSubtraction() {
+    // COMPLEX015: Oracle stores dates as plain ISO strings (not Extended JSON)
+    // Use plain path with TIMESTAMP return type for proper time precision
+    var expr =
+        ArithmeticExpression.subtract(
+            FieldPathExpression.of("resolvedAt", JsonReturnType.TIMESTAMP),
+            FieldPathExpression.of("createdAt", JsonReturnType.TIMESTAMP));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should access plain date paths (Oracle stores dates as ISO strings)
+    assertThat(sql)
+        .as("Should access plain resolvedAt path")
+        .contains("$.resolvedAt'");
+    assertThat(sql)
+        .as("Should access plain createdAt path")
+        .contains("$.createdAt'");
+    // Should use TIMESTAMP for time precision (EXTRACT handles interval)
+    assertThat(sql)
+        .as("Should use TIMESTAMP for time precision")
+        .containsIgnoringCase("RETURNING TIMESTAMP");
+  }
 }

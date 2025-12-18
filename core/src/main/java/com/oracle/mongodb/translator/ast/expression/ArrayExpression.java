@@ -2037,6 +2037,49 @@ public final class ArrayExpression implements Expression {
       final String arrayPath = normalizedPath.substring(0, firstDot);
       final String nestedPath = normalizedPath.substring(firstDot + 1);
 
+      // Check if the array path is a pipeline lookup result (e.g., from $graphLookup)
+      String pipelineLookupAlias = ctx.getPipelineLookupAlias(arrayPath);
+      if (pipelineLookupAlias != null) {
+        // For pipeline lookup: avg from the JSON array column in the CTE
+        ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
+        ctx.sql(pipelineLookupAlias);
+        ctx.sql(".");
+        ctx.sql(arrayPath); // column name
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+        ctx.sql(nestedPath);
+        ctx.sql("')))");
+        return;
+      }
+
+      // Check if the array path is from a simple (equality) $lookup
+      SqlGenerationContext.LookupFieldInfo lookupInfo = ctx.getLookupFieldInfo(arrayPath);
+      if (lookupInfo != null) {
+        // For equality lookup: generate correlated subquery averaging from foreign table
+        String subqAlias = "avg_" + arrayPath.substring(0, Math.min(3, arrayPath.length()));
+        ctx.sql("(SELECT AVG(");
+        ctx.sql(subqAlias);
+        ctx.sql(".data.");
+        ctx.sql(quotePath(nestedPath));
+        ctx.sql(") FROM ");
+        ctx.tableName(lookupInfo.foreignTable());
+        ctx.sql(" ");
+        ctx.sql(subqAlias);
+        ctx.sql(" WHERE ");
+        ctx.sql(subqAlias);
+        ctx.sql(".data.");
+        ctx.sql(quotePath(lookupInfo.foreignField()));
+        ctx.sql(" = ");
+        String alias = ctx.getBaseTableAlias();
+        if (alias != null && !alias.isEmpty()) {
+          ctx.sql(alias);
+          ctx.sql(".");
+        }
+        ctx.sql("data.");
+        ctx.sql(quotePath(lookupInfo.localField()));
+        ctx.sql(")");
+        return;
+      }
+
       ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");
@@ -2045,6 +2088,19 @@ public final class ArrayExpression implements Expression {
       ctx.sql(nestedPath);
       ctx.sql("')))");
     } else {
+      // Simple array path: avg all elements directly
+      // Check if this is a pipeline lookup result
+      String pipelineLookupAlias = ctx.getPipelineLookupAlias(normalizedPath);
+      if (pipelineLookupAlias != null) {
+        // For pipeline lookup: avg all elements from the JSON array column
+        ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
+        ctx.sql(pipelineLookupAlias);
+        ctx.sql(".");
+        ctx.sql(normalizedPath); // column name
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+        return;
+      }
+
       ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(");
       renderDataColumn(ctx);
       ctx.sql(", '$.");

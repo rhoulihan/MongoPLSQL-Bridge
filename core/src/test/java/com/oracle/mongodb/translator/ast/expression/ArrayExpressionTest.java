@@ -1383,4 +1383,52 @@ class ArrayExpressionTest {
         .as("Should wrap non-null result in JSON quotes")
         .contains("JSON('\"' || listagg_result || '\"')");
   }
+
+  @Test
+  void shouldRenderAvgOnPipelineLookupResultWithNestedPath() {
+    // COMPLEX017: $avg on $graphLookup result field with nested path
+    // MongoDB: {$avg: "$directAndIndirectReports.rating"} where the array is from $graphLookup
+    // Should use the pipeline lookup alias, NOT base.data
+    DefaultSqlGenerationContext ctx = new DefaultSqlGenerationContext(false, null, "base");
+    // Register pipeline lookup: directAndIndirectReports comes from graphLookup CTE
+    ctx.registerPipelineLookupAlias("directAndIndirectReports", "directAndIndirectReports_cte");
+
+    // $avg: "$directAndIndirectReports.rating" (with $ prefix as created by parser)
+    var expr =
+        ArrayExpression.avgArray(FieldPathExpression.of("$directAndIndirectReports.rating"));
+    expr.render(ctx);
+
+    String sql = ctx.toSql();
+
+    // Should use the CTE alias, NOT base.data
+    assertThat(sql)
+        .as("Should NOT reference base.data (graphLookup result doesn't exist in source)")
+        .doesNotContain("base.data");
+    assertThat(sql)
+        .as("Should use the pipeline lookup alias")
+        .contains("directAndIndirectReports_cte.directAndIndirectReports");
+    assertThat(sql).as("Should calculate average").containsIgnoringCase("AVG");
+  }
+
+  @Test
+  void shouldRenderAvgOnSimplePipelineLookupResult() {
+    // Test $avg on a simple pipeline lookup array (no nested path)
+    // MongoDB: {$avg: "$scores"} where "scores" is a numeric array from $graphLookup
+    DefaultSqlGenerationContext ctx = new DefaultSqlGenerationContext(false, null, "base");
+    ctx.registerPipelineLookupAlias("scores", "scores_cte");
+
+    // With $ prefix as created by parser
+    var expr = ArrayExpression.avgArray(FieldPathExpression.of("$scores"));
+    expr.render(ctx);
+
+    String sql = ctx.toSql();
+
+    assertThat(sql)
+        .as("Should NOT reference base.data")
+        .doesNotContain("base.data");
+    assertThat(sql)
+        .as("Should use the pipeline lookup alias")
+        .contains("scores_cte.scores");
+    assertThat(sql).as("Should calculate average").containsIgnoringCase("AVG");
+  }
 }

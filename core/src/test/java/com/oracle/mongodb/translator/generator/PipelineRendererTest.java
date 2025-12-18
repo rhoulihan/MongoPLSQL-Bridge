@@ -20,10 +20,12 @@ import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.FieldPathExpression;
+import com.oracle.mongodb.translator.ast.expression.InlineObjectExpression;
 import com.oracle.mongodb.translator.ast.expression.JsonReturnType;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
+import com.oracle.mongodb.translator.ast.expression.ObjectExpression;
 import com.oracle.mongodb.translator.ast.expression.SwitchExpression;
 import com.oracle.mongodb.translator.ast.expression.SwitchExpression.SwitchBranch;
 import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
@@ -42,6 +44,7 @@ import com.oracle.mongodb.translator.ast.stage.Pipeline;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage;
 import com.oracle.mongodb.translator.ast.stage.ProjectStage.ProjectionField;
 import com.oracle.mongodb.translator.ast.stage.RedactStage;
+import com.oracle.mongodb.translator.ast.stage.ReplaceRootStage;
 import com.oracle.mongodb.translator.ast.stage.SampleStage;
 import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.SetWindowFieldsStage.WindowField;
@@ -1707,6 +1710,116 @@ class PipelineRendererTest {
     assertThat(sql).contains("MAX(");
   }
 
+  @Test
+  void shouldRenderFacetWithEmptyArrayCoalesce() {
+    // FACET_PAGINATION001: Facet pipelines should return [] instead of null for empty results
+    // MongoDB behavior: empty facet result is [] (empty array), not null
+    // Oracle's JSON_ARRAYAGG returns null for empty results, so we need COALESCE
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("data", List.of(new LimitStage(5)));
+
+    Pipeline pipeline = Pipeline.of("orders", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Verify COALESCE is used to convert null to empty array
+    assertThat(sql)
+        .as("Facet pipeline should use COALESCE to return [] instead of null")
+        .containsIgnoringCase("COALESCE");
+    assertThat(sql)
+        .as("COALESCE should use JSON_ARRAY() for empty result")
+        .containsIgnoringCase("JSON_ARRAY()");
+  }
+
+  @Test
+  void shouldRenderFacetNestedFieldExtractionWithCoalesce() {
+    // FACET_PAGINATION001: When extracting nested fields from facet (e.g., $data._id),
+    // the JSON_ARRAYAGG should use COALESCE to return [] instead of null for empty results
+    // Pattern: $project.elements = "$data._id" extracts _id from each element in data facet
+
+    // Create facet with pagination data
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("total", AccumulatorExpression.sum(LiteralExpression.of(1)));
+    var groupStage = new GroupStage(FieldPathExpression.of("category"), accumulators);
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("data", List.of(new LimitStage(5)));
+
+    // Project that extracts nested field from facet result
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("elements", ProjectionField.include(FieldPathExpression.of("data._id")));
+
+    Pipeline pipeline =
+        Pipeline.of(
+            "orders",
+            groupStage,
+            new FacetStage(facets),
+            new ProjectStage(projections));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // The nested field extraction (jt_nested.field_val) should be wrapped in COALESCE
+    assertThat(sql)
+        .as("Nested field extraction should use COALESCE around JSON_ARRAYAGG")
+        .containsIgnoringCase("COALESCE(JSON_ARRAYAGG(jt_nested");
+  }
+
+  @Test
+  void shouldRenderFacetCountWithZeroExclusion() {
+    // FACET_PAGINATION001: MongoDB's $count returns nothing (empty array) when count is 0
+    // Oracle's COUNT(*) always returns 0 for empty input, producing [{"count": 0}]
+    // We need to exclude zero counts to match MongoDB behavior
+
+    // Facet with count stage
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("recordCount", List.of(new CountStage("count")));
+
+    Pipeline pipeline = Pipeline.of("orders", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Count query should filter out zero counts
+    // Pattern: WHERE cnt > 0 or HAVING COUNT(*) > 0
+    assertThat(sql)
+        .as("Count facet should exclude zero counts to match MongoDB behavior")
+        .containsIgnoringCase("cnt > 0");
+  }
+
+  @Test
+  void shouldRenderFacetWithGroupAndLimit() {
+    // COMPLEX022: Facet sub-pipeline with $group → $sort → $limit should apply the LIMIT
+    // Pattern: topCustomers: [{$group: ...}, {$sort: ...}, {$limit: 3}]
+
+    // Create facet with group, sort, and limit
+    var accumulators = new LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put(
+        "totalSpend",
+        AccumulatorExpression.sum(FieldPathExpression.of("amount", JsonReturnType.NUMBER)));
+    var groupStage = new GroupStage(FieldPathExpression.of("customerName"), accumulators);
+
+    var sortFields =
+        List.of(new SortField(FieldPathExpression.of("totalSpend"), SortDirection.DESC));
+    var sortStage = new SortStage(sortFields);
+
+    var limitStage = new LimitStage(3);
+
+    var facets = new LinkedHashMap<String, List<com.oracle.mongodb.translator.ast.stage.Stage>>();
+    facets.put("topCustomers", List.of(groupStage, sortStage, limitStage));
+
+    Pipeline pipeline = Pipeline.of("sales", new FacetStage(facets));
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // LIMIT should be applied as FETCH FIRST ... ROWS ONLY
+    assertThat(sql)
+        .as("Facet with $group and $limit should apply FETCH FIRST")
+        .containsIgnoringCase("FETCH FIRST 3 ROWS ONLY");
+  }
+
   // Tests for post-union sort and limit
   @Test
   void shouldRenderUnionWithSortAndLimit() {
@@ -3089,9 +3202,10 @@ class PipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE WHEN ... IS NOT NULL THEN 1 ELSE 0 END
-    // Oracle doesn't allow IS NOT NULL as a value expression in SELECT
-    assertThat(sql).contains("CASE WHEN userId IS NOT NULL THEN 1 ELSE 0 END");
+    // Should use JSON_SERIALIZE to properly detect JSON null values
+    // JSON columns can contain JSON null which is different from SQL NULL
+    assertThat(sql).contains("(userId IS NOT NULL AND JSON_SERIALIZE(userId) != 'null')");
+    assertThat(sql).contains("THEN TRUE ELSE FALSE END");
     assertThat(sql).doesNotContain("<> NULL");
     assertThat(sql).doesNotContain("!= NULL");
   }
@@ -3122,10 +3236,11 @@ class PipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE WHEN ... IS NULL THEN 1 ELSE 0 END
-    // Oracle doesn't allow IS NULL as a value expression in SELECT
-    assertThat(sql).contains("CASE WHEN userId IS NULL THEN 1 ELSE 0 END");
-    assertThat(sql).doesNotContain("= NULL");
+    // Should use JSON_SERIALIZE to properly detect JSON null values
+    // JSON columns can contain JSON null which is different from SQL NULL
+    assertThat(sql).contains("(userId IS NULL OR JSON_SERIALIZE(userId) = 'null')");
+    assertThat(sql).contains("THEN TRUE ELSE FALSE END");
+    assertThat(sql).doesNotContain("= NULL)"); // Should not have plain "= NULL" comparison
   }
 
   @Test
@@ -3888,5 +4003,53 @@ class PipelineRendererTest {
         .as("Accumulator aliases should NOT be quoted for subquery compatibility")
         .contains("AS highestPaidEmployee")
         .doesNotContain("AS \"highestPaidEmployee\"");
+  }
+
+  @Test
+  void shouldRenderReplaceRootFollowedByProject() {
+    // Test case: REPLACEROOT002
+    // Pipeline: [
+    //   {$replaceRoot: {newRoot: {$mergeObjects: [{orderId: "$_id"}, "$shippingAddress"]}}},
+    //   {$project: {orderId: 1, city: 1, state: 1}}
+    // ]
+    // The $project should be applied AFTER $replaceRoot, not ignored
+
+    // Create the inline object {orderId: "$_id"}
+    var inlineFields = new LinkedHashMap<String, Expression>();
+    inlineFields.put("orderId", FieldPathExpression.of("_id"));
+    var inlineObj = new InlineObjectExpression(inlineFields);
+
+    // Create $mergeObjects: [{orderId: "$_id"}, "$shippingAddress"]
+    var mergeObjects = ObjectExpression.mergeObjects(
+        List.of(inlineObj, FieldPathExpression.of("shippingAddress")));
+
+    // Create $replaceRoot with the mergeObjects as newRoot
+    var replaceRoot = new ReplaceRootStage(mergeObjects);
+
+    // Create $project: {orderId: 1, city: 1, state: 1}
+    var projections = new LinkedHashMap<String, ProjectionField>();
+    projections.put("orderId", ProjectionField.include(FieldPathExpression.of("orderId")));
+    projections.put("city", ProjectionField.include(FieldPathExpression.of("city")));
+    projections.put("state", ProjectionField.include(FieldPathExpression.of("state")));
+    var project = new ProjectStage(projections);
+
+    Pipeline pipeline = Pipeline.of("orders_detailed", replaceRoot, project);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // The SQL should apply the $project to the $replaceRoot result
+    // This requires wrapping $replaceRoot in a subquery and selecting specific fields
+    assertThat(sql)
+        .as("$project should be applied after $replaceRoot, not ignored")
+        .containsIgnoringCase("orderId")
+        .containsIgnoringCase("city")
+        .containsIgnoringCase("state");
+
+    // The output should NOT just be "... AS data" - it should project specific fields
+    // The current buggy behavior returns just the $replaceRoot result as "data"
+    assertThat(sql)
+        .as("Should project specific fields, not just return entire merged object")
+        .containsPattern("(?i)(SELECT.*orderId.*city.*state|FROM.*SELECT)");
   }
 }

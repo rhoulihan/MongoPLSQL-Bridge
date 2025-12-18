@@ -393,4 +393,40 @@ class LookupStageTest {
     assertThat(sql).contains("JSON_VALUE(sales_1_inner.data, '$.status') IN (");
     assertThat(sql).doesNotContain("JSON_VALUE(base.data");
   }
+
+  @Test
+  void shouldRenderPipelineLookupWithUnwind() {
+    // COMPLEX014: Pipeline lookup with $unwind should use JSON_TABLE to expand the array
+    // Pattern: {"$lookup": {"from": "sales", "let": {"prodName": "$name"},
+    //           "pipeline": [{"$unwind": "$items"}, ...], "as": "salesData"}}
+
+    // Create the pipeline stages
+    var unwindStage = new UnwindStage("items");
+    var matchFilter =
+        new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("items.product"),
+            FieldPathExpression.of("$prodName"));
+    var matchStage = new MatchStage(matchFilter);
+
+    var stage =
+        LookupStage.withPipeline(
+            "sales",
+            Map.of("prodName", "$name"),
+            List.of(unwindStage, matchStage),
+            "salesData");
+
+    var contextWithBase =
+        new DefaultSqlGenerationContext(false, Oracle26aiDialect.INSTANCE, "base");
+    stage.render(contextWithBase);
+
+    String sql = contextWithBase.toSql();
+    // Should use JSON_TABLE to unwind the items array
+    assertThat(sql)
+        .as("Pipeline lookup with $unwind should use JSON_TABLE to expand the array")
+        .containsIgnoringCase("JSON_TABLE");
+    assertThat(sql)
+        .as("JSON_TABLE should expand the items array path")
+        .contains("$.items[*]");
+  }
 }

@@ -225,11 +225,14 @@ public final class GraphLookupStage implements Stage {
     // Add the CTE results as a lateral join
     ctx.sql("SELECT ");
     if (depthField != null) {
-      ctx.sql("g.graph_depth AS ");
-      ctx.identifier(depthField);
-      ctx.sql(", ");
+      // MongoDB adds depthField to EACH document in the array, not as a separate column
+      // Use JSON_MERGEPATCH to merge the depth into each document
+      ctx.sql("JSON_ARRAYAGG(JSON_MERGEPATCH(g.data, JSON_OBJECT('");
+      ctx.sql(depthField);
+      ctx.sql("' VALUE g.graph_depth))) AS ");
+    } else {
+      ctx.sql("JSON_ARRAYAGG(g.data) AS ");
     }
-    ctx.sql("JSON_ARRAYAGG(g.data) AS ");
     ctx.identifier(as);
     ctx.sql(" FROM ");
     ctx.sql(cteName);

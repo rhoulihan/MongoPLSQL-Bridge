@@ -193,6 +193,9 @@ public final class PipelineRenderer {
       } else if (components.hasPostGroupAddFields) {
         // If we have post-group $addFields, we need to wrap the GROUP query in a subquery
         renderWithPostGroupAddFields(components, ctx);
+      } else if (components.hasReplaceRootWithProject) {
+        // If $replaceRoot is followed by $project, wrap $replaceRoot in subquery
+        renderWithReplaceRootAndProject(components, ctx);
       } else if (components.bucketAutoStage != null) {
         // $bucketAuto uses NTILE which requires a subquery pattern
         renderWithBucketAuto(components, ctx);
@@ -303,11 +306,10 @@ public final class PipelineRenderer {
       computedFieldNames.addAll(swf.getOutput().keySet());
     }
     // Also add $graphLookup output field names - these are rendered separately below
+    // Note: depthField is now merged INTO each document in the array, so it's not
+    // a separate top-level computed field
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
       computedFieldNames.add(graphLookup.getAs());
-      if (graphLookup.getDepthField() != null) {
-        computedFieldNames.add(graphLookup.getDepthField());
-      }
     }
 
     // Track which computed fields $project transformed (so $addFields skips them)
@@ -370,6 +372,7 @@ public final class PipelineRenderer {
     }
 
     // Render $graphLookup result columns only if included in $project
+    // Note: depthField is now merged INTO each document in the array, not a separate column
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
       String asField = graphLookup.getAs();
       // Only include if project actually wants this field (direct inclusion or transformation)
@@ -382,18 +385,8 @@ public final class PipelineRenderer {
         ctx.sql(" AS ");
         ctx.identifier(asField);
       }
-      if (graphLookup.getDepthField() != null) {
-        String depthField = graphLookup.getDepthField();
-        if (projectIncludedComputedFields.contains(depthField)
-            && !projectTransformedFields.contains(depthField)) {
-          ctx.sql(", ");
-          ctx.identifier(asField + "_cte");
-          ctx.sql(".");
-          ctx.identifier(depthField);
-          ctx.sql(" AS ");
-          ctx.identifier(depthField);
-        }
-      }
+      // depthField is merged into each document in the array via JSON_MERGEPATCH,
+      // so we don't render it as a separate column here
     }
 
     // FROM clause
@@ -661,8 +654,16 @@ public final class PipelineRenderer {
     for (AddFieldsStage addFields : components.postGroupAddFieldsStages) {
       for (var entry : addFields.getFields().entrySet()) {
         ctx.sql(", ");
-        // Render expression, but field references should resolve to inner query columns
-        renderPostGroupExpression(entry.getValue(), ctx);
+        Expression expr = entry.getValue();
+        // Wrap boolean expressions in CASE WHEN with TRUE/FALSE for proper JSON serialization
+        if (expr.isBooleanExpression()) {
+          ctx.sql("CASE WHEN ");
+          renderPostGroupExpression(expr, ctx);
+          ctx.sql(" THEN TRUE ELSE FALSE END");
+        } else {
+          // Render expression, but field references should resolve to inner query columns
+          renderPostGroupExpression(expr, ctx);
+        }
         ctx.sql(" AS ");
         ctx.identifier(entry.getKey());
       }
@@ -1059,6 +1060,127 @@ public final class PipelineRenderer {
     }
 
     ctx.sql(" FROM buckets ORDER BY bucket_id");
+  }
+
+  /**
+   * Renders a pipeline where $replaceRoot is followed by $project. The $replaceRoot result is
+   * wrapped in a subquery so that the $project can extract specific fields from the transformed
+   * document structure.
+   *
+   * <pre>
+   * SELECT JSON_ARRAYAGG(JSON_OBJECT(
+   *   'orderId' VALUE JSON_VALUE(sub.data, '$.orderId'),
+   *   'city' VALUE JSON_VALUE(sub.data, '$.city'),
+   *   'state' VALUE JSON_VALUE(sub.data, '$.state')
+   * ) RETURNING CLOB)
+   * FROM (
+   *   SELECT JSON_MERGEPATCH(...) AS data
+   *   FROM collection base
+   * ) sub
+   * </pre>
+   */
+  private void renderWithReplaceRootAndProject(
+      PipelineComponents components, SqlGenerationContext ctx) {
+    final ReplaceRootStage replaceRoot = components.replaceRootStage;
+    ProjectStage project = components.projectStage;
+
+    // Outer SELECT with JSON_ARRAYAGG for type-preserving output
+    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT(");
+    ctx.setJsonOutputMode(true);
+
+    boolean first = true;
+    for (var entry : project.getProjections().entrySet()) {
+      final String fieldName = entry.getKey();
+      ProjectStage.ProjectionField field = entry.getValue();
+
+      if (field.isExcluded()) {
+        continue;
+      }
+
+      if (!first) {
+        ctx.sql(", ");
+      }
+
+      // Output: 'fieldName' VALUE JSON_VALUE(sub.data, '$.fieldName')
+      ctx.sql("'");
+      ctx.sql(fieldName);
+      ctx.sql("' VALUE JSON_VALUE(sub.");
+      ctx.sql(config.dataColumnName());
+      ctx.sql(", '$.");
+      ctx.sql(fieldName);
+      ctx.sql("')");
+      first = false;
+    }
+
+    if (first) {
+      ctx.sql("'_dummy' VALUE NULL");
+    }
+
+    ctx.setJsonOutputMode(false);
+    ctx.sql(") RETURNING CLOB) FROM (");
+
+    // Inner subquery: render $replaceRoot result as 'data' column
+    ctx.sql("SELECT ");
+    ctx.visit(replaceRoot.getNewRoot());
+    ctx.sql(" AS ");
+    ctx.sql(config.dataColumnName());
+
+    // FROM clause with collection
+    ctx.sql(" FROM ");
+    ctx.tableName(components.collectionName);
+    String baseAlias = ctx.getBaseTableAlias();
+    if (baseAlias != null && !baseAlias.isEmpty()) {
+      ctx.sql(" ");
+      ctx.sql(baseAlias);
+    }
+
+    // WHERE clause if there are match stages
+    if (!components.matchStages.isEmpty()) {
+      ctx.sql(" WHERE ");
+      boolean firstMatch = true;
+      for (MatchStage match : components.matchStages) {
+        if (!firstMatch) {
+          ctx.sql(" AND ");
+        }
+        ctx.visit(match.getFilter());
+        firstMatch = false;
+      }
+    }
+
+    // Close subquery
+    ctx.sql(") sub");
+
+    // ORDER BY if there's a sort stage
+    if (components.sortStage != null) {
+      ctx.sql(" ORDER BY ");
+      boolean firstSort = true;
+      for (SortStage.SortField sortField : components.sortStage.getSortFields()) {
+        if (!firstSort) {
+          ctx.sql(", ");
+        }
+        ctx.sql("JSON_VALUE(sub.");
+        ctx.sql(config.dataColumnName());
+        ctx.sql(", '$.");
+        ctx.sql(sortField.getFieldPath().getPath());
+        ctx.sql("')");
+        if (sortField.getDirection() == SortStage.SortDirection.DESC) {
+          ctx.sql(" DESC");
+        }
+        firstSort = false;
+      }
+    }
+
+    // LIMIT/OFFSET if present
+    if (components.skipStage != null) {
+      ctx.sql(" OFFSET ");
+      ctx.sql(String.valueOf(components.skipStage.getSkip()));
+      ctx.sql(" ROWS");
+    }
+    if (components.limitStage != null) {
+      ctx.sql(" FETCH FIRST ");
+      ctx.sql(String.valueOf(components.limitStage.getLimit()));
+      ctx.sql(" ROWS ONLY");
+    }
   }
 
   /**
@@ -2031,14 +2153,24 @@ public final class PipelineRenderer {
 
   private void renderPostGroupComparison(ComparisonExpression comp, SqlGenerationContext ctx) {
     // Handle null comparisons specially - Oracle requires IS NULL / IS NOT NULL
-    // and these must be wrapped in CASE WHEN to be used as value expressions in SELECT
+    // But JSON columns can contain JSON null which is different from SQL NULL
+    // Use JSON_SERIALIZE to properly detect JSON null values
+    // The outer code wraps boolean expressions in CASE WHEN TRUE/FALSE for JSON output
     if (comp.getRight() instanceof LiteralExpression lit && lit.isNull()) {
-      ctx.sql("CASE WHEN ");
-      renderPostGroupExpression(comp.getLeft(), ctx);
       if (comp.getOp() == ComparisonOp.EQ) {
-        ctx.sql(" IS NULL THEN 1 ELSE 0 END");
+        // $eq: [field, null] -> (field IS NULL OR JSON_SERIALIZE(field) = 'null')
+        ctx.sql("(");
+        renderPostGroupExpression(comp.getLeft(), ctx);
+        ctx.sql(" IS NULL OR JSON_SERIALIZE(");
+        renderPostGroupExpression(comp.getLeft(), ctx);
+        ctx.sql(") = 'null')");
       } else if (comp.getOp() == ComparisonOp.NE) {
-        ctx.sql(" IS NOT NULL THEN 1 ELSE 0 END");
+        // $ne: [field, null] -> (field IS NOT NULL AND JSON_SERIALIZE(field) != 'null')
+        ctx.sql("(");
+        renderPostGroupExpression(comp.getLeft(), ctx);
+        ctx.sql(" IS NOT NULL AND JSON_SERIALIZE(");
+        renderPostGroupExpression(comp.getLeft(), ctx);
+        ctx.sql(") != 'null')");
       } else {
         throw new IllegalStateException("Invalid NULL comparison with operator: " + comp.getOp());
       }
@@ -2203,14 +2335,20 @@ public final class PipelineRenderer {
     ctx.sql("), ");
 
     // CTE 2: Aggregate by start_id
+    // MongoDB adds depthField to EACH document in the array, not as a separate column
     ctx.sql("graph_");
     ctx.sql(as);
-    ctx.sql(" AS (SELECT start_id, JSON_ARRAYAGG(data RETURNING CLOB) AS ");
-    ctx.identifier(as);
+    ctx.sql(" AS (SELECT start_id, JSON_ARRAYAGG(");
     if (graphLookup.getDepthField() != null) {
-      ctx.sql(", MAX(graph_depth) AS ");
-      ctx.identifier(graphLookup.getDepthField());
+      // Merge depth into each document using JSON_MERGEPATCH
+      ctx.sql("JSON_MERGEPATCH(data, JSON_OBJECT('");
+      ctx.sql(graphLookup.getDepthField());
+      ctx.sql("' VALUE graph_depth))");
+    } else {
+      ctx.sql("data");
     }
+    ctx.sql(" RETURNING CLOB) AS ");
+    ctx.identifier(as);
     ctx.sql(" FROM graph_paths_");
     ctx.sql(as);
     ctx.sql(" GROUP BY start_id)");
@@ -2464,6 +2602,11 @@ public final class PipelineRenderer {
     // Analyze pipeline for CTE requirements (multiple $group stages, etc.)
     components.stageSequence = PipelineStageSequence.analyze(pipeline);
 
+    // Detect $replaceRoot followed by $project - needs subquery wrapping
+    if (components.replaceRootStage != null && components.projectStage != null) {
+      components.hasReplaceRootWithProject = true;
+    }
+
     return components;
   }
 
@@ -2533,6 +2676,7 @@ public final class PipelineRenderer {
     }
 
     // Render $graphLookup result columns
+    // Note: depthField is now merged INTO each document in the array, not a separate column
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
       ctx.sql(", ");
       ctx.identifier(graphLookup.getAs() + "_cte");
@@ -2540,14 +2684,8 @@ public final class PipelineRenderer {
       ctx.identifier(graphLookup.getAs());
       ctx.sql(" AS ");
       ctx.identifier(graphLookup.getAs());
-      if (graphLookup.getDepthField() != null) {
-        ctx.sql(", ");
-        ctx.identifier(graphLookup.getAs() + "_cte");
-        ctx.sql(".");
-        ctx.identifier(graphLookup.getDepthField());
-        ctx.sql(" AS ");
-        ctx.identifier(graphLookup.getDepthField());
-      }
+      // depthField is merged into each document in the array via JSON_MERGEPATCH,
+      // so we don't render it as a separate column here
     }
   }
 
@@ -2563,11 +2701,10 @@ public final class PipelineRenderer {
       computedFieldNames.addAll(swf.getOutput().keySet());
     }
     // Also add $graphLookup output field names - these are rendered by renderAddFieldsClauses
+    // Note: depthField is now merged INTO each document in the array, so it's not
+    // a separate top-level computed field
     for (GraphLookupStage graphLookup : components.graphLookupStages) {
       computedFieldNames.add(graphLookup.getAs());
-      if (graphLookup.getDepthField() != null) {
-        computedFieldNames.add(graphLookup.getDepthField());
-      }
     }
 
     // Determine if we need row-by-row output (for UNIONs or nested pipelines)
@@ -2700,11 +2837,11 @@ public final class PipelineRenderer {
       ctx.sql(", ");
 
       Expression expr = entry.getValue();
-      // Oracle doesn't support boolean as column value, wrap in CASE WHEN
+      // Wrap boolean expressions in CASE WHEN with TRUE/FALSE for proper JSON serialization
       if (expr.isBooleanExpression()) {
         ctx.sql("CASE WHEN ");
         ctx.visit(expr);
-        ctx.sql(" THEN 1 ELSE 0 END");
+        ctx.sql(" THEN TRUE ELSE FALSE END");
       } else {
         ctx.visit(expr);
       }
@@ -2738,11 +2875,11 @@ public final class PipelineRenderer {
       ctx.sql(", ");
 
       Expression expr = entry.getValue();
-      // Oracle doesn't support boolean as column value, wrap in CASE WHEN
+      // Wrap boolean expressions in CASE WHEN with TRUE/FALSE for proper JSON serialization
       if (expr.isBooleanExpression()) {
         ctx.sql("CASE WHEN ");
         ctx.visit(expr);
-        ctx.sql(" THEN 1 ELSE 0 END");
+        ctx.sql(" THEN TRUE ELSE FALSE END");
       } else {
         ctx.visit(expr);
       }
@@ -2971,7 +3108,10 @@ public final class PipelineRenderer {
     // Build the JSON path for the nested field
     final String jsonPath = "$." + nestedField;
 
-    ctx.sql("(SELECT JSON_ARRAYAGG(jt_nested.field_val FORMAT JSON) FROM JSON_TABLE((");
+    // Use COALESCE to return [] instead of null for empty results
+    // MongoDB returns [] for empty facet nested field extraction
+    ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(jt_nested.field_val FORMAT JSON), JSON_ARRAY())");
+    ctx.sql(" FROM JSON_TABLE((");
     renderFacetPipeline(collectionName, facetPipeline, components, ctx);
     ctx.sql("), '$[*]' COLUMNS (field_val VARCHAR2(4000) FORMAT JSON PATH '");
     ctx.sql(jsonPath);
@@ -3095,7 +3235,8 @@ public final class PipelineRenderer {
     }
 
     // Outer query: JSON_ARRAYAGG around inner subquery
-    ctx.sql("SELECT JSON_ARRAYAGG(");
+    // Use COALESCE to return empty array [] instead of null for empty results
+    ctx.sql("SELECT COALESCE(JSON_ARRAYAGG(");
     renderFacetJsonObject(groupStage, projectStage, sortStage, ctx);
 
     // Add ORDER BY inside JSON_ARRAYAGG if there's a sort
@@ -3114,11 +3255,12 @@ public final class PipelineRenderer {
       }
     }
 
-    ctx.sql(") FROM (");
+    ctx.sql("), JSON_ARRAY()) FROM (");
 
     // Inner query: the actual aggregation/selection
     if (groupStage != null) {
-      renderFacetGroupQuery(collectionName, groupStage, matchStages, parentComponents, ctx);
+      renderFacetGroupQuery(
+          collectionName, groupStage, sortStage, limitStage, matchStages, parentComponents, ctx);
     } else if (projectStage != null) {
       renderFacetProjectQuery(
           collectionName, projectStage, matchStages, sortStage, limitStage, parentComponents, ctx);
@@ -3191,6 +3333,8 @@ public final class PipelineRenderer {
   private void renderFacetGroupQuery(
       String collectionName,
       GroupStage groupStage,
+      SortStage sortStage,
+      LimitStage limitStage,
       List<MatchStage> matchStages,
       PipelineComponents parentComponents,
       SqlGenerationContext ctx) {
@@ -3241,6 +3385,30 @@ public final class PipelineRenderer {
     if (groupStage.getIdExpression() != null) {
       ctx.sql(" GROUP BY ");
       ctx.visit(groupStage.getIdExpression());
+    }
+
+    // ORDER BY clause (required for proper LIMIT behavior)
+    if (sortStage != null && !sortStage.getSortFields().isEmpty()) {
+      ctx.sql(" ORDER BY ");
+      boolean firstSort = true;
+      for (SortStage.SortField field : sortStage.getSortFields()) {
+        if (!firstSort) {
+          ctx.sql(", ");
+        }
+        // Use column alias for grouped fields
+        ctx.identifier(field.getFieldPath().getPath());
+        if (field.getDirection() == SortStage.SortDirection.DESC) {
+          ctx.sql(" DESC");
+        }
+        firstSort = false;
+      }
+    }
+
+    // LIMIT clause
+    if (limitStage != null) {
+      ctx.sql(" FETCH FIRST ");
+      ctx.sql(String.valueOf(limitStage.getLimit()));
+      ctx.sql(" ROWS ONLY");
     }
   }
 
@@ -3328,6 +3496,8 @@ public final class PipelineRenderer {
    * Renders a facet sub-pipeline that contains a $count stage.
    * Used for patterns like: recordCount: [{$count: "count"}]
    * When there's a pre-facet $group, this counts the grouped rows.
+   * Note: MongoDB's $count returns nothing for empty input, but COUNT(*) returns 0.
+   * Use CASE to exclude zero counts to match MongoDB behavior.
    */
   private void renderFacetCountQuery(
       String collectionName,
@@ -3336,9 +3506,11 @@ public final class PipelineRenderer {
       PipelineComponents parentComponents,
       SqlGenerationContext ctx) {
     // Return JSON_ARRAYAGG with a single JSON_OBJECT containing the count
-    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT('");
+    // Use COALESCE to return empty array instead of null for empty results
+    // Use CASE to exclude zero counts (MongoDB's $count returns nothing for empty input)
+    ctx.sql("SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('");
     ctx.sql(countStage.getFieldName());
-    ctx.sql("' VALUE cnt)) FROM (SELECT COUNT(*) AS cnt FROM (");
+    ctx.sql("' VALUE cnt)), JSON_ARRAY()) FROM (SELECT COUNT(*) AS cnt FROM (");
 
     // Inner query: the data to count
     if (parentComponents.groupStage != null) {
@@ -3368,7 +3540,8 @@ public final class PipelineRenderer {
       }
     }
 
-    ctx.sql("))");
+    // Add WHERE clause to exclude zero counts (MongoDB's $count returns nothing for empty input)
+    ctx.sql(")) WHERE cnt > 0");
   }
 
   /**
@@ -3387,7 +3560,8 @@ public final class PipelineRenderer {
     GroupStage parentGroup = parentComponents.groupStage;
 
     // Return JSON_ARRAYAGG of JSON_OBJECT with all fields from the grouped data
-    ctx.sql("SELECT JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\"");
+    // Use COALESCE to return empty array instead of null for empty results
+    ctx.sql("SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('_id' VALUE \"_id\"");
 
     // Include all accumulator fields in the JSON_OBJECT
     if (parentGroup != null) {
@@ -3419,8 +3593,8 @@ public final class PipelineRenderer {
       }
     }
 
-    // Close JSON_ARRAYAGG and start FROM clause
-    ctx.sql(") FROM (");
+    // Close JSON_ARRAYAGG and COALESCE, start FROM clause
+    ctx.sql("), JSON_ARRAY()) FROM (");
 
     // Inner query: the grouped data with pagination
     renderPreFacetGroupQuery(collectionName, parentComponents, ctx);
@@ -3978,6 +4152,7 @@ public final class PipelineRenderer {
     boolean hasPostWindowMatch = false; // Track if $match comes after $setWindowFields
     boolean hasPostUnionSortOrLimit = false; // Track if $sort/$limit come after $unionWith
     boolean hasPostUnionGroup = false; // Track if $group comes after $unionWith
+    boolean hasReplaceRootWithProject = false; // Track if $project follows $replaceRoot
     SortStage postUnionSortStage; // $sort after $unionWith (applied to whole union result)
     LimitStage postUnionLimitStage; // $limit after $unionWith (applied to whole union result)
     GroupStage postUnionGroupStage; // $group after $unionWith (aggregates whole union result)

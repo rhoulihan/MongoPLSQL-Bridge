@@ -87,8 +87,12 @@ class GraphLookupStageTest {
     stage.render(context);
 
     String sql = context.toSql();
-    // Note: "level" is a reserved word and would be quoted; use "depth" instead
-    assertThat(sql).contains("g.graph_depth AS depth");
+    // MongoDB adds depthField to EACH document, so we use JSON_MERGEPATCH
+    // to merge the depth into each document in the array
+    assertThat(sql).containsIgnoringCase("JSON_MERGEPATCH");
+    assertThat(sql).containsIgnoringCase("JSON_OBJECT");
+    assertThat(sql).contains("'depth'");
+    assertThat(sql).containsIgnoringCase("graph_depth");
   }
 
   @Test
@@ -510,7 +514,8 @@ class GraphLookupStageTest {
     assertThat(sql).contains("WITH graph_reportingChain");
     assertThat(sql).contains("UNION ALL");
     assertThat(sql).contains("graph_depth < 10");
-    assertThat(sql).contains("AS depth");
+    // Depth is merged into each document via JSON_MERGEPATCH
+    assertThat(sql).contains("'depth'");
   }
 
   @Test
@@ -541,7 +546,8 @@ class GraphLookupStageTest {
     assertThat(sql).contains("'active'");
     assertThat(sql).contains("'verified'");
     assertThat(sql).contains("graph_depth < 3");
-    assertThat(sql).contains("AS distance");
+    // Distance is merged into each document via JSON_MERGEPATCH
+    assertThat(sql).contains("'distance'");
   }
 
   @Test
@@ -556,8 +562,8 @@ class GraphLookupStageTest {
     String sql = context.toSql();
     assertThat(sql).contains("components");
     assertThat(sql).contains("componentIds");
-    // Note: depth field is rendered with quotes: AS "level"
-    assertThat(sql).contains("\"level\"");
+    // Level is merged into each document via JSON_MERGEPATCH
+    assertThat(sql).contains("'level'");
   }
 
   @Test
@@ -617,5 +623,39 @@ class GraphLookupStageTest {
     String sql = context.toSql();
     assertThat(sql).contains(">=");
     assertThat(sql).contains("<=");
+  }
+
+  @Test
+  void shouldIncludeDepthFieldInsideEachDocument() {
+    // GRAPHLOOKUP002: MongoDB adds the depthField to EACH document in the array,
+    // not as a separate column. The depth indicates how many levels removed each
+    // document is from the starting point.
+    // Expected: [{...doc..., "depth": 0}, {...doc..., "depth": 1}, ...]
+    // NOT: depth as separate column, array without depth in documents
+    var stage =
+        new GraphLookupStage(
+            "employees", "$_id", "reportsTo", "_id", "reportingChain", 3, "depth");
+
+    stage.render(context);
+
+    String sql = context.toSql();
+    // The depth field should be merged INTO each document using JSON_MERGEPATCH
+    // not selected as a separate column
+    assertThat(sql)
+        .as("Depth field should be merged into each document in the array")
+        .containsIgnoringCase("JSON_MERGEPATCH");
+    assertThat(sql)
+        .as("Should create JSON object with depth field")
+        .containsIgnoringCase("JSON_OBJECT");
+    assertThat(sql)
+        .as("JSON object should contain the depth field name")
+        .contains("'depth'");
+    assertThat(sql)
+        .as("JSON object should use graph_depth value")
+        .containsIgnoringCase("graph_depth");
+    // The old pattern of separate column should NOT appear when depthField is set
+    assertThat(sql)
+        .as("Should not have depth as a separate column")
+        .doesNotContain("g.graph_depth AS depth,");
   }
 }
