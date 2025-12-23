@@ -83,7 +83,7 @@ class TranslatorCliTest {
     assertThat(exitCode).isZero();
     String output = outStream.toString();
     assertThat(output).contains("SELECT");
-    assertThat(output).contains("orders");
+    assertThat(output.toUpperCase()).contains("ORDERS");
   }
 
   @Test
@@ -107,7 +107,7 @@ class TranslatorCliTest {
     assertThat(exitCode).isZero();
     String output = outStream.toString();
     assertThat(output).contains("SELECT");
-    assertThat(output).contains("orders");
+    assertThat(output.toUpperCase()).contains("ORDERS");
   }
 
   @Test
@@ -138,8 +138,8 @@ class TranslatorCliTest {
     String output = outStream.toString();
     assertThat(output).contains("-- Pipeline: Pipeline 1");
     assertThat(output).contains("-- Pipeline: Pipeline 2");
-    assertThat(output).contains("orders");
-    assertThat(output).contains("products");
+    assertThat(output.toUpperCase()).contains("ORDERS");
+    assertThat(output.toUpperCase()).contains("PRODUCTS");
   }
 
   @Test
@@ -158,7 +158,7 @@ class TranslatorCliTest {
 
     assertThat(exitCode).isZero();
     String output = outStream.toString();
-    assertThat(output).contains("overridden");
+    assertThat(output.toUpperCase()).contains("OVERRIDDEN");
   }
 
   @Test

@@ -70,4 +70,24 @@ class OracleConfigurationTest {
 
     assertThat(config.qualifiedTableName()).isEqualTo("orders");
   }
+
+  @Test
+  void shouldDefaultCteBasedRenderingToTrue() {
+    var config = OracleConfiguration.builder().collectionName("orders").build();
+
+    assertThat(config.useCteBasedRendering())
+        .describedAs("CTE-based rendering should be enabled by default")
+        .isTrue();
+  }
+
+  @Test
+  void shouldAllowDisablingCteBasedRendering() {
+    var config =
+        OracleConfiguration.builder()
+            .collectionName("orders")
+            .useCteBasedRendering(false)
+            .build();
+
+    assertThat(config.useCteBasedRendering()).isFalse();
+  }
 }

@@ -55,24 +55,25 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Renders a MongoDB aggregation pipeline as a properly structured Oracle SQL query.
+ * Renders a MongoDB aggregation pipeline as Oracle SQL.
  *
- * <p>This class analyzes the pipeline stages and combines them into a single SQL query with the
- * correct clause ordering:
+ * <p><strong>Note:</strong> This class delegates to {@link CteBasedPipelineRenderer} by default
+ * (since CTE-based rendering is now the default). The legacy rendering path in this class is
+ * deprecated and will be removed in a future release.
  *
- * <pre>
- * SELECT ...
- * FROM table [alias]
- * [LEFT OUTER JOIN ...]
- * WHERE ...
- * GROUP BY ...
- * ORDER BY ...
- * OFFSET n ROWS
- * FETCH FIRST m ROWS ONLY
- * </pre>
+ * <p>The CTE-based renderer provides:
  *
- * <p>Multiple $match stages are combined with AND. The last $project or $group determines the
- * SELECT clause.
+ * <ul>
+ *   <li>Better type preservation using Oracle dot notation and JSON_QUERY
+ *   <li>Full recursive $graphLookup support with depth traversal
+ *   <li>Cleaner SQL structure using WITH clause (Common Table Expressions)
+ *   <li>Improved compatibility with Oracle MongoDB API patterns
+ * </ul>
+ *
+ * <p>To explicitly use the legacy path (not recommended), set {@code useCteBasedRendering(false)}
+ * in your {@link com.oracle.mongodb.translator.api.OracleConfiguration}.
+ *
+ * @see CteBasedPipelineRenderer
  */
 public final class PipelineRenderer {
 
@@ -82,15 +83,34 @@ public final class PipelineRenderer {
     this.config = config;
   }
 
-  /** Renders the pipeline to the given context. */
+  /**
+   * Renders the pipeline to the given context.
+   *
+   * <p>By default, delegates to {@link CteBasedPipelineRenderer} which is the recommended approach.
+   * The legacy rendering path is only used when {@code useCteBasedRendering} is explicitly set to
+   * {@code false}.
+   */
   public void render(Pipeline pipeline, SqlGenerationContext ctx) {
-    // If CTE-based rendering is enabled, delegate to the new renderer
+    // CTE-based rendering is now the default and recommended approach
     if (config.useCteBasedRendering()) {
       CteBasedPipelineRenderer cteRenderer = new CteBasedPipelineRenderer(config);
       cteRenderer.render(pipeline, ctx);
       return;
     }
 
+    // DEPRECATED: Legacy rendering path - will be removed in a future release
+    renderLegacy(pipeline, ctx);
+  }
+
+  /**
+   * Legacy rendering implementation.
+   *
+   * @deprecated Use CTE-based rendering instead by setting {@code useCteBasedRendering(true)} in
+   *     configuration (this is now the default). The legacy path does not support recursive
+   *     $graphLookup and has limited type preservation.
+   */
+  @Deprecated(since = "1.1.0", forRemoval = true)
+  private void renderLegacy(Pipeline pipeline, SqlGenerationContext ctx) {
     // Analyze pipeline to extract components
     PipelineComponents components = analyzePipeline(pipeline);
 

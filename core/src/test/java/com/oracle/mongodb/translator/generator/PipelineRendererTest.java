@@ -69,7 +69,13 @@ class PipelineRendererTest {
 
   @BeforeEach
   void setUp() {
-    OracleConfiguration config = OracleConfiguration.builder().collectionName("orders").build();
+    // Use legacy rendering (useCteBasedRendering=false) since these tests verify legacy output
+    // For CTE-based rendering tests, see CteBasedPipelineRendererTest
+    OracleConfiguration config =
+        OracleConfiguration.builder()
+            .collectionName("orders")
+            .useCteBasedRendering(false)
+            .build();
     renderer = new PipelineRenderer(config);
     // Use context with "base" alias to match actual translator behavior
     context = new DefaultSqlGenerationContext(false, null, "base");
@@ -323,6 +329,7 @@ class PipelineRendererTest {
         OracleConfiguration.builder()
             .collectionName("order_collection")
             .schemaName("myschema")
+            .useCteBasedRendering(false)
             .build();
     PipelineRenderer schemaRenderer = new PipelineRenderer(config);
     var ctx = new DefaultSqlGenerationContext(false, null, "base");
@@ -1183,7 +1190,11 @@ class PipelineRendererTest {
   // Test with context without base alias
   @Test
   void shouldRenderWithoutBaseAlias() {
-    OracleConfiguration config = OracleConfiguration.builder().collectionName("orders").build();
+    OracleConfiguration config =
+        OracleConfiguration.builder()
+            .collectionName("orders")
+            .useCteBasedRendering(false)
+            .build();
     PipelineRenderer localRenderer = new PipelineRenderer(config);
     var ctx = new DefaultSqlGenerationContext(false, null, "");
 

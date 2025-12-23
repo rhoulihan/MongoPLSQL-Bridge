@@ -45,15 +45,22 @@ public final class OracleConfiguration {
   }
 
   /**
-   * Returns true if CTE-based rendering should be used.
+   * Returns true if CTE-based rendering should be used (default: true).
    *
-   * <p>CTE-based rendering follows Oracle MongoDB API patterns:
+   * <p>CTE-based rendering is now the default and recommended approach. It follows Oracle MongoDB
+   * API patterns:
+   *
    * <ul>
-   *   <li>Uses WITH clause where each pipeline stage becomes a CTE</li>
-   *   <li>Uses JSON_EXISTS with type-safe predicates (stringOnly, numberOnly, etc.)</li>
-   *   <li>Uses json_transform for projections (KEEP, SET, REMOVE)</li>
-   *   <li>Returns DATA column preserving JSON types</li>
+   *   <li>Uses WITH clause where each pipeline stage becomes a CTE
+   *   <li>Uses JSON_EXISTS with type-safe predicates (stringOnly, numberOnly, etc.)
+   *   <li>Uses json_transform for projections (KEEP, SET, REMOVE)
+   *   <li>Returns DATA column preserving JSON types
+   *   <li>Supports recursive $graphLookup with full depth traversal
    * </ul>
+   *
+   * <p>The legacy rendering path is deprecated and will be removed in a future release.
+   *
+   * @return true if CTE-based rendering is enabled (default), false for legacy rendering
    */
   public boolean useCteBasedRendering() {
     return useCteBasedRendering;
@@ -72,7 +79,7 @@ public final class OracleConfiguration {
     private String collectionName;
     private String schemaName;
     private String dataColumnName;
-    private boolean useCteBasedRendering;
+    private boolean useCteBasedRendering = true; // CTE-based rendering is now the default
 
     private Builder() {}
 
