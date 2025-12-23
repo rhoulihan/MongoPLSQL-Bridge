@@ -14,12 +14,14 @@ public final class OracleConfiguration {
   private final String collectionName;
   private final String schemaName;
   private final String dataColumnName;
+  private final boolean useCteBasedRendering;
 
   private OracleConfiguration(Builder builder) {
     this.collectionName =
         Objects.requireNonNull(builder.collectionName, "collectionName must not be null");
     this.schemaName = builder.schemaName;
     this.dataColumnName = builder.dataColumnName != null ? builder.dataColumnName : "data";
+    this.useCteBasedRendering = builder.useCteBasedRendering;
   }
 
   /** Returns a new builder. */
@@ -42,6 +44,21 @@ public final class OracleConfiguration {
     return dataColumnName;
   }
 
+  /**
+   * Returns true if CTE-based rendering should be used.
+   *
+   * <p>CTE-based rendering follows Oracle MongoDB API patterns:
+   * <ul>
+   *   <li>Uses WITH clause where each pipeline stage becomes a CTE</li>
+   *   <li>Uses JSON_EXISTS with type-safe predicates (stringOnly, numberOnly, etc.)</li>
+   *   <li>Uses json_transform for projections (KEEP, SET, REMOVE)</li>
+   *   <li>Returns DATA column preserving JSON types</li>
+   * </ul>
+   */
+  public boolean useCteBasedRendering() {
+    return useCteBasedRendering;
+  }
+
   /** Returns the fully qualified table name (schema.collection or just collection). */
   public String qualifiedTableName() {
     if (schemaName != null) {
@@ -55,6 +72,7 @@ public final class OracleConfiguration {
     private String collectionName;
     private String schemaName;
     private String dataColumnName;
+    private boolean useCteBasedRendering;
 
     private Builder() {}
 
@@ -70,6 +88,17 @@ public final class OracleConfiguration {
 
     public Builder dataColumnName(String dataColumnName) {
       this.dataColumnName = dataColumnName;
+      return this;
+    }
+
+    /**
+     * Enables CTE-based rendering following Oracle MongoDB API patterns.
+     *
+     * @param useCteBasedRendering true to enable CTE-based rendering
+     * @return this builder
+     */
+    public Builder useCteBasedRendering(boolean useCteBasedRendering) {
+      this.useCteBasedRendering = useCteBasedRendering;
       return this;
     }
 

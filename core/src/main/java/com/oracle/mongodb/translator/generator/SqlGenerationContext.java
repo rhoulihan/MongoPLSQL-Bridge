@@ -271,6 +271,22 @@ public interface SqlGenerationContext {
   String getCteSourceTable();
 
   /**
+   * Sets whether the CTE uses a DATA column (new CTE-based renderer pattern).
+   * When true, field paths are accessed via JSON_QUERY("DATA", '$.path').
+   * When false (legacy CTE mode), field references map to explicit columns.
+   *
+   * @param usesDataColumn true if CTEs use DATA column pattern
+   */
+  void setUsesCteDataColumn(boolean usesDataColumn);
+
+  /**
+   * Returns whether the CTE uses a DATA column.
+   *
+   * @return true if using DATA column pattern
+   */
+  boolean usesCteDataColumn();
+
+  /**
    * Registers compound _id fields from a previous CTE's GroupStage. When a subsequent CTE
    * references "$_id.fieldName", it should be translated to just "fieldName" since compound _id
    * fields are flattened to plain columns in CTEs.
@@ -287,4 +303,23 @@ public interface SqlGenerationContext {
    * @return true if this is a compound _id field, false otherwise
    */
   boolean isCompoundIdField(String fieldName);
+
+  /**
+   * Sets the sort context for $group accumulators. When a $sort stage immediately precedes a $group
+   * stage, the sort fields are stored here so $first and $last accumulators can use the KEEP
+   * (DENSE_RANK FIRST/LAST ORDER BY ...) syntax.
+   *
+   * @param sortFields the sort fields from the preceding $sort stage, or null to clear
+   */
+  void setGroupSortContext(
+      java.util.List<com.oracle.mongodb.translator.ast.stage.SortStage.SortField> sortFields);
+
+  /**
+   * Gets the sort context for $group accumulators. Returns the sort fields from a preceding $sort
+   * stage, or null if no sort context is set.
+   *
+   * @return the sort fields, or null if no sort context
+   */
+  java.util.List<com.oracle.mongodb.translator.ast.stage.SortStage.SortField>
+      getGroupSortContext();
 }

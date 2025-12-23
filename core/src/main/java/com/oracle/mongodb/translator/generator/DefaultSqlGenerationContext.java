@@ -9,6 +9,7 @@ package com.oracle.mongodb.translator.generator;
 import com.oracle.mongodb.translator.ast.AstNode;
 import com.oracle.mongodb.translator.ast.expression.Expression;
 import com.oracle.mongodb.translator.ast.expression.LookupSizeExpression;
+import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.generator.dialect.Oracle26aiDialect;
 import com.oracle.mongodb.translator.generator.dialect.OracleDialect;
 import com.oracle.mongodb.translator.util.FieldNameValidator;
@@ -157,8 +158,10 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   private boolean jsonOutputMode = false;
   private boolean nestedPipeline = false;
   private boolean inCteContext = false;
+  private boolean usesCteDataColumn = false;
   private String cteSourceTable = null;
   private Set<String> compoundIdFields = Collections.emptySet();
+  private List<SortStage.SortField> groupSortContext = null;
 
   // Uses SqlGenerationContext.LookupFieldInfo record for lookup metadata
 
@@ -400,6 +403,17 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
     if (value instanceof Number || value instanceof Boolean) {
       return value.toString();
     }
+    if (value instanceof java.util.Date date) {
+      // Format as Oracle TIMESTAMP literal
+      var formatter = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+      return "TIMESTAMP '" + formatter.format(date) + "'";
+    }
+    if (value instanceof java.time.Instant instant) {
+      // Format as Oracle TIMESTAMP literal
+      var formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+          .withZone(java.time.ZoneId.systemDefault());
+      return "TIMESTAMP '" + formatter.format(instant) + "'";
+    }
     return "'" + value.toString().replace("'", "''") + "'";
   }
 
@@ -444,6 +458,16 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   }
 
   @Override
+  public void setUsesCteDataColumn(boolean usesDataColumn) {
+    this.usesCteDataColumn = usesDataColumn;
+  }
+
+  @Override
+  public boolean usesCteDataColumn() {
+    return usesCteDataColumn;
+  }
+
+  @Override
   public void registerCompoundIdFields(Set<String> fields) {
     this.compoundIdFields = fields != null ? Set.copyOf(fields) : Collections.emptySet();
   }
@@ -451,5 +475,15 @@ public class DefaultSqlGenerationContext implements SqlGenerationContext {
   @Override
   public boolean isCompoundIdField(String fieldName) {
     return compoundIdFields.contains(fieldName);
+  }
+
+  @Override
+  public void setGroupSortContext(List<SortStage.SortField> sortFields) {
+    this.groupSortContext = sortFields != null ? List.copyOf(sortFields) : null;
+  }
+
+  @Override
+  public List<SortStage.SortField> getGroupSortContext() {
+    return groupSortContext;
   }
 }

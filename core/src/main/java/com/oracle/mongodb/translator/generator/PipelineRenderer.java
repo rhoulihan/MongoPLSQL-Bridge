@@ -84,6 +84,13 @@ public final class PipelineRenderer {
 
   /** Renders the pipeline to the given context. */
   public void render(Pipeline pipeline, SqlGenerationContext ctx) {
+    // If CTE-based rendering is enabled, delegate to the new renderer
+    if (config.useCteBasedRendering()) {
+      CteBasedPipelineRenderer cteRenderer = new CteBasedPipelineRenderer(config);
+      cteRenderer.render(pipeline, ctx);
+      return;
+    }
+
     // Analyze pipeline to extract components
     PipelineComponents components = analyzePipeline(pipeline);
 
@@ -1238,14 +1245,17 @@ public final class PipelineRenderer {
         cteCtx.registerCompoundIdFields(getCompoundIdFields(previousGroupStage));
       }
 
-      // Extract stages from this group: GroupStage, LookupStage, UnwindStage, and MatchStage
+      // Extract stages from this group: GroupStage, SortStage, LookupStage, UnwindStage, MatchStage
       GroupStage groupStage = null;
+      SortStage sortStage = null;
       List<LookupStage> lookupStages = new ArrayList<>();
       List<UnwindStage> unwindStages = new ArrayList<>();
       List<MatchStage> matchStages = new ArrayList<>();
       for (Stage stage : group.getStages()) {
         if (stage instanceof GroupStage gs) {
           groupStage = gs;
+        } else if (stage instanceof SortStage ss) {
+          sortStage = ss;
         } else if (stage instanceof LookupStage ls) {
           lookupStages.add(ls);
         } else if (stage instanceof UnwindStage us) {
@@ -1276,9 +1286,12 @@ public final class PipelineRenderer {
       }
 
       if (groupStage != null) {
+        // Set sort context for $first/$last accumulators if a preceding sort exists
+        setGroupSortContext(sortStage, cteCtx);
         // Render SELECT clause for this group
         cteCtx.sql("SELECT ");
         renderGroupSelectClause(groupStage, cteCtx);
+        cteCtx.setGroupSortContext(null); // Clear sort context after rendering
 
         // Render FROM clause
         cteCtx.sql(" FROM ");
@@ -1348,12 +1361,15 @@ public final class PipelineRenderer {
     // Get the final stage group
     PipelineStageSequence.StageGroup finalGroup = stageGroups.get(stageGroups.size() - 1);
 
-    // Extract the GroupStage and ProjectStage from the final group
+    // Extract the GroupStage, SortStage, and ProjectStage from the final group
     GroupStage finalGroupStage = null;
+    SortStage finalSortStage = null;
     ProjectStage finalProjectStage = null;
     for (Stage stage : finalGroup.getStages()) {
       if (stage instanceof GroupStage gs) {
         finalGroupStage = gs;
+      } else if (stage instanceof SortStage ss) {
+        finalSortStage = ss;
       } else if (stage instanceof ProjectStage ps) {
         finalProjectStage = ps;
       }
@@ -1372,6 +1388,8 @@ public final class PipelineRenderer {
     }
 
     if (finalGroupStage != null) {
+      // Set sort context for $first/$last accumulators if a preceding sort exists
+      setGroupSortContext(finalSortStage, finalCtx);
       if (finalProjectStage != null) {
         // $group followed by $project: render $project fields from CTE/subquery
         // We need a subquery: SELECT project_fields FROM (SELECT group_fields ... GROUP BY ...)
@@ -1385,6 +1403,7 @@ public final class PipelineRenderer {
         finalCtx.sql(currentSource);
         renderCteGroupByClause(finalGroupStage, finalCtx);
       }
+      finalCtx.setGroupSortContext(null); // Clear sort context after rendering
     } else if (finalProjectStage != null) {
       // Just $project (no $group in final stage): render project fields from CTE
       finalCtx.sql("SELECT ");
@@ -2014,6 +2033,21 @@ public final class PipelineRenderer {
   }
 
   /**
+   * Sets the sort context for $group accumulators. When a $sort immediately precedes a $group,
+   * $first and $last accumulators should use the sort order via KEEP (DENSE_RANK ...) syntax.
+   *
+   * @param sortStage the sort stage that precedes the group, or null if none
+   * @param ctx the SQL generation context
+   */
+  private void setGroupSortContext(SortStage sortStage, SqlGenerationContext ctx) {
+    if (sortStage != null) {
+      ctx.setGroupSortContext(sortStage.getSortFields());
+    } else {
+      ctx.setGroupSortContext(null);
+    }
+  }
+
+  /**
    * Checks if an expression represents a simple inclusion (i.e., {field: 1} or {field: true}).
    */
   private boolean isSimpleInclusion(Expression expr) {
@@ -2536,6 +2570,11 @@ public final class PipelineRenderer {
           components.postUnionSortStage = sort;
           components.hasPostUnionSortOrLimit = true;
         } else {
+          // Track if this sort comes before the first $group
+          // This is needed for $first/$last accumulators to use KEEP DENSE_RANK
+          if (!sawGroupStage && components.preGroupSortStage == null) {
+            components.preGroupSortStage = sort;
+          }
           components.sortStage = sort;
         }
       } else if (stage instanceof SkipStage skip) {
@@ -2631,7 +2670,10 @@ public final class PipelineRenderer {
       return; // $replaceRoot replaces the entire SELECT
     } else if (components.groupStage != null) {
       // $group determines the SELECT clause
+      // Set sort context for $first/$last accumulators if a preceding sort exists
+      setGroupSortContext(components.preGroupSortStage, ctx);
       renderGroupSelectClause(components.groupStage, ctx);
+      ctx.setGroupSortContext(null); // Clear sort context after rendering
     } else if (components.bucketStage != null) {
       // $bucket determines the SELECT clause
       ctx.visit(components.bucketStage);
@@ -4139,6 +4181,7 @@ public final class PipelineRenderer {
     BucketAutoStage bucketAutoStage;
     FacetStage facetStage;
     SortStage sortStage;
+    SortStage preGroupSortStage; // $sort before first $group (for $first/$last accumulators)
     SkipStage skipStage;
     LimitStage limitStage;
     CountStage countStage;
