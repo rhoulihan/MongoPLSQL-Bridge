@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-22
+**Last Updated:** 2025-12-23
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -593,6 +593,10 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 - **JSON Type Preservation**: Changed from `JSON_VALUE` with `FORMAT JSON` to `JSON_QUERY` for compound `_id` expressions in `$group` stages. `JSON_QUERY` provides more robust type preservation for numbers, booleans, null, and handles non-scalar values (objects, arrays).
 - **$ifNull in Arithmetic Expressions**: Fixed `renderNumericOperand` to properly handle `ConditionalExpression` (e.g., `{$multiply: ["$qty", {$ifNull: ["$discount", 0]}]}`). Added dedicated `renderConditionalExpressionNumeric` method that renders `$ifNull` as `NVL()` and `$cond` as `CASE WHEN`.
 - **Comparison Script Sorting**: Fixed document sorting in cross-database comparison script to use canonical representation with sorted keys, ensuring field-order-independent matching between MongoDB and Oracle results.
+
+**Improvements Applied (2025-12-23):**
+- **Inline View Wrapper for Type Preservation**: Extended inline view wrapper pattern to `$bucket` and `$redact` stages. Oracle's parser requires CTE references to be wrapped in inline views (`FROM (SELECT * FROM "CTE") q`) to enable dot notation (`q."DATA".field`) for type-preserving field access. This ensures numbers, booleans, and other JSON types are preserved throughout the pipeline rather than being converted to VARCHAR2 by JSON_VALUE.
+- **Dot Notation for BUCKET/REDACT**: Both `$bucket` CASE expressions and `$redact` WHERE clauses now use dot notation for field access, matching the pattern used in other stages like `$group`, `$sort`, and `$lookup`.
 
 ## Next Steps
 

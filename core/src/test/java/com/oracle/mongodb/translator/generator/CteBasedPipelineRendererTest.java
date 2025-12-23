@@ -966,4 +966,423 @@ class CteBasedPipelineRendererTest {
         .contains("salary")
         .contains("80000");
   }
+
+  // =========================================================================
+  // Type Preservation Tests - Dot Notation
+  // =========================================================================
+
+  @Test
+  void shouldUseDotNotationForComparisonInWhereClause() {
+    // When comparing fields in WHERE clause ($redact $cond or similar),
+    // should use dot notation to preserve types instead of JSON_VALUE
+    var condition = new ComparisonExpression(
+        ComparisonOp.EQ,
+        FieldPathExpression.of("status"),
+        LiteralExpression.of("active"));
+    var condExpr = ConditionalExpression.cond(
+        condition,
+        LiteralExpression.of("$$KEEP"),
+        LiteralExpression.of("$$PRUNE"));
+
+    var redactStage = new RedactStage(condExpr);
+    Pipeline pipeline = Pipeline.of("orders", redactStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use dot notation with table alias: q."DATA".status = 'active'
+    // NOT: JSON_VALUE("DATA", '$.status') = 'active'
+    assertThat(sql)
+        .describedAs("Should use dot notation for field access in WHERE clause")
+        .contains("q.\"DATA\".status")
+        .doesNotContain("JSON_VALUE(\"DATA\", '$.status')");
+  }
+
+  @Test
+  void shouldUseDotNotationForNestedFieldInWhereClause() {
+    // Nested field access should also use dot notation
+    var condition = new ComparisonExpression(
+        ComparisonOp.GT,
+        FieldPathExpression.of("customer.age"),
+        LiteralExpression.of(18));
+    var condExpr = ConditionalExpression.cond(
+        condition,
+        LiteralExpression.of("$$KEEP"),
+        LiteralExpression.of("$$PRUNE"));
+
+    var redactStage = new RedactStage(condExpr);
+    Pipeline pipeline = Pipeline.of("orders", redactStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use dot notation with table alias: q."DATA".customer.age > 18
+    assertThat(sql)
+        .describedAs("Should use dot notation for nested field access")
+        .contains("q.\"DATA\".customer.age")
+        .doesNotContain("JSON_VALUE(\"DATA\", '$.customer.age')");
+  }
+
+  @Test
+  void shouldUseDotNotationForFieldInAddFieldsCondition() {
+    // $addFields with $cond should use dot notation for field comparisons
+    var fields = new java.util.LinkedHashMap<String, Expression>();
+    var condition = new ComparisonExpression(
+        ComparisonOp.GTE,
+        FieldPathExpression.of("amount"),
+        LiteralExpression.of(100));
+    var condExpr = ConditionalExpression.cond(
+        condition,
+        LiteralExpression.of("high"),
+        LiteralExpression.of("low"));
+    fields.put("category", condExpr);
+
+    var addFieldsStage = new AddFieldsStage(fields);
+    Pipeline pipeline = Pipeline.of("orders", addFieldsStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use dot notation with table alias in the CASE WHEN condition
+    assertThat(sql)
+        .describedAs("Should use dot notation for field access in $cond condition")
+        .contains("q.\"DATA\".amount")
+        .doesNotContain("JSON_VALUE(\"DATA\", '$.amount')");
+  }
+
+  // =========================================================================
+  // Phase 2: Dot Notation in Lookup/Join Contexts
+  // =========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForLookupCteReference() {
+    // $lookup should wrap CTE reference in inline view to enable dot notation
+    // Pattern: FROM (SELECT * FROM "CTE") q instead of FROM "CTE" q
+    var lookupStage = LookupStage.equality(
+        "inventory",      // from
+        "productId",      // localField
+        "productId",      // foreignField
+        "inventoryData"); // as
+
+    Pipeline pipeline = Pipeline.of("orders", lookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use inline view wrapper pattern for CTE reference
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for dot notation support")
+        .contains("FROM (SELECT * FROM \"Q1\") q");
+  }
+
+  @Test
+  void shouldUseDotNotationForBothLookupFields() {
+    // With inline view wrapper, both local and foreign fields can use dot notation
+    var lookupStage = LookupStage.equality(
+        "inventory",      // from
+        "productId",      // localField
+        "productId",      // foreignField
+        "inventoryData"); // as
+
+    Pipeline pipeline = Pipeline.of("orders", lookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Both fields should use dot notation (no JSON_VALUE for field access)
+    assertThat(sql)
+        .describedAs("Should use dot notation for both lookup fields")
+        .contains("f.\"DATA\".productId")  // foreign field
+        .contains("q.\"DATA\".productId")  // local field (now works with inline view wrapper)
+        .doesNotContain("JSON_VALUE(q.\"DATA\"")  // no JSON_VALUE for local field
+        .doesNotContain("JSON_VALUE(f.\"DATA\""); // no JSON_VALUE for foreign field
+  }
+
+  @Test
+  void shouldQuoteSpecialFieldNamesInLookup() {
+    // Fields starting with underscore need quoting in dot notation
+    var lookupStage = LookupStage.equality(
+        "customers",      // from
+        "customerId",     // localField
+        "_id",            // foreignField (needs quoting)
+        "customerInfo");  // as
+
+    Pipeline pipeline = Pipeline.of("orders", lookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // _id should be quoted as "_id" in dot notation
+    assertThat(sql)
+        .describedAs("Should quote _id field in dot notation")
+        .contains("f.\"DATA\".\"_id\"");
+  }
+
+  // ==========================================================================
+  // Phase 3: GROUP BY with inline view wrapper for dot notation (type preservation)
+  // ==========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForGroupByCte() {
+    // GROUP BY on field from CTE should use inline view wrapper
+    // This enables dot notation which preserves types (booleans, numbers)
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", new AccumulatorExpression(AccumulatorOp.COUNT, null));
+    var groupStage = new GroupStage(FieldPathExpression.of("status"), accumulators);
+
+    Pipeline pipeline = Pipeline.of("orders", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // GROUP BY CTE reference should be wrapped in inline view
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for GROUP BY dot notation")
+        .contains("FROM (SELECT * FROM \"Q1\") ");
+  }
+
+  @Test
+  void shouldUseDotNotationInGroupByClause() {
+    // GROUP BY should use dot notation for type preservation
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", new AccumulatorExpression(AccumulatorOp.COUNT, null));
+    var groupStage = new GroupStage(FieldPathExpression.of("status"), accumulators);
+
+    Pipeline pipeline = Pipeline.of("orders", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // GROUP BY should use dot notation, not JSON_VALUE
+    assertThat(sql)
+        .describedAs("Should use dot notation in GROUP BY clause")
+        .containsPattern("GROUP BY.*\\.\"DATA\"\\.status")
+        .doesNotContain("GROUP BY JSON_VALUE");
+  }
+
+  @Test
+  void shouldUseDotNotationInGroupByJsonObjectValue() {
+    // The _id VALUE in JSON_OBJECT should use dot notation for type preservation
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("count", new AccumulatorExpression(AccumulatorOp.COUNT, null));
+    var groupStage = new GroupStage(FieldPathExpression.of("active"), accumulators);
+
+    Pipeline pipeline = Pipeline.of("orders", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // JSON_OBJECT _id VALUE should use dot notation, not JSON_VALUE
+    assertThat(sql)
+        .describedAs("Should use dot notation for _id VALUE in JSON_OBJECT")
+        .containsPattern("'_id' VALUE.*\\.\"DATA\"\\.active")
+        .doesNotContain("JSON_VALUE(\"DATA\"");
+  }
+
+  // ==========================================================================
+  // Phase 4: ORDER BY with inline view wrapper for dot notation (type preservation)
+  // ==========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForOrderByCte() {
+    // ORDER BY on field from CTE should use inline view wrapper
+    var sortStage = new SortStage(java.util.List.of(
+        new SortStage.SortField(FieldPathExpression.of("amount"), SortStage.SortDirection.ASC)));
+
+    Pipeline pipeline = Pipeline.of("orders", sortStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // ORDER BY CTE reference should be wrapped in inline view
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for ORDER BY dot notation")
+        .contains("FROM (SELECT * FROM \"Q1\") ");
+  }
+
+  @Test
+  void shouldUseDotNotationInOrderByClause() {
+    // ORDER BY should use dot notation for type preservation
+    var sortStage = new SortStage(java.util.List.of(
+        new SortStage.SortField(FieldPathExpression.of("amount"), SortStage.SortDirection.ASC)));
+
+    Pipeline pipeline = Pipeline.of("orders", sortStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // ORDER BY should use dot notation, not JSON_VALUE dual-key pattern
+    assertThat(sql)
+        .describedAs("Should use dot notation in ORDER BY clause")
+        .containsPattern("ORDER BY.*\\.\"DATA\"\\.amount")
+        .doesNotContain("JSON_VALUE(\"DATA\"");
+  }
+
+  @Test
+  void shouldUseDotNotationForDescendingSort() {
+    // Descending sort should also use dot notation
+    var sortStage = new SortStage(java.util.List.of(
+        new SortStage.SortField(FieldPathExpression.of("price"), SortStage.SortDirection.DESC)));
+
+    Pipeline pipeline = Pipeline.of("products", sortStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .describedAs("Should use dot notation for descending sort")
+        .containsPattern("ORDER BY.*\\.\"DATA\"\\.price.*DESC")
+        .doesNotContain("JSON_VALUE(\"DATA\"");
+  }
+
+  // ==========================================================================
+  // Phase 5: BUCKETAUTO with inline view wrapper for dot notation
+  // ==========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForBucketAutoCte() {
+    // BUCKETAUTO inner FROM should use inline view wrapper
+    var output = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    output.put("count", new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    var bucketAutoStage = new BucketAutoStage(
+        FieldPathExpression.of("price"), 3, output, null);
+
+    Pipeline pipeline = Pipeline.of("products", bucketAutoStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Inner FROM should wrap CTE reference in inline view for dot notation
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for BUCKETAUTO")
+        .contains("FROM (SELECT * FROM \"Q1\") ");
+  }
+
+  @Test
+  void shouldUseDotNotationInBucketAutoOrderBy() {
+    // NTILE ORDER BY should use dot notation for type-preserving sort
+    var output = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    output.put("count", new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    var bucketAutoStage = new BucketAutoStage(
+        FieldPathExpression.of("price"), 3, output, null);
+
+    Pipeline pipeline = Pipeline.of("products", bucketAutoStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // NTILE ORDER BY should use dot notation, not JSON_VALUE
+    assertThat(sql)
+        .describedAs("Should use dot notation in NTILE ORDER BY")
+        .containsPattern("OVER \\(ORDER BY.*\\.\"DATA\"\\.price")
+        .doesNotContain("JSON_VALUE(\"DATA\"");
+  }
+
+  @Test
+  void shouldUseDotNotationForBucketAutoGroupVal() {
+    // group_val should use dot notation for type preservation
+    var output = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    output.put("count", new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    var bucketAutoStage = new BucketAutoStage(
+        FieldPathExpression.of("price"), 3, output, null);
+
+    Pipeline pipeline = Pipeline.of("products", bucketAutoStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // group_val AS should use dot notation
+    assertThat(sql)
+        .describedAs("Should use dot notation for group_val")
+        .containsPattern("\\.\"DATA\"\\.price AS group_val");
+  }
+
+  // ==========================================================================
+  // Phase 5: BUCKET with inline view wrapper for dot notation
+  // ==========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForBucketCte() {
+    // RED test: BUCKET should wrap CTE reference in inline view
+    var output = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    output.put("count", new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    var bucketStage = new BucketStage(
+        FieldPathExpression.of("price"),
+        java.util.List.of(0, 50, 100, 200),
+        "Other",
+        output);
+    Pipeline pipeline = Pipeline.of("products", bucketStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for BUCKET")
+        .contains("FROM (SELECT * FROM \"Q1\") ");
+  }
+
+  @Test
+  void shouldUseDotNotationInBucketCaseExpression() {
+    // RED test: BUCKET CASE expression should use dot notation for field access
+    var output = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    output.put("count", new AccumulatorExpression(AccumulatorOp.SUM, LiteralExpression.of(1)));
+    var bucketStage = new BucketStage(
+        FieldPathExpression.of("price"),
+        java.util.List.of(0, 50, 100, 200),
+        "Other",
+        output);
+    Pipeline pipeline = Pipeline.of("products", bucketStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use dot notation in CASE WHEN expressions
+    assertThat(sql)
+        .describedAs("Should use dot notation in CASE WHEN for BUCKET")
+        .containsPattern("WHEN q\\.\"DATA\"\\.price >=")
+        .doesNotContain("JSON_VALUE(\"DATA\"");
+  }
+
+  // ==========================================================================
+  // Phase 5: REDACT with inline view wrapper for dot notation
+  // ==========================================================================
+
+  @Test
+  void shouldUseInlineViewWrapperForRedactCte() {
+    // RED test: REDACT should wrap CTE reference in inline view for dot notation support
+    // $redact with $cond: if level >= 5 then $$KEEP else $$PRUNE
+    var condExpr = ConditionalExpression.cond(
+        new ComparisonExpression(ComparisonOp.GTE,
+            FieldPathExpression.of("level"), LiteralExpression.of(5)),
+        LiteralExpression.of("$$KEEP"),
+        LiteralExpression.of("$$PRUNE"));
+    var redactStage = new RedactStage(condExpr);
+    Pipeline pipeline = Pipeline.of("employees", redactStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .describedAs("Should wrap CTE reference in inline view for REDACT")
+        .contains("FROM (SELECT * FROM \"Q1\") ");
+  }
+
+  @Test
+  void shouldUseDotNotationInRedactWhereClause() {
+    // REDACT WHERE clause should use dot notation for field access
+    var condExpr = ConditionalExpression.cond(
+        new ComparisonExpression(ComparisonOp.GTE,
+            FieldPathExpression.of("level"), LiteralExpression.of(5)),
+        LiteralExpression.of("$$KEEP"),
+        LiteralExpression.of("$$PRUNE"));
+    var redactStage = new RedactStage(condExpr);
+    Pipeline pipeline = Pipeline.of("employees", redactStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql)
+        .describedAs("Should use dot notation in WHERE clause for REDACT")
+        .containsPattern("WHERE q\\.\"DATA\"\\.level >=");
+  }
 }

@@ -314,14 +314,16 @@ public final class CteBasedPipelineRenderer {
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
         ctx.sql("SELECT ");
         renderJsonObjectGroup(ctx, groupStage);
-        ctx.sql(" AS \"DATA\" FROM \"" + previousCte + "\" q");
+        // Use inline view wrapper to enable dot notation for type preservation
+        ctx.sql(" AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         renderGroupByClause(ctx, groupStage);
         ctx.sql(")");
       }
       case SORT -> {
         SortStage sortStage = (SortStage) cte.stage();
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
-        ctx.sql("SELECT \"DATA\" FROM \"" + previousCte + "\" q");
+        // Use inline view wrapper to enable dot notation for type-preserving sort
+        ctx.sql("SELECT \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         renderOrderByClause(ctx, sortStage);
         ctx.sql(")");
       }
@@ -329,7 +331,8 @@ public final class CteBasedPipelineRenderer {
         // Combined sort + skip/limit for order preservation across CTEs
         SortPaginationStages sp = cte.sortPagination();
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
-        ctx.sql("SELECT \"DATA\" FROM \"" + previousCte + "\" q");
+        // Use inline view wrapper to enable dot notation for type-preserving sort
+        ctx.sql("SELECT \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         renderOrderByClause(ctx, sp.sort());
         if (sp.skip() != null) {
           ctx.sql(" OFFSET " + sp.skip().getSkip() + " ROWS");
@@ -345,7 +348,8 @@ public final class CteBasedPipelineRenderer {
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
         ctx.sql("SELECT ");
         renderJsonObjectGroupWithSort(ctx, sg.group(), sg.sort());
-        ctx.sql(" AS \"DATA\" FROM \"" + previousCte + "\" q");
+        // Use inline view wrapper to enable dot notation for type preservation
+        ctx.sql(" AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         renderGroupByClause(ctx, sg.group());
         ctx.sql(")");
       }
@@ -431,18 +435,21 @@ public final class CteBasedPipelineRenderer {
           // Pipeline form: use let variables and pipeline stages
           renderLookupPipelineSubquery(ctx, lookupStage, upperFromTable);
         } else {
-          // Simple equality form
+          // Simple equality form - use dot notation for type preservation
           String localField = lookupStage.getLocalField();
           String foreignField = lookupStage.getForeignField();
 
           ctx.sql("COALESCE((SELECT JSON_ARRAYAGG(f.\"DATA\" RETURNING JSON) ");
           ctx.sql("FROM \"" + upperFromTable + "\" f ");
-          ctx.sql("WHERE JSON_VALUE(f.\"DATA\", '$." + foreignField + "') = ");
-          ctx.sql("JSON_VALUE(q.\"DATA\", '$." + localField + "')), ");
+          // Use dot notation for both fields - inline view wrapper enables this for CTE access
+          ctx.sql("WHERE f.\"DATA\"." + quoteDotNotationPath(foreignField) + " = ");
+          ctx.sql("q.\"DATA\"." + quoteDotNotationPath(localField) + "), ");
           ctx.sql("JSON_ARRAY(RETURNING JSON))");
         }
 
-        ctx.sql(") AS \"DATA\" FROM \"" + previousCte + "\" q");
+        // Wrap CTE reference in inline view to enable dot notation
+        // Oracle's parser requires this for simplified JSON syntax on CTE columns
+        ctx.sql(") AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         ctx.sql(")");
       }
       case UNIONWITH -> {
@@ -470,7 +477,8 @@ public final class CteBasedPipelineRenderer {
           ctx.sql(", '" + entry.getKey() + "' VALUE ");
           renderAccumulator(ctx, entry.getValue());
         }
-        ctx.sql(") AS \"DATA\" FROM \"" + previousCte + "\" q ");
+        // Use inline view wrapper to enable dot notation for type preservation
+        ctx.sql(") AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q ");
         ctx.sql("GROUP BY ");
         renderBucketCaseExpression(ctx, bucketStage);
         ctx.sql(")");
@@ -490,12 +498,13 @@ public final class CteBasedPipelineRenderer {
         ctx.sql(") AS \"DATA\" FROM (");
         final int buckets = bucketAutoStage.getBuckets();
         ctx.sql("SELECT NTILE(" + buckets + ") OVER (ORDER BY ");
-        // Use numeric ordering for NTILE to match group_val
-        renderNumericAccumulatorArg(ctx, bucketAutoStage.getGroupBy());
+        // Use dot notation for type-preserving numeric ordering
+        renderBucketAutoGroupByField(ctx, bucketAutoStage.getGroupBy());
         ctx.sql(") AS bucket_id, ");
-        // Include the groupBy field value for MIN/MAX computation
-        renderNumericAccumulatorArg(ctx, bucketAutoStage.getGroupBy());
-        ctx.sql(" AS group_val, \"DATA\" FROM \"" + previousCte + "\" q");
+        // Include the groupBy field value for MIN/MAX computation using dot notation
+        renderBucketAutoGroupByField(ctx, bucketAutoStage.getGroupBy());
+        // Use inline view wrapper to enable dot notation for type preservation
+        ctx.sql(" AS group_val, \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q");
         ctx.sql(") GROUP BY bucket_id ORDER BY bucket_id");
         ctx.sql(")");
       }
@@ -538,7 +547,8 @@ public final class CteBasedPipelineRenderer {
       case REDACT -> {
         RedactStage redactStage = (RedactStage) cte.stage();
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
-        ctx.sql("SELECT \"DATA\" FROM \"" + previousCte + "\" q WHERE ");
+        // Use inline view wrapper to enable dot notation for type preservation
+        ctx.sql("SELECT \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q WHERE ");
         renderRedactCondition(ctx, redactStage.getExpression());
         ctx.sql(")");
       }
@@ -1255,14 +1265,16 @@ public final class CteBasedPipelineRenderer {
   }
 
   /**
-   * Renders a field access expression for comparison/grouping contexts.
-   * Uses JSON_VALUE for comparisons, GROUP BY, ORDER BY (needs raw values).
-   * For type-preserving output (JSON_OBJECT VALUE), use renderExpressionValue instead.
+   * Renders a field access expression for GROUP BY and JSON_OBJECT _id contexts.
+   * Uses dot notation with table alias (q."DATA".field) to preserve native JSON types.
+   * This works because we wrap CTE references in inline views, which enables dot notation.
+   * For WHERE clause comparisons, use renderFieldAccessForWhere() instead.
    */
   private void renderFieldAccess(SqlGenerationContext ctx, Expression expr) {
     if (expr instanceof FieldPathExpression fieldPath) {
-      // Use JSON_VALUE for comparisons/grouping - returns raw string value
-      ctx.sql("JSON_VALUE(\"DATA\", '$." + fieldPath.getPath() + "')");
+      // Use dot notation with table alias for type preservation
+      // This works with inline view wrapper: FROM (SELECT * FROM "CTE") q
+      ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fieldPath.getPath()));
     } else if (expr instanceof DateExpression dateExpr) {
       // Custom CTE-mode rendering for DateExpression
       renderDateExpressionCte(ctx, dateExpr);
@@ -1292,6 +1304,44 @@ public final class CteBasedPipelineRenderer {
     } else {
       // Fallback for other expressions - try rendering them
       ctx.sql("NULL");
+    }
+  }
+
+  /**
+   * Renders a field access expression for WHERE clause comparison contexts.
+   * Uses dot notation to preserve native JSON types (numbers remain numbers, booleans remain
+   * booleans).
+   * Do NOT use this for GROUP BY contexts - Oracle doesn't support dot notation in GROUP BY.
+   * Uses table alias q."DATA" for CTE context compatibility.
+   */
+  private void renderFieldAccessForWhere(SqlGenerationContext ctx, Expression expr) {
+    if (expr instanceof FieldPathExpression fieldPath) {
+      // Use dot notation with table alias for type-preserving field access
+      // The q. prefix is needed in CTE contexts where we reference the previous CTE
+      ctx.sql("q.\"DATA\"." + fieldPath.getDotNotationPath());
+    } else if (expr instanceof DateExpression dateExpr) {
+      // Custom CTE-mode rendering for DateExpression
+      renderDateExpressionCte(ctx, dateExpr);
+    } else if (expr instanceof ConditionalExpression condExpr) {
+      // Custom CTE-mode rendering for ConditionalExpression
+      renderConditionalExpression(ctx, condExpr);
+    } else if (expr instanceof LiteralExpression lit) {
+      // Literal values are rendered as-is
+      Object value = lit.getValue();
+      if (value instanceof String) {
+        ctx.sql("'" + value + "'");
+      } else {
+        ctx.sql(String.valueOf(value));
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      // Arithmetic expressions like $multiply, $add, etc.
+      renderArithmeticExpression(ctx, arith);
+    } else if (expr instanceof ArrayExpression arrayExpr) {
+      // Array expressions like $size
+      renderArrayExpressionForFieldAccess(ctx, arrayExpr);
+    } else {
+      // Fallback to general renderFieldAccess
+      renderFieldAccess(ctx, expr);
     }
   }
 
@@ -1604,7 +1654,8 @@ public final class CteBasedPipelineRenderer {
       // Query form: {field: {$in: [values...]}}
       Expression field = inExpr.getField();
       if (field instanceof FieldPathExpression fp) {
-        ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "')");
+        // Use dot notation with table alias for type-preserving field access
+        ctx.sql("q.\"DATA\"." + fp.getDotNotationPath());
       } else {
         renderExpressionValue(ctx, field);
       }
@@ -1630,7 +1681,7 @@ public final class CteBasedPipelineRenderer {
       // Handle null comparisons specially - SQL requires IS NULL / IS NOT NULL
       Expression right = comp.getRight();
       if (right instanceof LiteralExpression lit && lit.getValue() == null) {
-        renderFieldAccess(ctx, comp.getLeft());
+        renderFieldAccessForWhere(ctx, comp.getLeft());
         if (comp.getOp() == ComparisonOp.EQ) {
           ctx.sql(" IS NULL");
         } else if (comp.getOp() == ComparisonOp.NE) {
@@ -1639,10 +1690,10 @@ public final class CteBasedPipelineRenderer {
           ctx.sql(" IS NOT NULL");
         }
       } else {
-        // Render: JSON_VALUE("DATA", '$.left') op right
-        // Use renderFieldAccess (not renderExpressionValue) for comparisons
+        // Render: field op right - using dot notation for type preservation
+        // Use renderFieldAccessForWhere (not renderExpressionValue) for comparisons
         // because JSON_QUERY returns quoted values like "100" which can't be compared numerically
-        renderFieldAccess(ctx, comp.getLeft());
+        renderFieldAccessForWhere(ctx, comp.getLeft());
         String op = switch (comp.getOp()) {
           case EQ -> " = ";
           case NE -> " != ";
@@ -1653,7 +1704,7 @@ public final class CteBasedPipelineRenderer {
           default -> " = ";
         };
         ctx.sql(op);
-        renderFieldAccess(ctx, right);
+        renderFieldAccessForWhere(ctx, right);
       }
     } else {
       // Fallback
@@ -1858,6 +1909,28 @@ public final class CteBasedPipelineRenderer {
   }
 
   /**
+   * Renders a $bucketAuto groupBy field using dot notation for type preservation.
+   * Uses q."DATA".field pattern with inline view wrapper for CTE access.
+   */
+  private void renderBucketAutoGroupByField(SqlGenerationContext ctx, Expression arg) {
+    if (arg instanceof FieldPathExpression fp) {
+      // Use dot notation for type-preserving access
+      ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fp.getPath()));
+    } else if (arg instanceof LiteralExpression lit) {
+      Object val = lit.getValue();
+      if (val instanceof Number) {
+        ctx.sql(String.valueOf(val));
+      } else {
+        ctx.sql("NULL");
+      }
+    } else if (arg instanceof ArithmeticExpression arith) {
+      renderArithmeticExpression(ctx, arith);
+    } else {
+      ctx.sql("NULL");
+    }
+  }
+
+  /**
    * Renders an accumulator argument for MIN/MAX/FIRST/LAST.
    * Handles FieldPath, Literal, ConditionalExpression.
    */
@@ -1891,8 +1964,8 @@ public final class CteBasedPipelineRenderer {
     Expression condition = condExpr.getCondition();
     // Handle various condition types for $cond inside accumulators
     if (condition instanceof FieldPathExpression fp) {
-      // Boolean field path like $isConversion
-      ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "') = 'true'");
+      // Boolean field path like $isConversion - use dot notation with boolean comparison
+      ctx.sql("q.\"DATA\"." + fp.getDotNotationPath() + " = true");
     } else if (condition instanceof ComparisonExpression) {
       renderComparisonAsWhere(ctx, condition);
     } else if (condition instanceof InExpression inExpr) {
@@ -1938,7 +2011,8 @@ public final class CteBasedPipelineRenderer {
   private void renderInExpressionCondition(SqlGenerationContext ctx, InExpression inExpr) {
     Expression field = inExpr.getField();
     if (field instanceof FieldPathExpression fp) {
-      ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "')");
+      // Use dot notation with table alias for type-preserving field access
+      ctx.sql("q.\"DATA\"." + fp.getDotNotationPath());
     } else {
       renderExpressionValue(ctx, field);
     }
@@ -2067,7 +2141,7 @@ public final class CteBasedPipelineRenderer {
 
       // Handle null comparisons specially - SQL requires IS NULL / IS NOT NULL
       if (right instanceof LiteralExpression lit && lit.getValue() == null) {
-        renderFieldAccess(ctx, left);
+        renderFieldAccessForWhere(ctx, left);
         if (comp.getOp() == ComparisonOp.EQ) {
           ctx.sql(" IS NULL");
         } else if (comp.getOp() == ComparisonOp.NE) {
@@ -2088,7 +2162,7 @@ public final class CteBasedPipelineRenderer {
         case LTE -> "<=";
         default -> "=";
       };
-      renderFieldAccess(ctx, left);
+      renderFieldAccessForWhere(ctx, left);
       ctx.sql(" " + op + " ");
       if (right instanceof LiteralExpression lit) {
         Object val = lit.getValue();
@@ -2100,7 +2174,7 @@ public final class CteBasedPipelineRenderer {
           ctx.sql(String.valueOf(val));
         }
       } else {
-        renderFieldAccess(ctx, right);
+        renderFieldAccessForWhere(ctx, right);
       }
     } else {
       ctx.sql("1=1");
@@ -2109,10 +2183,9 @@ public final class CteBasedPipelineRenderer {
 
   /**
    * Renders the ORDER BY clause for a $sort stage.
-   * Uses dual sort keys for each field to handle both numeric and string values:
-   * 1. First key: RETURNING NUMBER NULL ON ERROR (sorts numbers, NULLs for strings)
-   * 2. Second key: raw JSON_VALUE (sorts strings when first key is all NULLs)
-   * This mimics MongoDB's type-aware sorting (numbers before strings).
+   * Uses dot notation with table alias (q."DATA".field) for type-preserving sort.
+   * Oracle's dot notation naturally sorts: numbers before strings, each sorted correctly.
+   * This matches MongoDB's type-aware sorting semantics.
    */
   private void renderOrderByClause(SqlGenerationContext ctx, SortStage sortStage) {
     var sortFields = sortStage.getSortFields();
@@ -2127,13 +2200,10 @@ public final class CteBasedPipelineRenderer {
         Expression expr = sortField.getFieldPath();
 
         if (expr instanceof FieldPathExpression fieldPath) {
-          String path = fieldPath.getPath();
-          // First key: numeric sort (NULLs for non-numbers go to end)
-          ctx.sql("JSON_VALUE(\"DATA\", '$." + path + "' RETURNING NUMBER NULL ON ERROR) ");
-          ctx.sql(dir);
-          ctx.sql(" NULLS LAST, ");
-          // Second key: string sort (for when first key is all NULLs)
-          ctx.sql("JSON_VALUE(\"DATA\", '$." + path + "') ");
+          // Use dot notation for type-preserving sort
+          // Oracle's dot notation naturally sorts: numbers before strings, each sorted correctly
+          // This matches MongoDB's sort semantics
+          ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fieldPath.getPath()) + " ");
           ctx.sql(dir);
           ctx.sql(" NULLS LAST");
         } else {
@@ -3549,4 +3619,66 @@ public final class CteBasedPipelineRenderer {
       String pathsCte,   // Name of the graph_paths CTE
       String aggCte      // Name of the graph_ CTE
   ) {}
+
+  /**
+   * Converts a field path to Oracle dot notation format with proper quoting.
+   * Handles paths like "productId", "customer.name", "_id", etc.
+   * Field names that start with underscore, digit, or contain special characters
+   * must be quoted in Oracle's simplified JSON syntax.
+   *
+   * @param fieldPath the MongoDB field path (without leading $ or .)
+   * @return the properly quoted Oracle dot notation path
+   */
+  private static String quoteDotNotationPath(String fieldPath) {
+    if (fieldPath == null || fieldPath.isEmpty()) {
+      return fieldPath;
+    }
+    // Remove leading $ or . if present
+    String path = fieldPath;
+    if (path.startsWith("$")) {
+      path = path.substring(1);
+    }
+    if (path.startsWith(".")) {
+      path = path.substring(1);
+    }
+    // Split by dots for nested paths and quote each segment if needed
+    String[] segments = path.split("\\.");
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < segments.length; i++) {
+      if (i > 0) {
+        result.append(".");
+      }
+      String segment = segments[i];
+      // Quote if starts with underscore, digit, or contains non-alphanumeric chars
+      if (needsQuoting(segment)) {
+        result.append("\"").append(segment).append("\"");
+      } else {
+        result.append(segment);
+      }
+    }
+    return result.toString();
+  }
+
+  /**
+   * Determines if a field name needs quoting in Oracle dot notation.
+   * Names starting with underscore, digit, or containing special characters need quotes.
+   */
+  private static boolean needsQuoting(String fieldName) {
+    if (fieldName == null || fieldName.isEmpty()) {
+      return false;
+    }
+    char first = fieldName.charAt(0);
+    // Must quote if starts with underscore or digit
+    if (first == '_' || Character.isDigit(first)) {
+      return true;
+    }
+    // Must quote if contains any non-alphanumeric characters
+    for (int i = 0; i < fieldName.length(); i++) {
+      char c = fieldName.charAt(i);
+      if (!Character.isLetterOrDigit(c) && c != '_') {
+        return true;
+      }
+    }
+    return false;
+  }
 }

@@ -305,7 +305,7 @@ MongoDB Pipeline (BSON)
 
 **Key Design Decisions:**
 - **jOOQ-inspired context rendering**: AST nodes render themselves via `SqlGenerationContext`
-- **Type-preserving output**: Uses `JSON_QUERY` and `JSON_ARRAYAGG(JSON_OBJECT(*))` to preserve MongoDB types (numbers, booleans, arrays)
+- **Type-preserving output**: Uses Oracle dot notation (`q."DATA".field`), `JSON_QUERY`, and inline view wrappers to preserve MongoDB types (numbers, booleans, arrays) throughout the pipeline
 - **Sealed interfaces**: Type-safe expression and stage hierarchies
 - **Specification-first**: Operator definitions in JSON drive code generation
 
