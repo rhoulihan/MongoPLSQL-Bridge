@@ -215,4 +215,28 @@ class AggregationTranslatorTest {
     // Warnings list should exist (may be empty)
     assertThat(result.warnings()).isNotNull();
   }
+
+  @Test
+  void shouldTranslateNullMatchWithCte() {
+    // This is NULL003 test case - matching nested field with null value
+    var cteTranslator =
+        AggregationTranslator.create(
+            OracleConfiguration.builder()
+                .collectionName("sales")
+                .useCteBasedRendering(true)
+                .build());
+
+    var pipeline =
+        List.of(
+            Document.parse("{\"$match\": {\"metadata.campaign\": null}}"),
+            Document.parse("{\"$project\": {\"_id\": 1, \"orderId\": 1}}"));
+
+    var result = cteTranslator.translate(pipeline);
+
+    System.out.println("CTE NULL match SQL: " + result.sql());
+    assertThat(result.sql())
+        .contains("WITH")
+        .contains("SELECT")
+        .contains("WHERE");
+  }
 }

@@ -467,8 +467,16 @@ public final class ArrayExpression implements Expression {
     }
   }
 
-  /** Renders "alias.data" or just "data" if no alias is set. */
+  /**
+   * Renders the data column reference.
+   * In new CTE context (with DATA column): outputs "DATA" (quoted column name)
+   * Otherwise: outputs "alias.data" or just "data"
+   */
   private void renderDataColumn(SqlGenerationContext ctx) {
+    if (ctx.usesCteDataColumn()) {
+      ctx.sql("\"DATA\"");
+      return;
+    }
     String alias = ctx.getBaseTableAlias();
     if (alias != null && !alias.isEmpty()) {
       ctx.sql(alias);
@@ -773,8 +781,8 @@ public final class ArrayExpression implements Expression {
             // Use COALESCE to return empty array instead of NULL when no matches
             ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val FORMAT JSON), JSON_ARRAY())");
             ctx.sql(" FROM JSON_TABLE(");
-            ctx.sql(ctx.getBaseTableAlias());
-            ctx.sql(".data, '$.");
+            renderDataColumn(ctx);
+            ctx.sql(", '$.");
             ctx.sql(fieldPath.getPath());
             ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
             ctx.sql(varField);
@@ -795,8 +803,8 @@ public final class ArrayExpression implements Expression {
             } else {
               // Use COALESCE to return empty array instead of NULL when no matches
               ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val), JSON_ARRAY()) FROM JSON_TABLE(");
-              ctx.sql(ctx.getBaseTableAlias());
-              ctx.sql(".data, '$.");
+              renderDataColumn(ctx);
+              ctx.sql(", '$.");
               ctx.sql(fieldPath.getPath());
               ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')) WHERE ");
               ctx.visit(indexExpression); // condition
@@ -819,8 +827,8 @@ public final class ArrayExpression implements Expression {
             ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
             ctx.sql(varField);
             ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
-            ctx.sql(ctx.getBaseTableAlias());
-            ctx.sql(".data, '$.");
+            renderDataColumn(ctx);
+            ctx.sql(", '$.");
             ctx.sql(fieldPath.getPath());
             ctx.sql("[*]' COLUMNS (");
             ctx.sql(varField);
@@ -840,8 +848,8 @@ public final class ArrayExpression implements Expression {
               ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
               ctx.visit(indexExpression);
               ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
-              ctx.sql(ctx.getBaseTableAlias());
-              ctx.sql(".data, '$.");
+              renderDataColumn(ctx);
+              ctx.sql(", '$.");
               ctx.sql(fieldPath.getPath());
               ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
             }
@@ -850,8 +858,8 @@ public final class ArrayExpression implements Expression {
             ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
             ctx.visit(indexExpression); // mapping expression
             ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
-            ctx.sql(ctx.getBaseTableAlias());
-            ctx.sql(".data, '$.");
+            renderDataColumn(ctx);
+            ctx.sql(", '$.");
             ctx.sql(fieldPath.getPath());
             ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
           }
@@ -897,8 +905,8 @@ public final class ArrayExpression implements Expression {
       ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), ");
       ctx.visit(indexExpression); // initialValue
       ctx.sql(") FROM JSON_TABLE(");
-      ctx.sql(ctx.getBaseTableAlias());
-      ctx.sql(".data, '$.");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
       ctx.sql(path);
       ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
       return;
@@ -913,8 +921,8 @@ public final class ArrayExpression implements Expression {
         ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), ");
         ctx.visit(indexExpression); // initialValue
         ctx.sql(") FROM JSON_TABLE(");
-        ctx.sql(ctx.getBaseTableAlias());
-        ctx.sql(".data, '$.");
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
         ctx.sql(path);
         ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
         ctx.sql(nestedField);
@@ -936,8 +944,8 @@ public final class ArrayExpression implements Expression {
           ctx.sql("), ");
           ctx.visit(indexExpression); // initialValue
           ctx.sql(") FROM JSON_TABLE(");
-          ctx.sql(ctx.getBaseTableAlias());
-          ctx.sql(".data, '$.");
+          renderDataColumn(ctx);
+          ctx.sql(", '$.");
           ctx.sql(path);
           ctx.sql("[*]' COLUMNS (");
 
@@ -971,8 +979,8 @@ public final class ArrayExpression implements Expression {
       ctx.sql("ELSE JSON('\"' || listagg_result || '\"') END FROM (");
       ctx.sql("SELECT LISTAGG(val, '') WITHIN GROUP (ORDER BY ROWNUM) AS listagg_result ");
       ctx.sql("FROM JSON_TABLE(");
-      ctx.sql(ctx.getBaseTableAlias());
-      ctx.sql(".data, '$.");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
       ctx.sql(path);
       ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$'))))");
       return;
@@ -1205,8 +1213,8 @@ public final class ArrayExpression implements Expression {
       SqlGenerationContext ctx, String arrayPath, java.util.Set<String> varFields) {
     ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(val FORMAT JSON), JSON_ARRAY())");
     ctx.sql(" FROM JSON_TABLE(");
-    ctx.sql(ctx.getBaseTableAlias());
-    ctx.sql(".data, '$.");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(arrayPath);
     ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$'");
 
@@ -1405,9 +1413,11 @@ public final class ArrayExpression implements Expression {
   /** Renders $slice when the array is an expression. */
   private void renderSliceExpression(SqlGenerationContext ctx) {
     // For expression arrays, use JSON_TABLE with row limiting
-    ctx.sql("(SELECT JSON_ARRAYAGG(val ORDER BY rn) FROM (SELECT val, rn FROM JSON_TABLE(");
+    // FORMAT JSON is required to preserve JSON structure when slicing arrays of objects
+    ctx.sql("(SELECT JSON_ARRAYAGG(val FORMAT JSON ORDER BY rn) FROM ");
+    ctx.sql("(SELECT val, rn FROM JSON_TABLE(");
     ctx.visit(arrayExpression);
-    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) PATH '$', rn FOR ORDINALITY))");
+    ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', rn FOR ORDINALITY))");
 
     if (additionalArgs != null && !additionalArgs.isEmpty()) {
       // Three argument form: array, skip, count
@@ -1513,9 +1523,12 @@ public final class ArrayExpression implements Expression {
       ctx.sql(ascending ? "ASC" : "DESC");
       ctx.sql(") FROM JSON_TABLE(");
 
-      if (ctx.isInCteContext()) {
-        // In CTE context, the field path is a plain column name (the array itself)
-        // Use the column name directly and '$[*]' as the JSON path
+      if (ctx.usesCteDataColumn()) {
+        // New CTE mode: access the array from the DATA column
+        ctx.sql("JSON_QUERY(\"DATA\", '$." + path + "')");
+        ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
+      } else if (ctx.isInCteContext()) {
+        // Legacy CTE mode: the path refers to a column (e.g., $products -> products)
         ctx.sql(path);
         ctx.sql(", '$[*]' COLUMNS (val VARCHAR2(4000) FORMAT JSON PATH '$', ");
       } else {
@@ -2398,12 +2411,17 @@ public final class ArrayExpression implements Expression {
   /**
    * Renders $map with object transformation. Creates JSON_TABLE with columns for each variable
    * field, then renders JSON_OBJECT with those columns.
+   * Fields used in arithmetic are defined as NUMBER type for proper numeric handling.
    */
   private void renderMapWithObjectTransformation(
       SqlGenerationContext ctx,
       String arrayPath,
       InlineObjectExpression inlineObj,
       java.util.Set<String> varFields) {
+
+    // Collect fields used in arithmetic expressions - these need NUMBER type
+    java.util.Set<String> numericFields = new java.util.LinkedHashSet<>();
+    collectArithmeticFields(inlineObj, numericFields);
 
     ctx.sql("(SELECT COALESCE(JSON_ARRAYAGG(");
 
@@ -2426,12 +2444,13 @@ public final class ArrayExpression implements Expression {
     ctx.sql(")");
 
     ctx.sql("), JSON_ARRAY()) FROM JSON_TABLE(");
-    ctx.sql(ctx.getBaseTableAlias());
-    ctx.sql(".data, '$.");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
     ctx.sql(arrayPath);
     ctx.sql("[*]' COLUMNS (");
 
     // Generate columns for each variable field
+    // Fields used in arithmetic get NUMBER type, others get default VARCHAR2
     boolean firstCol = true;
     for (String field : varFields) {
       if (!firstCol) {
@@ -2439,11 +2458,46 @@ public final class ArrayExpression implements Expression {
       }
       firstCol = false;
       ctx.sql(field);
-      ctx.sql(" PATH '$.");
+      if (numericFields.contains(field)) {
+        // Field is used in arithmetic - define as NUMBER for proper type handling
+        ctx.sql(" NUMBER PATH '$.");
+      } else {
+        ctx.sql(" PATH '$.");
+      }
       ctx.sql(field);
       ctx.sql("'");
     }
     ctx.sql(")))");
+  }
+
+  /**
+   * Collects field names that are used in arithmetic expressions.
+   * These fields should be defined as NUMBER in JSON_TABLE for correct numeric operations.
+   */
+  private void collectArithmeticFields(InlineObjectExpression obj, java.util.Set<String> fields) {
+    for (java.util.Map.Entry<String, Expression> entry : obj.getFields().entrySet()) {
+      if (entry.getValue() instanceof ArithmeticExpression arith) {
+        collectArithmeticOperandFields(arith, fields);
+      }
+    }
+  }
+
+  /**
+   * Recursively collects field names used as operands in arithmetic expressions.
+   */
+  private void collectArithmeticOperandFields(
+      ArithmeticExpression arith, java.util.Set<String> fields) {
+    for (Expression operand : arith.getOperands()) {
+      if (operand instanceof FieldPathExpression fp) {
+        String path = fp.getPath();
+        if (path != null && path.startsWith("$") && path.contains(".")) {
+          int dotIndex = path.indexOf('.');
+          fields.add(path.substring(dotIndex + 1));
+        }
+      } else if (operand instanceof ArithmeticExpression nested) {
+        collectArithmeticOperandFields(nested, fields);
+      }
+    }
   }
 
   /**

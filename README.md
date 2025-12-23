@@ -12,16 +12,16 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 89% instruction coverage and 191 passing cross-database validation tests (176 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
+**Phase 4 Complete** - All operators implemented with 79% instruction coverage and 191 passing cross-database validation tests (179 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
 
 | Metric | Value |
 |--------|-------|
-| Unit Tests | 1,622 |
+| Unit Tests | 1,665 |
 | Cross-DB Validation | 191 |
-| Strict Matches | 176 |
+| Strict Matches | 179 |
 | Large-Scale Tests | 10 |
-| Instruction Coverage | 89% |
-| Branch Coverage | 77% |
+| Instruction Coverage | 79% |
+| Branch Coverage | 67% |
 
 ## Supported Operators
 
@@ -198,7 +198,7 @@ System.out.println(result.sql());
 ./gradlew :core:test
 ```
 
-Runs 1,622 unit tests covering all operators, parsers, and pipeline scenarios.
+Runs 1,665 unit tests covering all operators, parsers, and pipeline scenarios.
 
 ### Integration Tests
 
@@ -263,7 +263,7 @@ mongo-oracle-translator/
 ├── core/                    # Main translation library
 │   └── src/
 │       ├── main/java/       # API, AST, parser, optimizer, generator, CLI
-│       └── test/java/       # Unit tests (1,622)
+│       └── test/java/       # Unit tests (1,665)
 ├── integration-tests/       # Oracle integration tests
 ├── query-tests/             # Cross-database validation tests
 │   ├── tests/               # Test case definitions (191)

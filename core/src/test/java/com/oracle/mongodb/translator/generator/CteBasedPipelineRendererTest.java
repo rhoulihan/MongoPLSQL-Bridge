@@ -578,6 +578,59 @@ class CteBasedPipelineRendererTest {
         .contains("EXTRACT");
   }
 
+  @Test
+  void shouldRenderAddFieldsWithDivideOfSumAndSizeAsCte() {
+    // MongoDB: [{$addFields: {
+    //   avgOrderValue: {$cond: [
+    //     {$gt: [{$size: "$orders"}, 0]},
+    //     {$divide: [{$sum: "$orders.amount"}, {$size: "$orders"}]},
+    //     0
+    //   ]}
+    // }}]
+    // This tests expression-level $sum (array sum) and $size within $divide
+    var fields = new java.util.LinkedHashMap<String, Expression>();
+
+    // $size: "$orders"
+    var sizeExpr = ArrayExpression.size(FieldPathExpression.of("orders"));
+
+    // $sum: "$orders.amount" - expression-level sum (ArrayOp.SUM_ARRAY, not AccumulatorExpression)
+    var sumExpr = ArrayExpression.sumArray(FieldPathExpression.of("orders.amount"));
+
+    // $divide: [$sum, $size]
+    var divideExpr = new ArithmeticExpression(
+        ArithmeticOp.DIVIDE,
+        java.util.List.of(sumExpr, sizeExpr));
+
+    // $gt: [$size, 0]
+    var gtCondition = new ComparisonExpression(
+        ComparisonOp.GT, sizeExpr, LiteralExpression.of(0));
+
+    // $cond: [condition, thenExpr, elseExpr]
+    var condExpr = ConditionalExpression.cond(gtCondition, divideExpr, LiteralExpression.of(0));
+
+    fields.put("avgOrderValue", condExpr);
+
+    var addFieldsStage = new AddFieldsStage(fields);
+    Pipeline pipeline = Pipeline.of("customers", addFieldsStage);
+
+    renderer.render(pipeline, context);
+    String sql = context.toSql();
+
+    // Should properly render both $sum and $size as numeric operands, NOT as NULL
+    assertThat(sql)
+        .contains("\"Q2\"")
+        .contains("json_transform")
+        .contains("SET")
+        .contains("'$.\"avgOrderValue\"'")
+        // Critical: should NOT contain NULL / NULL pattern
+        .doesNotContain("NULL / NULL")
+        .doesNotContain("(NULL / NULL)")
+        // Should have proper $size rendering
+        .contains("$.orders.size()")
+        // Should have proper $sum array sum rendering with JSON_TABLE
+        .contains("SUM");
+  }
+
   // =========================================================================
   // Stage Type Tests - $unwind
   // =========================================================================

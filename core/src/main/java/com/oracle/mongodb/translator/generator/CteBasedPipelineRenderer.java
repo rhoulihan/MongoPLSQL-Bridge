@@ -14,6 +14,7 @@ import com.oracle.mongodb.translator.ast.expression.ArithmeticOp;
 import com.oracle.mongodb.translator.ast.expression.ArrayExpression;
 import com.oracle.mongodb.translator.ast.expression.ArrayOp;
 import com.oracle.mongodb.translator.ast.expression.ComparisonExpression;
+import com.oracle.mongodb.translator.ast.expression.ComparisonOp;
 import com.oracle.mongodb.translator.ast.expression.CompoundIdExpression;
 import com.oracle.mongodb.translator.ast.expression.ConditionalExpression;
 import com.oracle.mongodb.translator.ast.expression.DateExpression;
@@ -760,7 +761,7 @@ public final class CteBasedPipelineRenderer {
 
   /**
    * Renders a $lookup pipeline form as a correlated subquery.
-   * Handles let variable substitution and pipeline stages ($match, $group).
+   * Handles let variable substitution and pipeline stages ($match, $group, $unwind).
    */
   private void renderLookupPipelineSubquery(
       SqlGenerationContext ctx, LookupStage lookupStage, String fromTable) {
@@ -770,12 +771,21 @@ public final class CteBasedPipelineRenderer {
     // Collect all key stages in the pipeline
     List<MatchStage> matchStages = new ArrayList<>();
     GroupStage groupStage = null;
+    UnwindStage unwindStage = null;
     for (Stage stage : pipeline) {
       if (stage instanceof MatchStage ms) {
         matchStages.add(ms);
       } else if (stage instanceof GroupStage gs) {
         groupStage = gs;
+      } else if (stage instanceof UnwindStage us) {
+        unwindStage = us;
       }
+    }
+
+    // Get unwind path if present (e.g., "items" from "$items")
+    String unwindPath = null;
+    if (unwindStage != null) {
+      unwindPath = unwindStage.getPath();
     }
 
     ctx.sql("COALESCE((SELECT ");
@@ -788,7 +798,7 @@ public final class CteBasedPipelineRenderer {
       // Render each accumulator
       for (var entry : groupStage.getAccumulators().entrySet()) {
         ctx.sql(", '" + entry.getKey() + "' VALUE ");
-        renderLookupAccumulator(ctx, entry.getValue());
+        renderLookupAccumulator(ctx, entry.getValue(), unwindPath);
       }
 
       ctx.sql(") RETURNING JSON)");
@@ -799,6 +809,22 @@ public final class CteBasedPipelineRenderer {
 
     ctx.sql(" FROM \"" + fromTable + "\" f");
 
+    // If there's an $unwind, add JSON_TABLE to iterate over the array
+    if (unwindPath != null) {
+      ctx.sql(", JSON_TABLE(f.\"DATA\", '$." + unwindPath + "[*]' COLUMNS (");
+      // Add columns based on fields used in match and group
+      java.util.Set<String> neededFields = collectUnwindFields(matchStages, groupStage, unwindPath);
+      boolean first = true;
+      for (String field : neededFields) {
+        if (!first) {
+          ctx.sql(", ");
+        }
+        ctx.sql("\"" + field + "\" VARCHAR2(4000) PATH '$." + field + "'");
+        first = false;
+      }
+      ctx.sql(")) jt");
+    }
+
     // Render WHERE clause with let variable substitution - combine all match stages
     if (!matchStages.isEmpty()) {
       ctx.sql(" WHERE ");
@@ -806,7 +832,7 @@ public final class CteBasedPipelineRenderer {
         if (i > 0) {
           ctx.sql(" AND ");
         }
-        renderLookupMatchCondition(ctx, matchStages.get(i).getFilter(), letVars);
+        renderLookupMatchCondition(ctx, matchStages.get(i).getFilter(), letVars, unwindPath);
       }
     }
 
@@ -814,10 +840,59 @@ public final class CteBasedPipelineRenderer {
   }
 
   /**
+   * Collects field names used in match and group stages that come from the unwound array.
+   */
+  private java.util.Set<String> collectUnwindFields(
+      List<MatchStage> matchStages, GroupStage groupStage, String unwindPath) {
+    java.util.Set<String> fields = new java.util.LinkedHashSet<>();
+    String prefix = unwindPath + ".";
+
+    // Collect from match stages
+    for (MatchStage ms : matchStages) {
+      collectFieldsFromExpression(ms.getFilter(), prefix, fields);
+    }
+
+    // Collect from group stage accumulators
+    if (groupStage != null) {
+      for (var entry : groupStage.getAccumulators().entrySet()) {
+        collectFieldsFromExpression(entry.getValue().getArgument(), prefix, fields);
+      }
+    }
+
+    return fields;
+  }
+
+  /**
+   * Recursively collects field paths starting with the given prefix.
+   */
+  private void collectFieldsFromExpression(
+      Expression expr, String prefix, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      if (path.startsWith(prefix)) {
+        // Extract the field name after the prefix (e.g., "items.product" -> "product")
+        fields.add(path.substring(prefix.length()));
+      }
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectFieldsFromExpression(comp.getLeft(), prefix, fields);
+      collectFieldsFromExpression(comp.getRight(), prefix, fields);
+    } else if (expr instanceof LogicalExpression logical) {
+      for (Expression operand : logical.getOperands()) {
+        collectFieldsFromExpression(operand, prefix, fields);
+      }
+    } else if (expr instanceof AccumulatorExpression accum) {
+      collectFieldsFromExpression(accum.getArgument(), prefix, fields);
+    }
+  }
+
+  /**
    * Renders an accumulator expression for $lookup pipeline $group.
    * Handles SUM, COUNT, MIN, MAX, PUSH (with object expressions), etc.
+   *
+   * @param unwindPath if non-null, use JSON_TABLE columns (jt.field) instead of JSON_VALUE
    */
-  private void renderLookupAccumulator(SqlGenerationContext ctx, AccumulatorExpression accum) {
+  private void renderLookupAccumulator(
+      SqlGenerationContext ctx, AccumulatorExpression accum, String unwindPath) {
     var op = accum.getOp();
     Expression arg = accum.getArgument();
 
@@ -833,36 +908,115 @@ public final class CteBasedPipelineRenderer {
         // MAX/MIN: use RETURNING NUMBER for proper numeric comparison and type preservation
         String func = op == AccumulatorOp.MAX ? "MAX" : "MIN";
         ctx.sql(func + "(");
-        if (arg instanceof FieldPathExpression fp) {
-          String path = fp.getPath();
-          if (path.startsWith("$")) {
-            path = path.substring(1);
-          }
-          ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "' RETURNING NUMBER)");
-        } else {
-          ctx.sql("NULL");
-        }
+        renderLookupFieldAccess(ctx, arg, unwindPath, true);
         ctx.sql(")");
       }
       case SUM, AVG -> {
         // Numeric aggregations
         String func = op.getSqlFunction();
         ctx.sql("NVL(" + func + "(");
-        if (arg instanceof FieldPathExpression fp) {
-          String path = fp.getPath();
-          if (path.startsWith("$")) {
-            path = path.substring(1);
-          }
-          ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "' RETURNING NUMBER)");
-        } else {
-          ctx.sql("NULL");
-        }
+        renderLookupFieldAccess(ctx, arg, unwindPath, true);
         ctx.sql("), 0)");
       }
       default -> {
         // Fallback for other accumulators
         ctx.sql("NULL");
       }
+    }
+  }
+
+  /**
+   * Renders a field access in lookup context, using JSON_TABLE column if unwound.
+   *
+   * @param numeric if true, use RETURNING NUMBER for JSON_VALUE
+   */
+  private void renderLookupFieldAccess(
+      SqlGenerationContext ctx, Expression arg, String unwindPath, boolean numeric) {
+    if (arg instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      if (path.startsWith("$")) {
+        path = path.substring(1);
+      }
+
+      // Check if this path starts with the unwind path
+      if (unwindPath != null && path.startsWith(unwindPath + ".")) {
+        // Use JSON_TABLE column (jt.fieldName)
+        String fieldName = path.substring(unwindPath.length() + 1);
+        if (numeric) {
+          ctx.sql("TO_NUMBER(jt.\"" + fieldName + "\")");
+        } else {
+          ctx.sql("jt.\"" + fieldName + "\"");
+        }
+      } else {
+        // Standard JSON_VALUE access
+        if (numeric) {
+          ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "' RETURNING NUMBER)");
+        } else {
+          ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "')");
+        }
+      }
+    } else {
+      ctx.sql("NULL");
+    }
+  }
+
+  /**
+   * Renders a field reference in $lookup $match conditions.
+   * Handles inner table fields (f.DATA), outer table variable references (q.DATA via letVars),
+   * unwound array fields (jt.field), and literal values.
+   *
+   * @param ctx the SQL generation context
+   * @param expr the expression to render
+   * @param letVars mapping of $$variable names to their outer-table field paths
+   * @param unwindPath if non-null, the array path being unwound (use jt. for fields under it)
+   * @param allowVariable if true, check for $$variable references in letVars
+   */
+  private void renderLookupMatchField(
+      SqlGenerationContext ctx, Expression expr, Map<String, String> letVars,
+      String unwindPath, boolean allowVariable) {
+    if (expr instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+
+      // Check for $$variable reference (outer table field via let clause)
+      // Note: ExpressionParser strips one $ from $$varName, leaving $varName
+      if (allowVariable && path.startsWith("$") && letVars != null) {
+        String varName = path.substring(1); // Remove the remaining $
+        String outerField = letVars.get(varName);
+        if (outerField != null) {
+          // Reference the outer table (q) via the let variable
+          ctx.sql("JSON_VALUE(q.\"DATA\", '$." + outerField + "')");
+          return;
+        }
+      }
+
+      // Strip single $ prefix if present (inner table field reference)
+      if (path.startsWith("$")) {
+        path = path.substring(1);
+      }
+
+      // Check if this field is under the unwind path (use JSON_TABLE column)
+      if (unwindPath != null && path.startsWith(unwindPath + ".")) {
+        String fieldName = path.substring(unwindPath.length() + 1);
+        ctx.sql("jt.\"" + fieldName + "\"");
+      } else {
+        // Standard inner table field reference
+        ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "')");
+      }
+    } else if (expr instanceof LiteralExpression lit) {
+      Object val = lit.getValue();
+      if (val instanceof String) {
+        ctx.sql("'" + ((String) val).replace("'", "''") + "'");
+      } else if (val instanceof Number) {
+        ctx.sql(val.toString());
+      } else if (val instanceof Boolean) {
+        ctx.sql(((Boolean) val) ? "'true'" : "'false'");
+      } else if (val == null) {
+        ctx.sql("NULL");
+      } else {
+        ctx.sql("'" + val.toString().replace("'", "''") + "'");
+      }
+    } else {
+      ctx.sql("NULL");
     }
   }
 
@@ -916,9 +1070,12 @@ public final class CteBasedPipelineRenderer {
   /**
    * Renders a $match condition with let variable substitution.
    * Handles $expr: {$eq: ["$field", "$$variable"]} pattern.
+   *
+   * @param unwindPath if non-null, use JSON_TABLE columns for fields under this path
    */
   private void renderLookupMatchCondition(
-      SqlGenerationContext ctx, Expression filter, Map<String, String> letVars) {
+      SqlGenerationContext ctx, Expression filter, Map<String, String> letVars,
+      String unwindPath) {
     if (filter instanceof LogicalExpression logical) {
       // Handle $and / $or by recursively rendering operands
       List<Expression> operands = logical.getOperands();
@@ -929,7 +1086,7 @@ public final class CteBasedPipelineRenderer {
         if (i > 0) {
           ctx.sql(sqlOperator);
         }
-        renderLookupMatchCondition(ctx, operands.get(i), letVars);
+        renderLookupMatchCondition(ctx, operands.get(i), letVars, unwindPath);
       }
       ctx.sql(")");
     } else if (filter instanceof ComparisonExpression comp) {
@@ -937,47 +1094,12 @@ public final class CteBasedPipelineRenderer {
       Expression right = comp.getRight();
 
       // Render left side (inner table field reference)
-      if (left instanceof FieldPathExpression fp) {
-        String path = fp.getPath();
-        if (path.startsWith("$") && !path.startsWith("$$")) {
-          path = path.substring(1);
-        }
-        ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "')");
-      } else {
-        ctx.sql("NULL");
-      }
+      renderLookupMatchField(ctx, left, letVars, unwindPath, false);
 
       ctx.sql(" = ");
 
       // Render right side (may be a $$variable reference)
-      if (right instanceof FieldPathExpression fp) {
-        String path = fp.getPath();
-        if (path.startsWith("$")) {
-          String varName = path.substring(1);  // Remove $ to get variable name
-          String outerField = letVars.get(varName);
-          if (outerField != null) {
-            // Variable reference - use outer table field
-            if (outerField.startsWith("$")) {
-              outerField = outerField.substring(1);
-            }
-            ctx.sql("JSON_VALUE(q.\"DATA\", '$." + outerField + "')");
-          } else {
-            // Not a variable, treat as inner field
-            ctx.sql("JSON_VALUE(f.\"DATA\", '$." + varName + "')");
-          }
-        } else {
-          ctx.sql("JSON_VALUE(f.\"DATA\", '$." + path + "')");
-        }
-      } else if (right instanceof LiteralExpression lit) {
-        Object val = lit.getValue();
-        if (val instanceof String) {
-          ctx.sql("'" + val + "'");
-        } else {
-          ctx.sql(String.valueOf(val));
-        }
-      } else {
-        ctx.sql("NULL");
-      }
+      renderLookupMatchField(ctx, right, letVars, unwindPath, true);
     } else if (filter instanceof InExpression inExpr) {
       // Handle $in / $nin
       Expression field = inExpr.getField();
@@ -1505,21 +1627,34 @@ public final class CteBasedPipelineRenderer {
       }
       ctx.sql(")");
     } else if (expr instanceof ComparisonExpression comp) {
-      // Render: JSON_VALUE("DATA", '$.left') op right
-      // Use renderFieldAccess (not renderExpressionValue) for comparisons
-      // because JSON_QUERY returns quoted values like "100" which can't be compared numerically
-      renderFieldAccess(ctx, comp.getLeft());
-      String op = switch (comp.getOp()) {
-        case EQ -> " = ";
-        case NE -> " != ";
-        case GT -> " > ";
-        case GTE -> " >= ";
-        case LT -> " < ";
-        case LTE -> " <= ";
-        default -> " = ";
-      };
-      ctx.sql(op);
-      renderFieldAccess(ctx, comp.getRight());
+      // Handle null comparisons specially - SQL requires IS NULL / IS NOT NULL
+      Expression right = comp.getRight();
+      if (right instanceof LiteralExpression lit && lit.getValue() == null) {
+        renderFieldAccess(ctx, comp.getLeft());
+        if (comp.getOp() == ComparisonOp.EQ) {
+          ctx.sql(" IS NULL");
+        } else if (comp.getOp() == ComparisonOp.NE) {
+          ctx.sql(" IS NOT NULL");
+        } else {
+          ctx.sql(" IS NOT NULL");
+        }
+      } else {
+        // Render: JSON_VALUE("DATA", '$.left') op right
+        // Use renderFieldAccess (not renderExpressionValue) for comparisons
+        // because JSON_QUERY returns quoted values like "100" which can't be compared numerically
+        renderFieldAccess(ctx, comp.getLeft());
+        String op = switch (comp.getOp()) {
+          case EQ -> " = ";
+          case NE -> " != ";
+          case GT -> " > ";
+          case GTE -> " >= ";
+          case LT -> " < ";
+          case LTE -> " <= ";
+          default -> " = ";
+        };
+        ctx.sql(op);
+        renderFieldAccess(ctx, right);
+      }
     } else {
       // Fallback
       ctx.sql("1=1");
@@ -1754,19 +1889,77 @@ public final class CteBasedPipelineRenderer {
   private void renderConditionalAsValue(SqlGenerationContext ctx, ConditionalExpression condExpr) {
     ctx.sql("CASE WHEN ");
     Expression condition = condExpr.getCondition();
-    // Handle boolean field path like $isConversion
+    // Handle various condition types for $cond inside accumulators
     if (condition instanceof FieldPathExpression fp) {
+      // Boolean field path like $isConversion
       ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "') = 'true'");
     } else if (condition instanceof ComparisonExpression) {
       renderComparisonAsWhere(ctx, condition);
+    } else if (condition instanceof InExpression inExpr) {
+      // $in condition like {$in: ["$status", ["resolved", "closed"]]}
+      renderInExpressionCondition(ctx, inExpr);
+    } else if (condition instanceof ArrayExpression arrayExpr
+        && arrayExpr.getOp() == ArrayOp.IN) {
+      // $in expression form: {$in: ["$field", [values]]}
+      Expression valueExpr = arrayExpr.getIndexExpression();
+      Expression arrayValueExpr = arrayExpr.getArrayExpression();
+      renderExpressionValue(ctx, valueExpr);
+      ctx.sql(" IN (");
+      if (arrayValueExpr instanceof LiteralExpression litArray
+          && litArray.getValue() instanceof java.util.List<?> list) {
+        boolean first = true;
+        for (Object item : list) {
+          if (!first) {
+            ctx.sql(", ");
+          }
+          if (item instanceof String) {
+            ctx.sql("'" + ((String) item).replace("'", "''") + "'");
+          } else {
+            ctx.sql(String.valueOf(item));
+          }
+          first = false;
+        }
+      }
+      ctx.sql(")");
     } else {
-      ctx.sql("1=1");
+      // Fallback - use general condition expression rendering
+      renderConditionExpression(ctx, condition);
     }
     ctx.sql(" THEN ");
     renderNumericAccumulatorArg(ctx, condExpr.getThenExpr());
     ctx.sql(" ELSE ");
     renderNumericAccumulatorArg(ctx, condExpr.getElseExpr());
     ctx.sql(" END");
+  }
+
+  /**
+   * Renders an InExpression as a SQL condition.
+   */
+  private void renderInExpressionCondition(SqlGenerationContext ctx, InExpression inExpr) {
+    Expression field = inExpr.getField();
+    if (field instanceof FieldPathExpression fp) {
+      ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "')");
+    } else {
+      renderExpressionValue(ctx, field);
+    }
+    if (inExpr.isNegated()) {
+      ctx.sql(" NOT IN (");
+    } else {
+      ctx.sql(" IN (");
+    }
+    List<?> values = inExpr.getValues();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      Object val = values.get(i);
+      if (val instanceof String) {
+        ctx.sql("'" + ((String) val).replace("'", "''") + "'");
+      } else {
+        ctx.sql(String.valueOf(val));
+      }
+    }
+    ctx.sql(")");
   }
 
   /**
@@ -1865,11 +2058,27 @@ public final class CteBasedPipelineRenderer {
 
   /**
    * Renders a comparison expression as WHERE condition.
+   * Handles null comparisons specially using IS NULL / IS NOT NULL.
    */
   private void renderComparisonAsWhere(SqlGenerationContext ctx, Expression expr) {
     if (expr instanceof ComparisonExpression comp) {
       Expression left = comp.getLeft();
       Expression right = comp.getRight();
+
+      // Handle null comparisons specially - SQL requires IS NULL / IS NOT NULL
+      if (right instanceof LiteralExpression lit && lit.getValue() == null) {
+        renderFieldAccess(ctx, left);
+        if (comp.getOp() == ComparisonOp.EQ) {
+          ctx.sql(" IS NULL");
+        } else if (comp.getOp() == ComparisonOp.NE) {
+          ctx.sql(" IS NOT NULL");
+        } else {
+          // Other comparisons with null don't make sense, but handle gracefully
+          ctx.sql(" IS NOT NULL");
+        }
+        return;
+      }
+
       String op = switch (comp.getOp()) {
         case EQ -> "=";
         case NE -> "!=";
@@ -1888,7 +2097,7 @@ public final class CteBasedPipelineRenderer {
         } else if (val instanceof String) {
           ctx.sql("'" + val + "'");
         } else {
-          ctx.sql(val.toString());
+          ctx.sql(String.valueOf(val));
         }
       } else {
         renderFieldAccess(ctx, right);
@@ -2543,6 +2752,12 @@ public final class CteBasedPipelineRenderer {
     } else if (expr instanceof ConditionalExpression condExpr) {
       // Handle $ifNull and $cond in numeric context
       renderConditionalExpressionNumeric(ctx, condExpr);
+    } else if (expr instanceof ArrayExpression arrayExpr) {
+      // Handle $size in numeric context
+      renderArrayExpressionNumeric(ctx, arrayExpr);
+    } else if (expr instanceof AccumulatorExpression accumExpr) {
+      // Handle expression-level $sum (array sum, not group accumulator)
+      renderExpressionLevelAccumulator(ctx, accumExpr);
     } else {
       ctx.sql("NULL");
     }
@@ -2573,6 +2788,135 @@ public final class CteBasedPipelineRenderer {
       ctx.sql(" ELSE ");
       renderNumericOperand(ctx, condExpr.getElseExpr());
       ctx.sql(" END");
+    }
+  }
+
+  /**
+   * Renders an ArrayExpression in numeric context.
+   * Handles $size, $sum (SUM_ARRAY), and $avg (AVG_ARRAY) to produce numeric values.
+   */
+  private void renderArrayExpressionNumeric(SqlGenerationContext ctx, ArrayExpression arrayExpr) {
+    ArrayOp op = arrayExpr.getOp();
+    Expression arrayArg = arrayExpr.getArrayExpression();
+
+    if (op == ArrayOp.SIZE) {
+      if (arrayArg instanceof FieldPathExpression fp) {
+        // $size on field path: JSON_VALUE("DATA", '$.field.size()' RETURNING NUMBER)
+        ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + ".size()' RETURNING NUMBER)");
+      } else {
+        // Nested expression - try to render and get size
+        ctx.sql("0");
+      }
+    } else if (op == ArrayOp.SUM_ARRAY) {
+      // Expression-level $sum: sum values from an array field
+      // MongoDB: {$sum: "$orders.amount"} -> sum all amount values from orders array
+      renderArrayAggregateSubquery(ctx, arrayArg, "SUM");
+    } else if (op == ArrayOp.AVG_ARRAY) {
+      // Expression-level $avg: average values from an array field
+      renderArrayAggregateSubquery(ctx, arrayArg, "AVG");
+    } else {
+      // For other array ops, fall back to NULL (not supported in numeric context)
+      ctx.sql("NULL");
+    }
+  }
+
+  /**
+   * Renders a subquery to aggregate (SUM/AVG) values from an array field.
+   * Handles both simple arrays (e.g., "$scores") and dotted paths (e.g., "$orders.amount").
+   */
+  private void renderArrayAggregateSubquery(
+      SqlGenerationContext ctx, Expression arrayArg, String aggFunc) {
+    if (arrayArg instanceof FieldPathExpression fp) {
+      String path = fp.getPath();
+      // Check if this is a dotted path (e.g., "orders.amount")
+      int dotIndex = path.indexOf('.');
+      if (dotIndex > 0) {
+        // Dotted path: extract array part and field part
+        String arrayPart = path.substring(0, dotIndex);
+        String fieldPart = path.substring(dotIndex + 1);
+        // Use subquery with JSON_TABLE to aggregate array elements
+        ctx.sql("(SELECT NVL(" + aggFunc + "(TO_NUMBER(val)), 0) FROM JSON_TABLE(\"DATA\", '$.");
+        ctx.sql(arrayPart);
+        ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+        ctx.sql(fieldPart);
+        ctx.sql("')))");
+      } else {
+        // Simple path: aggregate array of numbers directly
+        ctx.sql("(SELECT NVL(" + aggFunc + "(TO_NUMBER(val)), 0) FROM JSON_TABLE(\"DATA\", '$.");
+        ctx.sql(path);
+        ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+      }
+    } else if (arrayArg instanceof LiteralExpression lit && lit.getValue() instanceof Number n) {
+      // $sum: 1 or similar literal - just return the literal
+      ctx.sql(String.valueOf(n));
+    } else {
+      ctx.sql("0");
+    }
+  }
+
+  /**
+   * Renders an AccumulatorExpression in expression context (not group context).
+   * In MongoDB, $sum can be used as an expression to sum array elements.
+   * For example: {$sum: "$orders.amount"} sums all amount values from the orders array.
+   */
+  private void renderExpressionLevelAccumulator(
+      SqlGenerationContext ctx, AccumulatorExpression accumExpr) {
+    AccumulatorOp op = accumExpr.getOp();
+    Expression arg = accumExpr.getArgument();
+
+    if (op == AccumulatorOp.SUM) {
+      // Expression-level $sum: sum values from an array field
+      // MongoDB: {$sum: "$orders.amount"} -> sum all amount values from orders array
+      if (arg instanceof FieldPathExpression fp) {
+        String path = fp.getPath();
+        // Check if this is a dotted path (e.g., "orders.amount")
+        int dotIndex = path.indexOf('.');
+        if (dotIndex > 0) {
+          // Dotted path: extract array part and field part
+          String arrayPart = path.substring(0, dotIndex);
+          String fieldPart = path.substring(dotIndex + 1);
+          // Use subquery with JSON_TABLE to sum array elements
+          ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(\"DATA\", '$.");
+          ctx.sql(arrayPart);
+          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+          ctx.sql(fieldPart);
+          ctx.sql("')))");
+        } else {
+          // Simple path: sum array of numbers directly
+          ctx.sql("(SELECT NVL(SUM(TO_NUMBER(val)), 0) FROM JSON_TABLE(\"DATA\", '$.");
+          ctx.sql(path);
+          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+        }
+      } else if (arg instanceof LiteralExpression lit && lit.getValue() instanceof Number n) {
+        // $sum: 1 as expression (not in group) - just return the literal
+        ctx.sql(String.valueOf(n));
+      } else {
+        ctx.sql("0");
+      }
+    } else if (op == AccumulatorOp.AVG) {
+      // Expression-level $avg: average values from an array field
+      if (arg instanceof FieldPathExpression fp) {
+        String path = fp.getPath();
+        int dotIndex = path.indexOf('.');
+        if (dotIndex > 0) {
+          String arrayPart = path.substring(0, dotIndex);
+          String fieldPart = path.substring(dotIndex + 1);
+          ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(\"DATA\", '$.");
+          ctx.sql(arrayPart);
+          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$.");
+          ctx.sql(fieldPart);
+          ctx.sql("')))");
+        } else {
+          ctx.sql("(SELECT AVG(TO_NUMBER(val)) FROM JSON_TABLE(\"DATA\", '$.");
+          ctx.sql(path);
+          ctx.sql("[*]' COLUMNS (val VARCHAR2(4000) PATH '$')))");
+        }
+      } else {
+        ctx.sql("NULL");
+      }
+    } else {
+      // Other accumulators not supported as expressions
+      ctx.sql("NULL");
     }
   }
 
@@ -2753,7 +3097,9 @@ public final class CteBasedPipelineRenderer {
       hasClause = true;
     }
 
-    // ORDER BY clause
+    // ORDER BY clause - use two-key pattern for type-agnostic sorting
+    // First key: numeric sort (NULLs for non-numbers)
+    // Second key: string sort (for when first key is all NULLs, e.g., dates)
     Map<String, Integer> sortBy = windowStage.getSortBy();
     if (!sortBy.isEmpty()) {
       if (hasClause) {
@@ -2765,12 +3111,16 @@ public final class CteBasedPipelineRenderer {
         if (!firstSort) {
           ctx.sql(", ");
         }
-        ctx.sql("JSON_VALUE(q.\"DATA\", '$.");
-        ctx.sql(sortEntry.getKey());
-        ctx.sql("' RETURNING NUMBER)");
-        if (sortEntry.getValue() < 0) {
-          ctx.sql(" DESC");
-        }
+        String dir = sortEntry.getValue() < 0 ? "DESC" : "ASC";
+        String fieldPath = sortEntry.getKey();
+        // First key: numeric sort
+        ctx.sql("JSON_VALUE(q.\"DATA\", '$." + fieldPath + "' RETURNING NUMBER NULL ON ERROR) ");
+        ctx.sql(dir);
+        ctx.sql(" NULLS LAST, ");
+        // Second key: string sort (fallback for dates, strings)
+        ctx.sql("JSON_VALUE(q.\"DATA\", '$." + fieldPath + "') ");
+        ctx.sql(dir);
+        ctx.sql(" NULLS LAST");
         firstSort = false;
       }
       hasClause = true;

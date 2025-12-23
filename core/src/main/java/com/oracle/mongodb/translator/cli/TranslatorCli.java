@@ -189,6 +189,7 @@ public final class TranslatorCli {
         case "--inline", "-i" -> options.inlineBindVariables = true;
         case "--no-hints" -> options.includeHints = false;
         case "--strict" -> options.strictMode = true;
+        case "--cte" -> options.cteMode = true;
         case "--collection", "-c" -> {
           if (i + 1 >= args.length) {
             throw new IllegalArgumentException("--collection requires a value");
@@ -301,6 +302,7 @@ public final class TranslatorCli {
         OracleConfiguration.builder()
             .collectionName(pipeline.collection)
             .dataColumnName(options.dataColumnName != null ? options.dataColumnName : "data")
+            .useCteBasedRendering(options.cteMode)
             .build();
 
     TranslationOptions translationOptions =
@@ -422,6 +424,7 @@ public final class TranslatorCli {
     out.println("  -i, --inline             Inline bind variables into SQL");
     out.println("  --no-hints               Disable Oracle optimizer hints");
     out.println("  --strict                 Fail on unsupported operators");
+    out.println("  --cte                    Use CTE-based SQL generation (WITH clause)");
     out.println("  --data-column <name>     JSON data column name (default: data)");
     out.println("  -x, --execute <file>     Execute SQL against Oracle using connection file");
     out.println("  -o, --output <file>      Write output to file instead of stdout");
@@ -447,6 +450,7 @@ public final class TranslatorCli {
     boolean inlineBindVariables;
     boolean includeHints = true;
     boolean strictMode;
+    boolean cteMode;
     String collection;
     String dataColumnName;
     String inputFile;

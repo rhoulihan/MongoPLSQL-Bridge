@@ -50,6 +50,9 @@ OUTPUT_FILE = PROJECT_ROOT / "docs" / "test-catalog-data.json"
 # Cache for generated SQL
 sql_cache = {}
 
+# Global flag for CTE mode
+USE_CTE_MODE = False
+
 
 def format_sql(sql: str) -> str:
     """Format SQL for readability using sqlparse if available."""
@@ -82,8 +85,12 @@ def generate_sql(collection: str, pipeline: list) -> tuple:
             tmp_file = f.name
 
         try:
+            cmd = [str(cli_path), "--collection", collection, "--inline"]
+            if USE_CTE_MODE:
+                cmd.append("--cte")
+            cmd.append(tmp_file)
             result = subprocess.run(
-                [str(cli_path), "--collection", collection, "--inline", tmp_file],
+                cmd,
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
@@ -672,10 +679,18 @@ def process_integration_tests() -> tuple:
 
 
 def main():
+    global USE_CTE_MODE
+
     parser = argparse.ArgumentParser(description='Generate test catalog data')
     parser.add_argument('--run', action='store_true',
                         help='Execute queries against databases (requires Docker)')
+    parser.add_argument('--cte', action='store_true',
+                        help='Use CTE-based SQL rendering')
     args = parser.parse_args()
+
+    USE_CTE_MODE = args.cte
+    if USE_CTE_MODE:
+        print("Using CTE-based SQL rendering", file=sys.stderr)
 
     print("Generating comprehensive test catalog data...", file=sys.stderr)
 

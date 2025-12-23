@@ -6,7 +6,9 @@
 
 package com.oracle.mongodb.translator.ast.expression;
 
+import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.generator.SqlGenerationContext;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -91,21 +93,11 @@ public final class AccumulatorExpression implements Expression {
       // COUNT(*) for $count
       ctx.sql("COUNT(*)");
     } else if (op == AccumulatorOp.FIRST) {
-      // In GROUP BY context, use MIN to get first value (deterministic when combined with sort)
-      // Oracle's FIRST_VALUE requires OVER clause and cannot be used as aggregate
-      ctx.sql("MIN(");
-      if (argument != null) {
-        ctx.visit(argument);
-      }
-      ctx.sql(")");
+      // $first gets the first value in sorted order within each group
+      renderFirstOrLast(ctx, "FIRST");
     } else if (op == AccumulatorOp.LAST) {
-      // In GROUP BY context, use MAX to get last value (deterministic when combined with sort)
-      // Oracle's LAST_VALUE requires OVER clause and cannot be used as aggregate
-      ctx.sql("MAX(");
-      if (argument != null) {
-        ctx.visit(argument);
-      }
-      ctx.sql(")");
+      // $last gets the last value in sorted order within each group
+      renderFirstOrLast(ctx, "LAST");
     } else if (op == AccumulatorOp.PUSH) {
       // JSON_ARRAYAGG for $push - collects all values into array
       ctx.sql("JSON_ARRAYAGG(");
@@ -133,6 +125,99 @@ public final class AccumulatorExpression implements Expression {
         ctx.visit(argument);
       }
       ctx.sql(")");
+    }
+  }
+
+  /**
+   * Renders $first or $last accumulator using Oracle's KEEP (DENSE_RANK ...) syntax when sort
+   * context is available, or falls back to MIN/MAX otherwise.
+   *
+   * <p>Oracle syntax: MIN/MAX(expr) KEEP (DENSE_RANK FIRST/LAST ORDER BY sort_expr [ASC|DESC])
+   */
+  private void renderFirstOrLast(SqlGenerationContext ctx, String rankPosition) {
+    List<SortStage.SortField> sortContext = ctx.getGroupSortContext();
+
+    if (sortContext != null && !sortContext.isEmpty()) {
+      // With sort context, use KEEP (DENSE_RANK FIRST/LAST ORDER BY ...) syntax
+      // MIN is used as the aggregate since we want any value from the first/last ranked row
+      ctx.sql("MIN(");
+      if (argument != null) {
+        ctx.visit(argument);
+      }
+      ctx.sql(") KEEP (DENSE_RANK ");
+      ctx.sql(rankPosition);
+      ctx.sql(" ORDER BY ");
+
+      boolean first = true;
+      for (SortStage.SortField sortField : sortContext) {
+        if (!first) {
+          ctx.sql(", ");
+        }
+        // Render sort field with explicit JSON_VALUE for KEEP ORDER BY clause
+        // Use the field's return type if available, otherwise use generic JSON ordering
+        renderSortFieldForKeepClause(ctx, sortField);
+        first = false;
+      }
+      ctx.sql(")");
+    } else {
+      // Without sort context, use KEEP with ORDER BY _id to preserve document order
+      // MongoDB processes documents in _id order (insertion order for ObjectIds)
+      // For $first: DENSE_RANK FIRST ORDER BY _id ASC (get lowest _id = first document)
+      // For $last: DENSE_RANK FIRST ORDER BY _id DESC (get highest _id = last document)
+      ctx.sql("MIN(");
+      if (argument != null) {
+        ctx.visit(argument);
+      }
+      ctx.sql(") KEEP (DENSE_RANK FIRST ORDER BY ");
+      // Order by _id to preserve document insertion order
+      String baseAlias = ctx.getBaseTableAlias();
+      ctx.sql("JSON_VALUE(");
+      if (baseAlias != null && !baseAlias.isEmpty()) {
+        ctx.sql(baseAlias);
+        ctx.sql(".");
+      }
+      ctx.sql("data, '$._id')");
+      if ("LAST".equals(rankPosition)) {
+        ctx.sql(" DESC");
+      }
+      ctx.sql(")");
+    }
+  }
+
+  /**
+   * Renders a sort field for use in the KEEP ORDER BY clause. Always uses JSON_VALUE since
+   * dot notation is not valid in KEEP ORDER BY clauses. Defaults to RETURNING NUMBER for
+   * proper numeric sorting when no return type is specified.
+   */
+  private void renderSortFieldForKeepClause(
+      SqlGenerationContext ctx, SortStage.SortField sortField) {
+    FieldPathExpression fieldPath = sortField.getFieldPath();
+
+    // Always use JSON_VALUE for KEEP ORDER BY clause (dot notation not supported here)
+    String baseAlias = ctx.getBaseTableAlias();
+    ctx.sql("JSON_VALUE(");
+    if (baseAlias != null && !baseAlias.isEmpty()) {
+      ctx.sql(baseAlias);
+      ctx.sql(".");
+    }
+    ctx.sql(fieldPath.getDataColumn());
+    ctx.sql(", '");
+    ctx.sql(fieldPath.getJsonPath());
+    ctx.sql("'");
+    // Use explicit return type if specified, otherwise default to NUMBER for proper sorting
+    // (MongoDB $first/$last are most commonly used with numeric ordering)
+    JsonReturnType returnType = fieldPath.getReturnType();
+    if (returnType != null) {
+      ctx.sql(" RETURNING ");
+      ctx.sql(returnType.getOracleSyntax());
+    } else {
+      ctx.sql(" RETURNING NUMBER");
+    }
+    ctx.sql(")");
+
+    // Add sort direction
+    if (sortField.getDirection() == SortStage.SortDirection.DESC) {
+      ctx.sql(" DESC");
     }
   }
 

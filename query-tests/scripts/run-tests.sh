@@ -32,6 +32,7 @@ JSON_REPORT_FILE="$RESULTS_DIR/test-report-${TIMESTAMP}.json"
 CATEGORY_FILTER=""
 TEST_FILTER=""
 VERBOSE=false
+CTE_MODE=true  # CTE mode is now the default
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -48,12 +49,22 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --cte)
+            CTE_MODE=true
+            shift
+            ;;
+        --legacy)
+            CTE_MODE=false
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [options]"
             echo "Options:"
             echo "  --category <name>   Run only tests in specified category"
             echo "  --test <id>         Run only specified test by ID"
             echo "  --verbose, -v       Show detailed output"
+            echo "  --cte               Use CTE-based SQL generation (default)"
+            echo "  --legacy            Use legacy SQL generation"
             echo "  --help, -h          Show this help message"
             echo ""
             echo "Categories: comparison, logical, accumulator, stage, arithmetic, conditional, complex, edge"
@@ -80,6 +91,9 @@ fi
 if [ -n "$TEST_FILTER" ]; then
     echo -e "  Test ID:   $TEST_FILTER"
 fi
+if [ "$CTE_MODE" = true ]; then
+    echo -e "  ${CYAN}CTE Mode:  ENABLED${NC}"
+fi
 echo -e "${BLUE}============================================================${NC}"
 echo ""
 
@@ -101,15 +115,18 @@ echo '{"timestamp": "'$(date -Iseconds)'", "results": [' > "$JSON_REPORT_FILE"
 FIRST_RESULT=true
 
 # Function to run MongoDB query
-# Uses EJSON.stringify with relaxed mode to normalize BSON types (Long, ObjectId, Date)
-# to JSON-friendly formats for comparison with Oracle results
+# Uses EJSON.parse to properly convert Extended JSON ($date, $oid, etc.) to native BSON types
+# Uses EJSON.stringify with relaxed mode to normalize output for comparison with Oracle results
 run_mongodb_query() {
     local collection="$1"
     local pipeline="$2"
 
+    # Escape single quotes in pipeline for shell embedding
+    local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
+
     docker exec mongo-translator-mongodb mongosh --quiet testdb \
         -u admin -p admin123 --authenticationDatabase admin \
-        --eval "EJSON.stringify(db.${collection}.aggregate(${pipeline}).toArray(), {relaxed: true})" 2>/dev/null
+        --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
 }
 
 # Function to wrap SQL to return JSON array using Oracle's JSON_ARRAYAGG
@@ -126,6 +143,7 @@ run_oracle_query() {
     local sql="$1"
 
     docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
 SET PAGESIZE 0
 SET LINESIZE 32767
 SET TRIMSPOOL ON
@@ -165,6 +183,7 @@ run_oracle_query_json() {
 
     local result
     result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
 SET PAGESIZE 0
 SET LINESIZE 32767
 SET TRIMSPOOL ON
@@ -193,6 +212,7 @@ run_oracle_count() {
     local sql="$1"
 
     docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
 SET PAGESIZE 0
 SET LINESIZE 100
 SET TRIMSPOOL ON
@@ -216,8 +236,14 @@ generate_oracle_sql() {
     tmp_file=$(mktemp /tmp/mongo-pipeline-XXXXXX.json)
     echo "$pipeline" > "$tmp_file"
 
+    # Build CLI options
+    local cli_opts="--collection $collection --inline"
+    if [ "$CTE_MODE" = true ]; then
+        cli_opts="$cli_opts --cte"
+    fi
+
     # Use the CLI tool directly (faster than gradle)
-    result=$(cd "$PROJECT_ROOT" && timeout --kill-after=5 30 ./mongo2sql --collection "$collection" --inline "$tmp_file" 2>&1)
+    result=$(cd "$PROJECT_ROOT" && timeout --kill-after=5 30 ./mongo2sql $cli_opts "$tmp_file" 2>&1)
     exit_code=$?
 
     # Clean up temp file
@@ -511,7 +537,11 @@ ln -sf "$(basename "$JSON_REPORT_FILE")" "$RESULTS_DIR/test-report-latest.json"
 # Generate test catalog data for HTML
 echo ""
 echo "Generating test-catalog-data.json..."
-python3 "$SCRIPT_DIR/generate-test-catalog-data.py" 2>/dev/null && echo "  Test catalog data updated: $PROJECT_ROOT/docs/test-catalog-data.json" || echo "  Warning: Failed to generate test catalog data"
+catalog_opts=""
+if [ "$CTE_MODE" = true ]; then
+    catalog_opts="--cte"
+fi
+python3 "$SCRIPT_DIR/generate-test-catalog-data.py" $catalog_opts 2>/dev/null && echo "  Test catalog data updated: $PROJECT_ROOT/docs/test-catalog-data.json" || echo "  Warning: Failed to generate test catalog data"
 echo "  View test catalog: $PROJECT_ROOT/docs/test-catalog.html"
 
 # Exit with error if any tests failed

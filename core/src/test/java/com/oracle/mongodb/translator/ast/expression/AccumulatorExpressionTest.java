@@ -67,23 +67,90 @@ class AccumulatorExpressionTest {
   }
 
   @Test
-  void shouldRenderFirst() {
-    // $first uses MIN() in GROUP BY context because Oracle's FIRST_VALUE requires OVER clause
+  void shouldRenderFirstWithoutSortContext() {
+    // Without sort context, $first uses KEEP with ORDER BY _id to preserve document order
     var expr = AccumulatorExpression.first(FieldPathExpression.of("name"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MIN(data.name)");
+    assertThat(context.toSql())
+        .isEqualTo("MIN(data.name) KEEP (DENSE_RANK FIRST ORDER BY JSON_VALUE(data, '$._id'))");
   }
 
   @Test
-  void shouldRenderLast() {
-    // $last uses MAX() in GROUP BY context because Oracle's LAST_VALUE requires OVER clause
+  void shouldRenderLastWithoutSortContext() {
+    // Without sort context, $last uses KEEP FIRST with ORDER BY _id DESC to get highest _id
     var expr = AccumulatorExpression.last(FieldPathExpression.of("name"));
 
     expr.render(context);
 
-    assertThat(context.toSql()).isEqualTo("MAX(data.name)");
+    assertThat(context.toSql())
+        .isEqualTo(
+            "MIN(data.name) KEEP (DENSE_RANK FIRST ORDER BY JSON_VALUE(data, '$._id') DESC)");
+  }
+
+  @Test
+  void shouldRenderFirstWithSortContext() {
+    // With sort context, $first uses KEEP (DENSE_RANK FIRST ORDER BY ...) syntax
+    var sortFields =
+        java.util.List.of(
+            new com.oracle.mongodb.translator.ast.stage.SortStage.SortField(
+                FieldPathExpression.of("salary", JsonReturnType.NUMBER),
+                com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection.DESC));
+    context.setGroupSortContext(sortFields);
+
+    var expr = AccumulatorExpression.first(FieldPathExpression.of("name"));
+
+    expr.render(context);
+
+    assertThat(context.toSql())
+        .isEqualTo(
+            "MIN(data.name) KEEP (DENSE_RANK FIRST ORDER BY "
+                + "JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC)");
+  }
+
+  @Test
+  void shouldRenderLastWithSortContext() {
+    // With sort context, $last uses KEEP (DENSE_RANK LAST ORDER BY ...) syntax
+    var sortFields =
+        java.util.List.of(
+            new com.oracle.mongodb.translator.ast.stage.SortStage.SortField(
+                FieldPathExpression.of("salary", JsonReturnType.NUMBER),
+                com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection.DESC));
+    context.setGroupSortContext(sortFields);
+
+    var expr = AccumulatorExpression.last(FieldPathExpression.of("name"));
+
+    expr.render(context);
+
+    assertThat(context.toSql())
+        .isEqualTo(
+            "MIN(data.name) KEEP (DENSE_RANK LAST ORDER BY "
+                + "JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC)");
+  }
+
+  @Test
+  void shouldRenderFirstWithMultipleSortFields() {
+    // $first with multiple sort fields
+    var sortFields =
+        java.util.List.of(
+            new com.oracle.mongodb.translator.ast.stage.SortStage.SortField(
+                FieldPathExpression.of("department"),
+                com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection.ASC),
+            new com.oracle.mongodb.translator.ast.stage.SortStage.SortField(
+                FieldPathExpression.of("salary", JsonReturnType.NUMBER),
+                com.oracle.mongodb.translator.ast.stage.SortStage.SortDirection.DESC));
+    context.setGroupSortContext(sortFields);
+
+    var expr = AccumulatorExpression.first(FieldPathExpression.of("name"));
+
+    expr.render(context);
+
+    assertThat(context.toSql())
+        .isEqualTo(
+            "MIN(data.name) KEEP (DENSE_RANK FIRST ORDER BY "
+                + "JSON_VALUE(data, '$.department' RETURNING NUMBER), "
+                + "JSON_VALUE(data, '$.salary' RETURNING NUMBER) DESC)");
   }
 
   @Test

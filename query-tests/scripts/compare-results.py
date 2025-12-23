@@ -32,6 +32,24 @@ import sys
 import argparse
 
 
+def normalize_date_string(s):
+    """
+    Normalize a date string to a consistent format.
+    Handles variations like:
+    - "2024-07-12T16:00:00Z"
+    - "2024-07-12T16:00:00.000Z"
+    - "2024-07-12T16:00:00.000000Z"
+    Returns a normalized ISO date string without milliseconds.
+    """
+    import re
+    # Match ISO 8601 date pattern
+    # Pattern: YYYY-MM-DDTHH:MM:SS(.sss...)?Z
+    match = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?Z?$', s)
+    if match:
+        return match.group(1) + 'Z'
+    return s
+
+
 def normalize_value(v, strict_types=True):
     """
     Normalize values for comparison (handle numeric precision, None, etc.)
@@ -49,6 +67,9 @@ def normalize_value(v, strict_types=True):
         # Round to 6 decimal places for comparison
         return round(float(v), 6)
     if isinstance(v, str):
+        # Check if it looks like a date string first
+        if 'T' in v and (v.endswith('Z') or '+' in v[-6:]):
+            return normalize_date_string(v)
         if strict_types:
             # STRICT: Keep strings as strings - don't coerce to numbers
             # This catches type mismatches like "10" vs 10
@@ -61,6 +82,11 @@ def normalize_value(v, strict_types=True):
             except (ValueError, TypeError):
                 return v.strip() if v else v
     if isinstance(v, dict):
+        # Check for MongoDB Extended JSON date format: {"$date": "..."}
+        if len(v) == 1 and '$date' in v:
+            date_val = v['$date']
+            if isinstance(date_val, str):
+                return normalize_date_string(date_val)
         return normalize_doc(v, strict_types)
     if isinstance(v, list):
         return [normalize_value(x, strict_types) for x in v]
