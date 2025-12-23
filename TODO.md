@@ -1,7 +1,7 @@
 # TODO - MongoDB to Oracle SQL Translator
 
 This file tracks improvements, enhancements, and features discovered during development.
-Last updated: 2025-12-17
+Last updated: 2025-12-23
 
 ---
 
@@ -329,17 +329,19 @@ All math operators were previously implemented.
 
 ---
 
-## Stub/Incomplete Implementations
+## Completed Implementations (Formerly Stub/Incomplete)
 
-- [ ] **$graphLookup Recursive Depth Support** (discovered: 2025-12-05)
-  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/PipelineRenderer.java:1026-1187`
-  - Issue: Oracle 23ai does not support CTEs inside LATERAL that reference outer columns (ORA-00904)
-  - Issue: PRIOR keyword does not work with JSON dot notation (ORA-19200)
-  - Current: Returns stub SQL with empty result set for recursive cases (maxDepth > 0)
-  - Skipped Tests:
-    - `query-tests/tests/test-cases.json` - GRAPHLOOKUP002 (recursive hierarchy traversal)
-    - `PipelineRendererTest.java` - 7 tests with @Disabled annotation
-  - Potential Solution: Requires JSON_VALUE usage (loses type information) or future Oracle features
+- [x] **$graphLookup Recursive Depth Support** (completed: 2025-12-23)
+  - File: `core/src/main/java/com/oracle/mongodb/translator/generator/CteBasedPipelineRenderer.java:617-726`
+  - Implementation: Recursive CTE approach with three specialized cases:
+    - `GRAPHLOOKUP_PATHS`: Recursive CTE with `UNION ALL` for depth traversal
+    - `GRAPHLOOKUP_AGG`: Aggregation CTE to collect results per start_id
+    - `GRAPHLOOKUP_JOIN`: Join CTE to merge results back to source documents
+  - Supports: `maxDepth`, `depthField`, `restrictSearchWithMatch`
+  - Tests passing:
+    - GRAPHLOOKUP001: maxDepth=0 with restrictSearchWithMatch (1 doc strict match)
+    - GRAPHLOOKUP002: maxDepth=3 recursive hierarchy (10 docs strict match)
+    - COMPLEX017: maxDepth=5 employee hierarchy with team metrics (1 doc strict match)
 
 ---
 
