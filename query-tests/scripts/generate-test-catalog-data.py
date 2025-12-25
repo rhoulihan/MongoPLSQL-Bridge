@@ -227,15 +227,17 @@ def load_query_test_results() -> dict:
         with open(TEST_RESULTS_FILE, 'r') as f:
             data = json.load(f)
             for result in data.get('results', []):
-                # Store all fields including mongodb_results and oracle_results
+                # Store all fields including mongodb_results, oracle_results, explain plan, and typeMatch
                 results[result['id']] = {
                     'id': result.get('id'),
                     'status': result.get('status'),
                     'matchType': result.get('matchType', ''),
+                    'typeMatch': result.get('typeMatch', ''),  # EJSON type comparison result
                     'mongodb_count': result.get('mongodb_count', 'N/A'),
                     'oracle_count': result.get('oracle_count', 'N/A'),
                     'mongodb_results': result.get('mongodb_results'),
-                    'oracle_results': result.get('oracle_results')
+                    'oracle_results': result.get('oracle_results'),
+                    'oracle_explain': result.get('oracle_explain', '')  # Oracle execution plan
                 }
     except Exception as e:
         print(f"Warning: Could not load test results: {e}", file=sys.stderr)
@@ -473,6 +475,7 @@ def process_query_tests(run_queries: bool = False) -> tuple:
 
             "status": result.get('status', 'N/A'),
             "matchType": result.get('matchType', ''),
+            "typeMatch": result.get('typeMatch', ''),  # EJSON type comparison: pass, fail, error, skipped
             "mongodbCount": result.get('mongodb_count', 'N/A'),
             "oracleCount": result.get('oracle_count', 'N/A'),
             "expectedCount": test.get('expected_count', 0),
@@ -480,7 +483,8 @@ def process_query_tests(run_queries: bool = False) -> tuple:
             "sortBy": test.get('sort_by', '_id'),
 
             "mongodbResults": mongo_results if mongo_results else None,
-            "oracleResults": oracle_results if oracle_results else None
+            "oracleResults": oracle_results if oracle_results else None,
+            "oracleExplain": result.get('oracle_explain', '')  # Oracle execution plan
         }
 
         tests.append(test_entry)
@@ -570,6 +574,7 @@ def process_large_scale_tests(run_queries: bool = False) -> tuple:
 
             "mongodbResults": mongo_results,
             "oracleResults": oracle_results,
+            "oracleExplain": "",  # Not captured for large-scale tests currently
             "mongodbTime": result.get('mongodb', {}).get('time', 0) if result else 0,
             "oracleTime": result.get('oracle', {}).get('time', 0) if result else 0
         }

@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-23
+**Last Updated:** 2025-12-25
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -81,7 +81,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation with restrictSearchWithMatch |
 | IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
 | IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
-| IMPL-048 | Integration Test Suite | ✅ Done | 191 cross-validation tests (176 strict matches, native JSON type) |
+| IMPL-048 | Integration Test Suite | ✅ Done | 191 cross-validation tests (182 strict matches, native JSON type, explain plans) |
 | IMPL-049 | Type Conversion Operators | ✅ Done | $type, $toInt, $toString, $toDouble, $toBool, $toDate |
 | IMPL-050 | $redact Stage | ✅ Done | Document-level filtering with $$PRUNE/$$KEEP/$$DESCEND |
 | IMPL-051 | $sample Stage | ✅ Done | Random sampling with DBMS_RANDOM.VALUE |
@@ -294,7 +294,7 @@ generator/dialect/
 
 **Unit Tests:** 1,622 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 191 tests (176 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 191 tests (182 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
 All tests passing: ✅ Yes (191/191)
@@ -597,6 +597,12 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 **Improvements Applied (2025-12-23):**
 - **Inline View Wrapper for Type Preservation**: Extended inline view wrapper pattern to `$bucket` and `$redact` stages. Oracle's parser requires CTE references to be wrapped in inline views (`FROM (SELECT * FROM "CTE") q`) to enable dot notation (`q."DATA".field`) for type-preserving field access. This ensures numbers, booleans, and other JSON types are preserved throughout the pipeline rather than being converted to VARCHAR2 by JSON_VALUE.
 - **Dot Notation for BUCKET/REDACT**: Both `$bucket` CASE expressions and `$redact` WHERE clauses now use dot notation for field access, matching the pattern used in other stages like `$group`, `$sort`, and `$lookup`.
+
+**Improvements Applied (2025-12-25):**
+- **Oracle Explain Plan Generation**: Test harness now captures Oracle explain plans for each query using DBMS_XPLAN.DISPLAY. Plans are stored in test results and displayed in a new third tab in the test catalog for query optimization analysis.
+- **$graphLookup Type Preservation Fix**: Fixed JSON_VALUE usage in recursive CTEs by introducing a `connect_from_val` column to store the connectFromField value. This avoids JSON_VALUE on recursive CTE self-references, preserving type fidelity for numbers, booleans, and other JSON types.
+- **Oracle Functional Indexes**: Added TYPE(STRICT) functional indexes on commonly queried JSON fields (status, amount, category, region, department, salary, active, price) across SALES, EMPLOYEES, PRODUCTS, and EVENTS tables. This improves query performance for predicates using JSON dot notation.
+- **Test Catalog Enhancements**: Added third tab for explain plan display, improved CSS styling for explain output, and automatic explain plan capture during test execution.
 
 ## Next Steps
 

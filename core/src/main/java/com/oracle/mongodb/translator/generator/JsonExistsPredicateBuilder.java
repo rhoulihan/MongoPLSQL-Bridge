@@ -15,6 +15,7 @@ import com.oracle.mongodb.translator.ast.expression.InExpression;
 import com.oracle.mongodb.translator.ast.expression.LiteralExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalExpression;
 import com.oracle.mongodb.translator.ast.expression.LogicalOp;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 
 /**
@@ -39,6 +40,9 @@ public final class JsonExistsPredicateBuilder {
   private final SqlGenerationContext ctx;
   private final java.util.List<Object> bindValues = new java.util.ArrayList<>();
 
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification = "ctx is intentionally shared with caller for building SQL")
   public JsonExistsPredicateBuilder(SqlGenerationContext ctx) {
     this.ctx = ctx;
   }

@@ -2,7 +2,7 @@ plugins {
     id("java-library")
     id("jacoco")
     id("checkstyle")
-    id("com.github.spotbugs") version "6.0.0" apply false
+    id("com.github.spotbugs") version "6.1.2" apply false
     id("org.owasp.dependencycheck") version "12.1.0" apply false
 }
 

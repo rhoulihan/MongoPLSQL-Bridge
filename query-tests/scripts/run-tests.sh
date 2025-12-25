@@ -114,7 +114,7 @@ echo "" >> "$REPORT_FILE"
 echo '{"timestamp": "'$(date -Iseconds)'", "results": [' > "$JSON_REPORT_FILE"
 FIRST_RESULT=true
 
-# Function to run MongoDB query
+# Function to run MongoDB query (relaxed JSON for value comparison)
 # Uses EJSON.parse to properly convert Extended JSON ($date, $oid, etc.) to native BSON types
 # Uses EJSON.stringify with relaxed mode to normalize output for comparison with Oracle results
 run_mongodb_query() {
@@ -127,6 +127,58 @@ run_mongodb_query() {
     docker exec mongo-translator-mongodb mongosh --quiet testdb \
         -u admin -p admin123 --authenticationDatabase admin \
         --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
+}
+
+# Function to run MongoDB query with EJSON output (Extended JSON for type comparison)
+# Uses EJSON.stringify WITHOUT relaxed mode to preserve type information
+run_mongodb_query_ejson() {
+    local collection="$1"
+    local pipeline="$2"
+
+    # Escape single quotes in pipeline for shell embedding
+    local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
+
+    docker exec mongo-translator-mongodb mongosh --quiet testdb \
+        -u admin -p admin123 --authenticationDatabase admin \
+        --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray())" 2>/dev/null
+}
+
+# Function to convert MongoDB EJSON to Oracle's EJSON format
+# Uses Oracle's JSON_SERIALIZE(JSON(text extended) returning clob extended)
+convert_mongo_ejson_to_oracle() {
+    local ejson_array="$1"
+
+    # Oracle can only process one document at a time, so we use a PL/SQL block
+    # to parse and re-serialize each document
+    docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
+SET SERVEROUTPUT ON SIZE UNLIMITED
+SET LINESIZE 32767
+SET PAGESIZE 0
+SET FEEDBACK OFF
+SET HEADING OFF
+DECLARE
+    v_json_array  JSON_ARRAY_T;
+    v_doc         JSON_OBJECT_T;
+    v_result      CLOB;
+BEGIN
+    v_json_array := JSON_ARRAY_T.PARSE('${ejson_array}');
+    DBMS_OUTPUT.PUT('[');
+    FOR i IN 0 .. v_json_array.get_size - 1 LOOP
+        IF i > 0 THEN
+            DBMS_OUTPUT.PUT(',');
+        END IF;
+        v_doc := TREAT(v_json_array.get(i) AS JSON_OBJECT_T);
+        SELECT JSON_SERIALIZE(JSON(v_doc.to_clob EXTENDED) RETURNING CLOB EXTENDED)
+        INTO v_result
+        FROM dual;
+        DBMS_OUTPUT.PUT(v_result);
+    END LOOP;
+    DBMS_OUTPUT.PUT_LINE(']');
+END;
+/
+EXIT;
+EOSQL" 2>/dev/null | grep -v "^PL/SQL" | grep -v "^$" | tr -d '\n'
 }
 
 # Function to wrap SQL to return JSON array using Oracle's JSON_ARRAYAGG
@@ -207,6 +259,52 @@ EOSQL" 2>/dev/null)
     fi
 }
 
+# Function to run Oracle query and return EJSON (Extended JSON with type info)
+# Uses JSON_SERIALIZE with EXTENDED option to preserve type encodings
+run_oracle_query_ejson() {
+    local sql="$1"
+
+    # Modify the SQL to wrap results in JSON_SERIALIZE with EXTENDED
+    # The translator already produces JSON_ARRAYAGG output, so we just need
+    # to add the EXTENDED serialization
+    local ejson_sql
+
+    # For CTE-based queries, we need to wrap the final SELECT with JSON_SERIALIZE
+    # Pattern: WITH ... ) SELECT JSON_ARRAYAGG("DATA" RETURNING CLOB) FROM "QN"
+    # The translator always generates JSON_ARRAYAGG("DATA" RETURNING CLOB), so use literal match
+    if [[ "$sql" =~ ^[[:space:]]*WITH[[:space:]] ]] || [[ "$sql" =~ ^[[:space:]]*SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
+        # Wrap JSON_ARRAYAGG with JSON_SERIALIZE to get Extended JSON output
+        ejson_sql=$(echo "${sql%;}" | sed 's/JSON_ARRAYAGG("DATA" RETURNING CLOB)/JSON_SERIALIZE(JSON_ARRAYAGG("DATA" RETURNING CLOB) RETURNING CLOB EXTENDED)/')
+    else
+        # Non-aggregated SQL - wrap entire result
+        local inner_sql="${sql%;}"
+        ejson_sql="SELECT JSON_SERIALIZE(JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING JSON) RETURNING CLOB EXTENDED) FROM (${inner_sql})"
+    fi
+
+    local result
+    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
+SET PAGESIZE 0
+SET LINESIZE 32767
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING OFF
+SET LONG 10000000
+SET LONGCHUNKSIZE 10000000
+${ejson_sql};
+EXIT;
+EOSQL" 2>/dev/null)
+
+    local cleaned
+    cleaned=$(echo "$result" | tr -d '\n\r' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    if [ -z "$cleaned" ] || [ "$cleaned" = "null" ]; then
+        echo "[]"
+    else
+        echo "$cleaned"
+    fi
+}
+
 # Function to run Oracle count query (counts actual rows)
 run_oracle_count() {
     local sql="$1"
@@ -222,6 +320,43 @@ SET HEADING OFF
 SELECT COUNT(*) FROM (${sql});
 EXIT;
 EOSQL" 2>/dev/null | grep -v "^$" | head -1 | tr -d ' \t'
+}
+
+# Function to generate Oracle EXPLAIN PLAN for a query
+# Returns the execution plan as formatted text
+run_oracle_explain_plan() {
+    local sql="$1"
+    local plan_id="plan_$$_$RANDOM"
+
+    # Clean up the SQL - remove trailing semicolon if present
+    local clean_sql="${sql%;}"
+
+    local result
+    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
+SET DEFINE OFF
+SET PAGESIZE 1000
+SET LINESIZE 200
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING ON
+
+-- Generate explain plan with unique statement ID
+EXPLAIN PLAN SET STATEMENT_ID = '${plan_id}' FOR
+${clean_sql};
+
+-- Display the plan with full details
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY('PLAN_TABLE', '${plan_id}', 'ALL'));
+
+-- Clean up plan table entry
+DELETE FROM PLAN_TABLE WHERE STATEMENT_ID = '${plan_id}';
+COMMIT;
+
+EXIT;
+EOSQL" 2>/dev/null)
+
+    # Return the plan output, preserving formatting
+    echo "$result"
 }
 
 # Function to generate Oracle SQL using the translator
@@ -365,7 +500,7 @@ PYTHON
         else
             echo "," >> "$JSON_REPORT_FILE"
         fi
-        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": []}" >> "$JSON_REPORT_FILE"
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"typeMatch\": \"skipped\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": [], \"oracle_explain\": \"\"}" >> "$JSON_REPORT_FILE"
         continue
     fi
 
@@ -386,7 +521,7 @@ PYTHON
         else
             echo "," >> "$JSON_REPORT_FILE"
         fi
-        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": []}" >> "$JSON_REPORT_FILE"
+        echo "{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"SKIP\", \"matchType\": \"\", \"typeMatch\": \"skipped\", \"mongodb_count\": \"N/A\", \"oracle_count\": \"N/A\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": [], \"oracle_results\": [], \"oracle_explain\": \"\"}" >> "$JSON_REPORT_FILE"
         continue
     fi
     TEST_SQL="$GENERATED_SQL"
@@ -399,27 +534,34 @@ PYTHON
     ORACLE_JSON=$(run_oracle_query_json "$TEST_SQL" 2>&1) || ORACLE_JSON="[]"
     ORACLE_COUNT=$(echo "$ORACLE_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "ERROR")
 
+    # Generate explain plan for Oracle query
+    ORACLE_EXPLAIN=$(run_oracle_explain_plan "$TEST_SQL" 2>&1) || ORACLE_EXPLAIN="Explain plan not available"
+
     # Determine result
     STATUS=""
     DETAILS=""
     COMPARE_RESULT=""
     MATCH_TYPE=""
+    TYPE_MATCH=""  # New EJSON type match indicator
 
     if [ "$MONGO_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
         MATCH_TYPE="none"
+        TYPE_MATCH="error"
         DETAILS="MongoDB query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
     elif [ "$ORACLE_COUNT" = "ERROR" ]; then
         STATUS="ERROR"
         MATCH_TYPE="none"
+        TYPE_MATCH="error"
         DETAILS="Oracle query failed"
         ERROR_TESTS=$((ERROR_TESTS + 1))
         echo -e "${RED}ERROR${NC}"
     elif [ "$MONGO_COUNT" != "$ORACLE_COUNT" ]; then
         STATUS="FAIL"
         MATCH_TYPE="none"
+        TYPE_MATCH="skipped"
         DETAILS="Count mismatch: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT, Expected=$TEST_EXPECTED"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         echo -e "${RED}FAIL${NC} (count: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT)"
@@ -436,22 +578,24 @@ PYTHON
             MATCH_TYPE="strict"
             DETAILS="Documents match (strict): MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
             PASSED_TESTS=$((PASSED_TESTS + 1))
-            echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, strict match)"
+            echo -n -e "${GREEN}PASS${NC} (strict"
         elif [[ "$COMPARE_RESULT" == LOOSE_MATCH* ]]; then
             STATUS="PASS"
             MATCH_TYPE="loose"
             DETAILS="Documents match (loose): MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT"
             PASSED_TESTS=$((PASSED_TESTS + 1))
-            echo -e "${YELLOW}PASS${NC} (count: $MONGO_COUNT, loose match)"
+            echo -n -e "${YELLOW}PASS${NC} (loose"
         elif [[ "$COMPARE_RESULT" == *MISMATCH* ]]; then
             STATUS="FAIL"
             MATCH_TYPE="none"
+            TYPE_MATCH="skipped"
             DETAILS="Document mismatch: $COMPARE_RESULT (counts: $MONGO_COUNT)"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             echo -e "${RED}FAIL${NC} (count: $MONGO_COUNT, $COMPARE_RESULT)"
         else
             # Comparison error - fall back to count comparison
             MATCH_TYPE="unknown"
+            TYPE_MATCH="error"
             if [ "$MONGO_COUNT" = "$TEST_EXPECTED" ]; then
                 STATUS="PASS"
                 DETAILS="MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (comparison: $COMPARE_RESULT)"
@@ -462,6 +606,38 @@ PYTHON
                 DETAILS="Counts match: MongoDB=$MONGO_COUNT, Oracle=$ORACLE_COUNT (expected $TEST_EXPECTED)"
                 PASSED_TESTS=$((PASSED_TESTS + 1))
                 echo -e "${GREEN}PASS${NC} (count: $MONGO_COUNT, expected: $TEST_EXPECTED)"
+            fi
+        fi
+
+        # Run EJSON type comparison if value comparison passed
+        if [ "$STATUS" = "PASS" ] && [ "$TYPE_MATCH" != "skipped" ] && [ "$TYPE_MATCH" != "error" ]; then
+            # Get EJSON from MongoDB (with type encodings preserved)
+            MONGO_EJSON=$(run_mongodb_query_ejson "$TEST_COLLECTION" "$TEST_PIPELINE" 2>&1) || MONGO_EJSON="[]"
+
+            # Get EJSON from Oracle (with type encodings)
+            ORACLE_EJSON=$(run_oracle_query_ejson "$TEST_SQL" 2>&1) || ORACLE_EJSON="[]"
+
+            # Compare EJSON types using temp file (avoids WSL pipe issues)
+            ejson_tmp=$(mktemp /tmp/ejson-compare-XXXXXX.json)
+            printf '%s\n' "{\"mongo\": $MONGO_EJSON, \"oracle\": $ORACLE_EJSON}" > "$ejson_tmp"
+            EJSON_COMPARE=$(python3 "$SCRIPT_DIR/compare-ejson.py" --stdin < "$ejson_tmp" 2>&1) || EJSON_COMPARE="ERROR"
+            rm -f "$ejson_tmp"
+
+            if [[ "$EJSON_COMPARE" == EJSON_MATCH* ]]; then
+                TYPE_MATCH="pass"
+                echo -e ", ${GREEN}types:pass${NC})"
+            elif [[ "$EJSON_COMPARE" == EJSON_MISMATCH* ]]; then
+                TYPE_MATCH="fail"
+                echo -e ", ${RED}types:fail${NC})"
+                if [ "$VERBOSE" = true ]; then
+                    echo "    EJSON mismatch: $EJSON_COMPARE"
+                fi
+            else
+                TYPE_MATCH="error"
+                echo -e ", ${YELLOW}types:error${NC})"
+                if [ "$VERBOSE" = true ]; then
+                    echo "    EJSON comparison error: $EJSON_COMPARE"
+                fi
             fi
         fi
     fi
@@ -476,9 +652,12 @@ PYTHON
     # Add to JSON report - escape special characters in results for valid JSON
     MONGO_RESULT_ESCAPED=$(echo "$MONGO_RESULT" | python3 -c 'import sys,json; print(json.dumps(json.loads(sys.stdin.read())))' 2>/dev/null || echo "[]")
     ORACLE_JSON_ESCAPED=$(echo "$ORACLE_JSON" | python3 -c 'import sys,json; print(json.dumps(json.loads(sys.stdin.read())))' 2>/dev/null || echo "[]")
+    # Escape explain plan as a JSON string (preserving newlines and special chars)
+    ORACLE_EXPLAIN_ESCAPED=$(echo "$ORACLE_EXPLAIN" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""')
 
     # Write comma prefix and JSON in single operation to avoid race conditions
-    JSON_ENTRY="{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"matchType\": \"$MATCH_TYPE\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": $MONGO_RESULT_ESCAPED, \"oracle_results\": $ORACLE_JSON_ESCAPED}"
+    # Include typeMatch indicator for EJSON type comparison results and explain plan
+    JSON_ENTRY="{\"id\": \"$TEST_ID\", \"name\": \"$TEST_NAME\", \"category\": \"$TEST_CATEGORY\", \"status\": \"$STATUS\", \"matchType\": \"$MATCH_TYPE\", \"typeMatch\": \"$TYPE_MATCH\", \"mongodb_count\": \"$MONGO_COUNT\", \"oracle_count\": \"$ORACLE_COUNT\", \"expected_count\": \"$TEST_EXPECTED\", \"mongodb_results\": $MONGO_RESULT_ESCAPED, \"oracle_results\": $ORACLE_JSON_ESCAPED, \"oracle_explain\": $ORACLE_EXPLAIN_ESCAPED}"
     if [ "$FIRST_RESULT" = true ]; then
         FIRST_RESULT=false
         echo "$JSON_ENTRY" >> "$JSON_REPORT_FILE"

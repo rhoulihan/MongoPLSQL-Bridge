@@ -349,11 +349,10 @@ class CteBasedPipelineRendererTest {
   }
 
   @Test
-  void shouldRenderGroupWithMinMaxUsingReturningNumber() {
+  void shouldRenderGroupWithMinMaxUsingDotNotation() {
     // MongoDB: [{$group: {_id: "$category", minPrice: {$min: "$price"},
     //           maxPrice: {$max: "$price"}}}]
-    // MIN/MAX on numeric fields should use RETURNING NUMBER for proper
-    // numeric comparison and output
+    // MIN/MAX should use dot notation for type preservation (numbers, strings, dates)
     var idExpr = FieldPathExpression.of("category");
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("minPrice",
@@ -366,12 +365,11 @@ class CteBasedPipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    // Should use RETURNING NUMBER for MIN/MAX to ensure proper numeric
-    // comparison and type preservation
+    // Should use dot notation for MIN/MAX to preserve native JSON types
     String sql = context.toSql();
     assertThat(sql)
-        .contains("MIN(JSON_VALUE(\"DATA\", '$.price' RETURNING NUMBER))")
-        .contains("MAX(JSON_VALUE(\"DATA\", '$.price' RETURNING NUMBER))");
+        .contains("MIN(q.\"DATA\".price)")
+        .contains("MAX(q.\"DATA\".price)");
   }
 
   @Test
@@ -538,14 +536,14 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
     String sql = context.toSql();
 
-    // Should produce CTE with json_transform SET using JSON_VALUE with .size()
+    // Should produce CTE with json_transform SET using PATH syntax for .size()
+    // PATH '$.field.size()' is type-preserving within json_transform context
     assertThat(sql)
         .contains("\"Q2\"")
         .contains("json_transform")
         .contains("SET")
         .contains("'$.\"itemCount\"'")
-        .contains("JSON_VALUE")
-        .contains("$.items.size()")
+        .contains("PATH '$.items.size()'")
         .doesNotContain("= NULL");
   }
 

@@ -12,13 +12,13 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 79% instruction coverage and 191 passing cross-database validation tests (179 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity.
+**Phase 4 Complete** - All operators implemented with 79% instruction coverage and 191 passing cross-database validation tests (182 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity, with Oracle explain plan generation and functional indexing for query optimization.
 
 | Metric | Value |
 |--------|-------|
 | Unit Tests | 1,665 |
 | Cross-DB Validation | 191 |
-| Strict Matches | 179 |
+| Strict Matches | 182 |
 | Large-Scale Tests | 10 |
 | Instruction Coverage | 79% |
 | Branch Coverage | 67% |
@@ -228,11 +228,12 @@ Open [docs/test-catalog.html](docs/test-catalog.html) in a browser for an intera
 - Searchable/filterable test list
 - Category tabs for quick navigation
 - MongoDB pipeline and generated SQL for each test
+- **Oracle explain plans** for query optimization analysis (third tab)
 - Side-by-side comparison of MongoDB vs Oracle results
 - Match type summary KPIs (Strict Match, Loose Match, Mismatch)
 - Live test execution (requires Docker containers running)
 
-> **Note:** The test catalog data is automatically regenerated after each test run via `docs/test-catalog-data.json`.
+> **Note:** The test catalog data is automatically regenerated after each test run via `docs/test-catalog-data.json`. Explain plans are captured automatically during test execution.
 
 ### Test Coverage Report
 
