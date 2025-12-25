@@ -603,6 +603,11 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 - **$graphLookup Type Preservation Fix**: Fixed JSON_VALUE usage in recursive CTEs by introducing a `connect_from_val` column to store the connectFromField value. This avoids JSON_VALUE on recursive CTE self-references, preserving type fidelity for numbers, booleans, and other JSON types.
 - **Oracle Functional Indexes**: Added TYPE(STRICT) functional indexes on commonly queried JSON fields (status, amount, category, region, department, salary, active, price) across SALES, EMPLOYEES, PRODUCTS, and EVENTS tables. This improves query performance for predicates using JSON dot notation.
 - **Test Catalog Enhancements**: Added third tab for explain plan display, improved CSS styling for explain output, and automatic explain plan capture during test execution.
+- **EJSON Type Comparison Script**: Added `compare-ejson.py` for type-aware comparison of MongoDB and Oracle results during cross-database validation. Root cause analysis of type differences identified:
+  - **Floating-point precision (4 tests)**: IEEE 754 differences (e.g., `119.99000000000001` vs `119.99`) - Fixed via 6-decimal normalization
+  - **Missing field vs null (2 tests)**: MongoDB omits null fields, Oracle includes explicit `null` - Fixed via null equivalence
+  - **Array ordering (6 tests)**: `$push`/`$addToSet` don't guarantee order in either database - Expected behavior
+  - **Semantic differences (2 tests)**: Different results in `$graphLookup`/pipeline `$lookup` - Under investigation
 
 ## Next Steps
 

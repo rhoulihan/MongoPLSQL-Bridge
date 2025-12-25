@@ -325,6 +325,23 @@ For exact semantics, add a `$sort` stage before your `$group` to ensure consiste
 
 Oracle's JSON type distinguishes between SQL NULL (missing value) and JSON null (explicit null in document). The translator uses `JSON_SERIALIZE()` to properly detect JSON nulls in post-aggregation comparisons like `{$ne: ["$field", null]}`.
 
+### Cross-Database Type Comparison
+
+The test suite includes EJSON (Extended JSON) type comparison to verify type fidelity between MongoDB and Oracle results. Root cause analysis of type differences identified three categories:
+
+| Category | Count | Description | Status |
+|----------|-------|-------------|--------|
+| **Floating-point precision** | 4 | IEEE 754 differences (e.g., `119.99000000000001` vs `119.99`) | Fixed via 6-decimal normalization |
+| **Missing field vs null** | 2 | MongoDB omits null fields, Oracle includes explicit `null` | Fixed via null equivalence |
+| **Array ordering** | 6 | `$push`/`$addToSet` don't guarantee order in either database | Expected behavior |
+| **Semantic differences** | 2 | Different results in `$graphLookup`/pipeline `$lookup` | Under investigation |
+
+The EJSON comparison script (`query-tests/scripts/compare-ejson.py`) handles:
+- Floating-point normalization to 6 decimal places
+- Missing field ≡ null equivalence
+- Object key order canonicalization
+- Document sorting by `_id` for consistent comparison
+
 ## Requirements
 
 - Java 17 or higher
