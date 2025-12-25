@@ -12,6 +12,7 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.19.3")
     testImplementation("com.oracle.database.jdbc:ojdbc11:23.3.0.23.09")
     testImplementation("org.mongodb:bson:5.0.0")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.15.3")
 }
 
 tasks.test {

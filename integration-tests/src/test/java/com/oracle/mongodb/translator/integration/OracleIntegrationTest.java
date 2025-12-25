@@ -8,6 +8,8 @@ package com.oracle.mongodb.translator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.mongodb.translator.api.AggregationTranslator;
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import java.sql.Connection;
@@ -38,6 +40,8 @@ class OracleIntegrationTest {
           .withUsername("testuser")
           .withPassword("testpass")
           .withStartupTimeoutSeconds(300);
+
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   private Connection connection;
   private AggregationTranslator translator;
@@ -109,7 +113,7 @@ class OracleIntegrationTest {
   }
 
   @Test
-  void shouldTranslateAndExecuteLimitPipeline() throws SQLException {
+  void shouldTranslateAndExecuteLimitPipeline() throws Exception {
     var pipeline = List.of(Document.parse("{\"$limit\": 2}"));
 
     var result = translator.translate(pipeline);
@@ -117,17 +121,17 @@ class OracleIntegrationTest {
     try (PreparedStatement ps = connection.prepareStatement(result.sql());
         ResultSet rs = ps.executeQuery()) {
 
-      int count = 0;
-      while (rs.next()) {
-        count++;
-      }
-
-      assertThat(count).isEqualTo(2);
+      // CTE-based renderer returns a single row with JSON array
+      assertThat(rs.next()).isTrue();
+      String jsonArray = rs.getString(1);
+      JsonNode array = OBJECT_MAPPER.readTree(jsonArray);
+      assertThat(array.isArray()).isTrue();
+      assertThat(array.size()).isEqualTo(2);
     }
   }
 
   @Test
-  void shouldTranslateAndExecuteSkipPipeline() throws SQLException {
+  void shouldTranslateAndExecuteSkipPipeline() throws Exception {
     var pipeline = List.of(Document.parse("{\"$skip\": 1}"));
 
     var result = translator.translate(pipeline);
@@ -135,17 +139,17 @@ class OracleIntegrationTest {
     try (PreparedStatement ps = connection.prepareStatement(result.sql());
         ResultSet rs = ps.executeQuery()) {
 
-      int count = 0;
-      while (rs.next()) {
-        count++;
-      }
-
-      assertThat(count).isEqualTo(2); // 3 total - 1 skipped
+      // CTE-based renderer returns a single row with JSON array
+      assertThat(rs.next()).isTrue();
+      String jsonArray = rs.getString(1);
+      JsonNode array = OBJECT_MAPPER.readTree(jsonArray);
+      assertThat(array.isArray()).isTrue();
+      assertThat(array.size()).isEqualTo(2); // 3 total - 1 skipped
     }
   }
 
   @Test
-  void shouldTranslateAndExecuteSkipLimitPipeline() throws SQLException {
+  void shouldTranslateAndExecuteSkipLimitPipeline() throws Exception {
     var pipeline = List.of(Document.parse("{\"$skip\": 1}"), Document.parse("{\"$limit\": 1}"));
 
     var result = translator.translate(pipeline);
@@ -153,12 +157,12 @@ class OracleIntegrationTest {
     try (PreparedStatement ps = connection.prepareStatement(result.sql());
         ResultSet rs = ps.executeQuery()) {
 
-      int count = 0;
-      while (rs.next()) {
-        count++;
-      }
-
-      assertThat(count).isEqualTo(1);
+      // CTE-based renderer returns a single row with JSON array
+      assertThat(rs.next()).isTrue();
+      String jsonArray = rs.getString(1);
+      JsonNode array = OBJECT_MAPPER.readTree(jsonArray);
+      assertThat(array.isArray()).isTrue();
+      assertThat(array.size()).isEqualTo(1);
     }
   }
 
