@@ -56,7 +56,11 @@ java -jar core/build/libs/core-1.0.0-SNAPSHOT-all.jar [options] <input-file>
 | `--pretty` | `-p` | Pretty-print the SQL output | Off |
 | `--no-hints` | | Disable Oracle optimizer hints | Hints enabled |
 | `--strict` | | Fail on unsupported operators | Off (warn only) |
+| `--procedural` | | Force procedural SQL with temp tables | Off |
+| `--auto-procedural` | | Auto-detect complex queries (≥15 CTEs) | **On (default)** |
+| `--no-auto-procedural` | | Disable automatic procedural mode detection | |
 | `--data-column <name>` | | JSON data column name | `data` |
+| `--execute <file>` | `-x` | Execute SQL against Oracle using connection file | |
 | `--output <file>` | `-o` | Write output to file instead of stdout | stdout |
 | `--version` | `-v` | Show version information | |
 | `--help` | `-h` | Show help message | |
@@ -110,6 +114,47 @@ In strict mode, the CLI fails with an error if the pipeline contains unsupported
 
 ```bash
 ./mongo2sql --strict pipeline.json
+```
+
+#### `--procedural`
+
+Forces the translator to generate procedural SQL using temporary tables instead of a single CTE-based query. This is useful for very complex pipelines that may cause Oracle session crashes due to CTE nesting limits.
+
+```bash
+# Force procedural mode
+./mongo2sql --procedural pipeline.json
+```
+
+The procedural output creates temporary tables (`TMP_PIPE_*`) for each CTE and includes `IS JSON` constraints to enable Oracle dot notation access on the materialized data.
+
+#### `--auto-procedural` (default: enabled)
+
+Automatically detects complex queries that need procedural mode. When a query has 15 or more CTEs, the translator automatically switches to procedural mode to avoid Oracle session issues.
+
+```bash
+# Explicitly enable (already the default)
+./mongo2sql --auto-procedural pipeline.json
+
+# Disable automatic detection
+./mongo2sql --no-auto-procedural pipeline.json
+```
+
+#### `--execute, -x`
+
+Executes the generated SQL directly against an Oracle database using connection details from a JSON file.
+
+```bash
+# Execute against Oracle
+./mongo2sql --execute connection.json pipeline.json
+```
+
+**Connection File Format:**
+```json
+{
+  "jdbcUrl": "jdbc:oracle:thin:@localhost:1521/FREEPDB1",
+  "user": "translator",
+  "password": "translator123"
+}
 ```
 
 #### `--data-column`

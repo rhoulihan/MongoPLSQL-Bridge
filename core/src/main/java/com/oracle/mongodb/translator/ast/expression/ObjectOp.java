@@ -14,7 +14,8 @@ import java.util.Map;
 public enum ObjectOp {
   MERGE_OBJECTS("$mergeObjects"),
   OBJECT_TO_ARRAY("$objectToArray"),
-  ARRAY_TO_OBJECT("$arrayToObject");
+  ARRAY_TO_OBJECT("$arrayToObject"),
+  GET_FIELD("$getField");
 
   private static final Map<String, ObjectOp> MONGO_LOOKUP;
 
@@ -23,7 +24,8 @@ public enum ObjectOp {
         Map.ofEntries(
             Map.entry("$mergeObjects", MERGE_OBJECTS),
             Map.entry("$objectToArray", OBJECT_TO_ARRAY),
-            Map.entry("$arrayToObject", ARRAY_TO_OBJECT));
+            Map.entry("$arrayToObject", ARRAY_TO_OBJECT),
+            Map.entry("$getField", GET_FIELD));
   }
 
   private final String mongoOperator;

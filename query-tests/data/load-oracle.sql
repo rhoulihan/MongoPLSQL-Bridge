@@ -461,6 +461,110 @@ CREATE INDEX idx_orders_status ON orders(JSON_VALUE(data, '$.status'));
 COMMIT;
 
 -- ============================================================
+-- Create Commission Sales Table (for sales commission pipeline tests)
+-- ============================================================
+PROMPT Loading commission_sales table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE commission_sales CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE commission_sales (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO commission_sales (id, data) VALUES ('CS001', '{"_id": "CS001", "salesRepId": "SR001", "accountId": "ACC001", "amount": 75000, "saleDate": {"$date": "2024-10-15T10:00:00.000Z"}, "productCategory": "software", "dealType": "new", "contractTermMonths": 12}');
+INSERT INTO commission_sales (id, data) VALUES ('CS002', '{"_id": "CS002", "salesRepId": "SR001", "accountId": "ACC002", "amount": 125000, "saleDate": {"$date": "2024-11-05T14:30:00.000Z"}, "productCategory": "services", "dealType": "expansion", "contractTermMonths": 24}');
+INSERT INTO commission_sales (id, data) VALUES ('CS003', '{"_id": "CS003", "salesRepId": "SR002", "accountId": "ACC001", "amount": 50000, "saleDate": {"$date": "2024-10-20T09:00:00.000Z"}, "productCategory": "hardware", "dealType": "new", "contractTermMonths": 12}');
+INSERT INTO commission_sales (id, data) VALUES ('CS004', '{"_id": "CS004", "salesRepId": "SR002", "accountId": "ACC003", "amount": 200000, "saleDate": {"$date": "2024-11-10T11:00:00.000Z"}, "productCategory": "software", "dealType": "renewal", "contractTermMonths": 36}');
+INSERT INTO commission_sales (id, data) VALUES ('CS005', '{"_id": "CS005", "salesRepId": "SR003", "accountId": "ACC004", "amount": 80000, "saleDate": {"$date": "2024-10-25T16:00:00.000Z"}, "productCategory": "support", "dealType": "upsell", "contractTermMonths": 12}');
+INSERT INTO commission_sales (id, data) VALUES ('CS006', '{"_id": "CS006", "salesRepId": "SR001", "accountId": "ACC005", "amount": 300000, "saleDate": {"$date": "2024-12-01T10:00:00.000Z"}, "productCategory": "software", "dealType": "new", "contractTermMonths": 24}');
+
+PROMPT   Inserted 6 commission_sales records
+
+CREATE INDEX idx_csales_rep ON commission_sales(JSON_VALUE(data, '$.salesRepId'));
+CREATE INDEX idx_csales_account ON commission_sales(JSON_VALUE(data, '$.accountId'));
+
+-- ============================================================
+-- Create Sales Reps Table (for sales commission pipeline tests)
+-- ============================================================
+PROMPT Loading sales_reps table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE sales_reps CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE sales_reps (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO sales_reps (id, data) VALUES ('SR001', '{"_id": "SR001", "name": {"first": "Sarah", "last": "Johnson"}, "email": "sarah.johnson@company.com", "region": "AMER-WEST", "territory": "California", "tier": "principal", "hireDate": {"$date": "2020-03-15T00:00:00.000Z"}, "quota": {"quarterly": 400000, "annual": 1600000}, "managerId": null}');
+INSERT INTO sales_reps (id, data) VALUES ('SR002', '{"_id": "SR002", "name": {"first": "Mike", "last": "Chen"}, "email": "mike.chen@company.com", "region": "AMER-EAST", "territory": "New York", "tier": "senior", "hireDate": {"$date": "2021-06-01T00:00:00.000Z"}, "quota": {"quarterly": 300000, "annual": 1200000}, "managerId": "SR001"}');
+INSERT INTO sales_reps (id, data) VALUES ('SR003', '{"_id": "SR003", "name": {"first": "Emily", "last": "Brown"}, "email": "emily.brown@company.com", "region": "EMEA", "territory": "UK", "tier": "associate", "hireDate": {"$date": "2023-01-10T00:00:00.000Z"}, "quota": {"quarterly": 200000, "annual": 800000}, "managerId": "SR001"}');
+
+PROMPT   Inserted 3 sales_reps records
+
+CREATE INDEX idx_reps_region ON sales_reps(JSON_VALUE(data, '$.region'));
+
+-- ============================================================
+-- Create Commission Accounts Table (for sales commission pipeline tests)
+-- ============================================================
+PROMPT Loading commission_accounts table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE commission_accounts CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE commission_accounts (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO commission_accounts (id, data) VALUES ('ACC001', '{"_id": "ACC001", "name": "TechCorp Inc", "accountType": "enterprise", "industrySector": "technology", "industryVertical": "cloud", "arr": 500000, "employeeCount": 5000, "headquarters": {"country": "USA", "state": "CA", "city": "San Francisco"}}');
+INSERT INTO commission_accounts (id, data) VALUES ('ACC002', '{"_id": "ACC002", "name": "FinanceFirst Bank", "accountType": "enterprise", "industrySector": "financial_services", "industryVertical": "banking", "arr": 750000, "employeeCount": 10000, "headquarters": {"country": "USA", "state": "NY", "city": "New York"}}');
+INSERT INTO commission_accounts (id, data) VALUES ('ACC003', '{"_id": "ACC003", "name": "HealthPlus Medical", "accountType": "commercial", "industrySector": "healthcare", "industryVertical": "hospitals", "arr": 250000, "employeeCount": 2000, "headquarters": {"country": "USA", "state": "TX", "city": "Houston"}}');
+INSERT INTO commission_accounts (id, data) VALUES ('ACC004', '{"_id": "ACC004", "name": "RetailMax Stores", "accountType": "commercial", "industrySector": "retail", "industryVertical": "e-commerce", "arr": 150000, "employeeCount": 500, "headquarters": {"country": "UK", "state": null, "city": "London"}}');
+INSERT INTO commission_accounts (id, data) VALUES ('ACC005', '{"_id": "ACC005", "name": "MegaSoft Solutions", "accountType": "enterprise", "industrySector": "technology", "industryVertical": "software", "arr": 1000000, "employeeCount": 8000, "headquarters": {"country": "USA", "state": "WA", "city": "Seattle"}}');
+
+PROMPT   Inserted 5 commission_accounts records
+
+CREATE INDEX idx_acct_type ON commission_accounts(JSON_VALUE(data, '$.accountType'));
+CREATE INDEX idx_acct_sector ON commission_accounts(JSON_VALUE(data, '$.industrySector'));
+
+-- ============================================================
+-- Create Commission Schedule Table (for sales commission pipeline tests)
+-- ============================================================
+PROMPT Loading commission_schedule table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE commission_schedule CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE commission_schedule (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO commission_schedule (id, data) VALUES ('SCHED001', '{"_id": "SCHED001", "accountType": "enterprise", "effectiveDate": {"$date": "2024-01-01T00:00:00.000Z"}, "expirationDate": null, "tiers": [{"tierName": "base", "minVolume": 0, "maxVolume": 250000, "baseRate": 0.06, "accelerator": 1.0}, {"tierName": "achiever", "minVolume": 250000, "maxVolume": 500000, "baseRate": 0.08, "accelerator": 1.25}, {"tierName": "performer", "minVolume": 500000, "maxVolume": 1000000, "baseRate": 0.10, "accelerator": 1.5}, {"tierName": "elite", "minVolume": 1000000, "maxVolume": 999999999, "baseRate": 0.12, "accelerator": 2.0}], "productMultipliers": {"software": 1.0, "hardware": 0.6, "services": 1.2, "support": 0.5}, "dealTypeMultipliers": {"new": 1.0, "renewal": 0.5, "expansion": 0.8, "upsell": 0.9}}');
+INSERT INTO commission_schedule (id, data) VALUES ('SCHED002', '{"_id": "SCHED002", "accountType": "commercial", "effectiveDate": {"$date": "2024-01-01T00:00:00.000Z"}, "expirationDate": null, "tiers": [{"tierName": "base", "minVolume": 0, "maxVolume": 100000, "baseRate": 0.07, "accelerator": 1.0}, {"tierName": "achiever", "minVolume": 100000, "maxVolume": 250000, "baseRate": 0.09, "accelerator": 1.25}, {"tierName": "performer", "minVolume": 250000, "maxVolume": 500000, "baseRate": 0.11, "accelerator": 1.5}, {"tierName": "elite", "minVolume": 500000, "maxVolume": 999999999, "baseRate": 0.13, "accelerator": 2.0}], "productMultipliers": {"software": 1.0, "hardware": 0.6, "services": 1.2, "support": 0.5}, "dealTypeMultipliers": {"new": 1.0, "renewal": 0.5, "expansion": 0.8, "upsell": 0.9}}');
+
+PROMPT   Inserted 2 commission_schedule records
+
+CREATE INDEX idx_sched_type ON commission_schedule(JSON_VALUE(data, '$.accountType'));
+
+COMMIT;
+
+-- ============================================================
 -- Summary
 -- ============================================================
 PROMPT
@@ -483,7 +587,15 @@ SELECT 'inventory', COUNT(*) FROM inventory
 UNION ALL
 SELECT 'org_chart', COUNT(*) FROM org_chart
 UNION ALL
-SELECT 'orders', COUNT(*) FROM orders;
+SELECT 'orders', COUNT(*) FROM orders
+UNION ALL
+SELECT 'commission_sales', COUNT(*) FROM commission_sales
+UNION ALL
+SELECT 'sales_reps', COUNT(*) FROM sales_reps
+UNION ALL
+SELECT 'commission_accounts', COUNT(*) FROM commission_accounts
+UNION ALL
+SELECT 'commission_schedule', COUNT(*) FROM commission_schedule;
 
 PROMPT ============================================================
 

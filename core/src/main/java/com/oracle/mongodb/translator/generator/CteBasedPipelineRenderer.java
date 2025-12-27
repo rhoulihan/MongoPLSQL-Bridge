@@ -54,6 +54,7 @@ import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.Stage;
 import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
 import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +106,9 @@ public final class CteBasedPipelineRenderer {
    * When true, we can use PATH 'expr' syntax for type-preserving operations like .size()
    * instead of JSON_VALUE which would require type coercion.
    */
+  @SuppressFBWarnings(
+      value = "URF_UNREAD_FIELD",
+      justification = "Field is set but read logic will be added for JSON_TRANSFORM optimization")
   private boolean inJsonTransformSet = false;
 
   public CteBasedPipelineRenderer(OracleConfiguration config) {
@@ -1173,13 +1177,39 @@ public final class CteBasedPipelineRenderer {
       Expression left = comp.getLeft();
       Expression right = comp.getRight();
 
-      // Render left side (inner table field reference)
-      renderLookupMatchField(ctx, left, letVars, unwindPath, false);
+      // Check if right side is null literal - use IS NULL / IS NOT NULL
+      boolean rightIsNull = right instanceof LiteralExpression lit && lit.getValue() == null;
 
-      ctx.sql(" = ");
+      if (rightIsNull) {
+        // Special handling for null comparison
+        renderLookupMatchField(ctx, left, letVars, unwindPath, false);
+        if (comp.getOp() == ComparisonOp.EQ) {
+          ctx.sql(" IS NULL");
+        } else if (comp.getOp() == ComparisonOp.NE) {
+          ctx.sql(" IS NOT NULL");
+        } else {
+          // Other comparisons with null don't make sense, render as always false
+          ctx.sql(" IS NULL AND 1=0");
+        }
+      } else {
+        // Render left side (inner table field reference)
+        renderLookupMatchField(ctx, left, letVars, unwindPath, false);
 
-      // Render right side (may be a $$variable reference)
-      renderLookupMatchField(ctx, right, letVars, unwindPath, true);
+        // Use the appropriate SQL operator based on the comparison type
+        String sqlOp = switch (comp.getOp()) {
+          case EQ -> " = ";
+          case NE -> " <> ";
+          case LT -> " < ";
+          case LTE -> " <= ";
+          case GT -> " > ";
+          case GTE -> " >= ";
+          default -> " = ";
+        };
+        ctx.sql(sqlOp);
+
+        // Render right side (may be a $$variable reference)
+        renderLookupMatchField(ctx, right, letVars, unwindPath, true);
+      }
     } else if (filter instanceof InExpression inExpr) {
       // Handle $in / $nin
       Expression field = inExpr.getField();
@@ -1498,7 +1528,59 @@ public final class CteBasedPipelineRenderer {
       case MERGE_OBJECTS -> renderMergeObjects(ctx, objExpr);
       case OBJECT_TO_ARRAY -> renderObjectToArray(ctx, objExpr);
       case ARRAY_TO_OBJECT -> renderArrayToObject(ctx, objExpr);
+      case GET_FIELD -> renderGetField(ctx, objExpr);
       default -> ctx.sql("NULL");
+    }
+  }
+
+  /**
+   * Renders $getField operator in CTE mode.
+   * MongoDB: {$getField: {field: "name", input: "$customer"}} or dynamic field
+   * Oracle: Uses JSON_VALUE with path or dynamic path construction
+   */
+  private void renderGetField(SqlGenerationContext ctx, ObjectExpression objExpr) {
+    List<Expression> args = objExpr.getAdditionalArgs();
+    Expression inputExpr = objExpr.getInputExpression();
+
+    if (args == null || args.isEmpty()) {
+      ctx.sql("NULL");
+      return;
+    }
+
+    Expression fieldExpr = args.get(0);
+
+    if (fieldExpr instanceof LiteralExpression lit && lit.getValue() instanceof String fieldName) {
+      // Static field name - use simple JSON_VALUE
+      ctx.sql("JSON_VALUE(");
+      if (inputExpr instanceof FieldPathExpression fieldPath) {
+        ctx.sql("\"DATA\", '$.");
+        ctx.sql(fieldPath.getPath());
+        ctx.sql(".");
+        ctx.sql(fieldName);
+        ctx.sql("')");
+      } else {
+        renderExpressionValue(ctx, inputExpr);
+        ctx.sql(", '$.");
+        ctx.sql(fieldName);
+        ctx.sql("')");
+      }
+    } else if (fieldExpr instanceof FieldPathExpression dynamicField) {
+      // Dynamic field name - the field name comes from another field in the document
+      // Use PL/SQL function for dynamic JSON path construction
+      String inputPath = (inputExpr instanceof FieldPathExpression fp) ? fp.getPath() : null;
+      String keyPath = dynamicField.getPath();
+
+      if (inputPath != null) {
+        // Call PL/SQL helper function: get_dynamic_json_field(doc, object_path, key_path)
+        // Returns JSON type to preserve numbers, booleans, etc.
+        ctx.sql("get_dynamic_json_field(\"DATA\", '$." + inputPath + "', '$." + keyPath + "')");
+      } else {
+        // Fallback when input is not a simple field path
+        ctx.sql("NULL /* dynamic $getField with complex input not supported */");
+      }
+    } else {
+      // Fallback for other expression types
+      ctx.sql("NULL");
     }
   }
 
@@ -1672,6 +1754,14 @@ public final class CteBasedPipelineRenderer {
         ctx.sql(", ");
         renderExpressionValue(ctx, defaultExpr);
         ctx.sql(")");
+      } else if (isNumberLiteral(defaultExpr) && valueExpr instanceof ObjectExpression objExpr
+          && objExpr.getOp() == ObjectOp.GET_FIELD) {
+        // $getField with number default: PL/SQL function returns JSON, wrap default
+        ctx.sql("COALESCE(");
+        renderObjectExpression(ctx, objExpr);
+        ctx.sql(", JSON('");
+        ctx.sql(String.valueOf(((LiteralExpression) defaultExpr).getValue()));
+        ctx.sql("'))");
       } else {
         // General case
         ctx.sql("COALESCE(");
@@ -1682,14 +1772,58 @@ public final class CteBasedPipelineRenderer {
       }
     } else {
       // $cond: CASE WHEN condition THEN thenValue ELSE elseValue END
+      // Must ensure type consistency between THEN and ELSE branches
+      final Expression thenExpr = condExpr.getThenExpr();
+      final Expression elseExpr = condExpr.getElseExpr();
+      final boolean thenReturnsJson = returnsJsonType(thenExpr);
+      final boolean elseReturnsJson = returnsJsonType(elseExpr);
+      final boolean thenIsNumericLiteral = isNumberLiteral(thenExpr);
+      final boolean elseIsNumericLiteral = isNumberLiteral(elseExpr);
+
       ctx.sql("CASE WHEN ");
       renderConditionExpression(ctx, condExpr.getCondition());
       ctx.sql(" THEN ");
-      renderExpressionValue(ctx, condExpr.getThenExpr());
-      ctx.sql(" ELSE ");
-      renderExpressionValue(ctx, condExpr.getElseExpr());
+
+      if (thenReturnsJson && elseIsNumericLiteral) {
+        // THEN returns JSON_QUERY (VARCHAR2), ELSE is numeric - use string literal
+        renderExpressionValue(ctx, thenExpr);
+        ctx.sql(" ELSE '");
+        ctx.sql(String.valueOf(((LiteralExpression) elseExpr).getValue()));
+        ctx.sql("'");
+      } else if (elseReturnsJson && thenIsNumericLiteral) {
+        // ELSE returns JSON_QUERY (VARCHAR2), THEN is numeric - use string literal
+        ctx.sql("'");
+        ctx.sql(String.valueOf(((LiteralExpression) thenExpr).getValue()));
+        ctx.sql("' ELSE ");
+        renderExpressionValue(ctx, elseExpr);
+      } else {
+        // No type mismatch or both same type
+        renderExpressionValue(ctx, thenExpr);
+        ctx.sql(" ELSE ");
+        renderExpressionValue(ctx, elseExpr);
+      }
       ctx.sql(" END");
     }
+  }
+
+  /**
+   * Checks if an expression returns a JSON type (vs. a scalar type).
+   * Used for ensuring CASE branch type consistency.
+   */
+  private boolean returnsJsonType(Expression expr) {
+    // Field paths return JSON_QUERY which produces JSON/CLOB
+    if (expr instanceof FieldPathExpression) {
+      return true;
+    }
+    // Nested conditionals may return JSON
+    if (expr instanceof ConditionalExpression condExpr) {
+      return returnsJsonType(condExpr.getThenExpr()) || returnsJsonType(condExpr.getElseExpr());
+    }
+    // $getField returns JSON
+    if (expr instanceof ObjectExpression objExpr && objExpr.getOp() == ObjectOp.GET_FIELD) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1990,10 +2124,12 @@ public final class CteBasedPipelineRenderer {
   /**
    * Renders an accumulator argument that needs numeric output.
    * Handles FieldPath, Literal, Arithmetic, ArrayExpression ($size), ConditionalExpression.
+   * Uses dot notation for type-preserving access - Oracle handles numeric conversion naturally.
    */
   private void renderNumericAccumulatorArg(SqlGenerationContext ctx, Expression arg) {
     if (arg instanceof FieldPathExpression fp) {
-      ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + "' RETURNING NUMBER)");
+      // Use dot notation for type-preserving access (no CAST - let Oracle handle naturally)
+      ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fp.getPath()));
     } else if (arg instanceof LiteralExpression lit) {
       // $sum: 1 case
       Object val = lit.getValue();
@@ -2005,10 +2141,10 @@ public final class CteBasedPipelineRenderer {
     } else if (arg instanceof ArithmeticExpression arith) {
       renderArithmeticExpression(ctx, arith);
     } else if (arg instanceof ArrayExpression arrayExpr && arrayExpr.getOp() == ArrayOp.SIZE) {
-      // $sum: {$size: "$events"} - use .size() JSON path function
+      // $sum: {$size: "$events"} - use .size() JSON path function (requires JSON_VALUE)
       Expression sizeArg = arrayExpr.getArrayExpression();
       if (sizeArg instanceof FieldPathExpression fp) {
-        ctx.sql("JSON_VALUE(\"DATA\", '$." + fp.getPath() + ".size()' RETURNING NUMBER)");
+        ctx.sql("JSON_VALUE(q.\"DATA\", '$." + fp.getPath() + ".size()' RETURNING NUMBER)");
       } else {
         ctx.sql("NULL");
       }
@@ -2163,8 +2299,15 @@ public final class CteBasedPipelineRenderer {
 
   /**
    * Renders a ConditionalExpression as a CASE expression for accumulator arguments.
+   * For $ifNull, uses NVL with proper type casting to handle JSON/scalar type mismatch.
    */
   private void renderConditionalAsValue(SqlGenerationContext ctx, ConditionalExpression condExpr) {
+    // Handle $ifNull specially - use NVL with type casting
+    if (condExpr.getType() == ConditionalExpression.ConditionalType.IF_NULL) {
+      renderIfNullAsValue(ctx, condExpr);
+      return;
+    }
+
     ctx.sql("CASE WHEN ");
     Expression condition = condExpr.getCondition();
     // Handle various condition types for $cond inside accumulators
@@ -2208,6 +2351,40 @@ public final class CteBasedPipelineRenderer {
     ctx.sql(" ELSE ");
     renderNumericAccumulatorArg(ctx, condExpr.getElseExpr());
     ctx.sql(" END");
+  }
+
+  /**
+   * Renders an $ifNull expression as NVL for accumulator arguments.
+   * Handles type compatibility between JSON fields and scalar defaults.
+   * For $ifNull: ["$field", default], the thenExpr is the field, elseExpr is the default.
+   */
+  private void renderIfNullAsValue(SqlGenerationContext ctx, ConditionalExpression condExpr) {
+    Expression fieldExpr = condExpr.getThenExpr();
+    Expression defaultExpr = condExpr.getElseExpr();
+
+    ctx.sql("NVL(");
+
+    // For type compatibility in NVL, cast JSON field to match the default's type
+    if (defaultExpr instanceof LiteralExpression lit) {
+      Object defaultVal = lit.getValue();
+      if (defaultVal instanceof Number && fieldExpr instanceof FieldPathExpression fp) {
+        // Cast JSON field to NUMBER to match numeric default
+        ctx.sql("CAST(q.\"DATA\"." + quoteDotNotationPath(fp.getPath()) + " AS NUMBER)");
+      } else if (defaultVal instanceof String && fieldExpr instanceof FieldPathExpression fp) {
+        // Cast JSON field to VARCHAR2 to match string default
+        ctx.sql("CAST(q.\"DATA\"." + quoteDotNotationPath(fp.getPath()) + " AS VARCHAR2(4000))");
+      } else {
+        // Other cases - render field directly
+        renderNumericAccumulatorArg(ctx, fieldExpr);
+      }
+    } else {
+      // Non-literal default - render field directly
+      renderNumericAccumulatorArg(ctx, fieldExpr);
+    }
+
+    ctx.sql(", ");
+    renderNumericAccumulatorArg(ctx, defaultExpr);
+    ctx.sql(")");
   }
 
   /**
@@ -2918,15 +3095,10 @@ public final class CteBasedPipelineRenderer {
     Expression indexExpr = arrayExpr.getIndexExpression();
 
     if (op == ArrayOp.SIZE) {
+      // Always use JSON_VALUE with RETURNING NUMBER for $size
+      // PATH syntax only works directly in json_transform SET, not inside nested JSON_OBJECT
       if (arrayInput instanceof FieldPathExpression fieldPath) {
-        if (inJsonTransformSet) {
-          // Inside json_transform SET: use PATH syntax for type preservation
-          // PATH '$.field.size()' returns number directly without JSON_VALUE
-          ctx.sql("PATH '$." + fieldPath.getPath() + ".size()'");
-        } else {
-          // Outside json_transform: use JSON_VALUE with RETURNING NUMBER
-          ctx.sql("JSON_VALUE(\"DATA\", '$." + fieldPath.getPath() + ".size()' RETURNING NUMBER)");
-        }
+        ctx.sql("JSON_VALUE(\"DATA\", '$." + fieldPath.getPath() + ".size()' RETURNING NUMBER)");
       } else {
         // $size on an expression - delegate to expression render
         ctx.sql("JSON_VALUE(");

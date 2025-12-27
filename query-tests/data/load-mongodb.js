@@ -387,6 +387,234 @@ db.orders.createIndex({status: 1});
 // Summary
 // ============================================================
 print('');
+// ============================================================
+// Commission Sales Collection (for sales commission pipeline tests)
+// ============================================================
+print('Loading commission_sales collection...');
+db.commission_sales.drop();
+
+db.commission_sales.insertMany([
+  {
+    _id: "CS001",
+    salesRepId: "SR001",
+    accountId: "ACC001",
+    amount: 75000,
+    saleDate: new Date("2024-10-15T10:00:00.000Z"),
+    productCategory: "software",
+    dealType: "new",
+    contractTermMonths: 12
+  },
+  {
+    _id: "CS002",
+    salesRepId: "SR001",
+    accountId: "ACC002",
+    amount: 125000,
+    saleDate: new Date("2024-11-05T14:30:00.000Z"),
+    productCategory: "services",
+    dealType: "expansion",
+    contractTermMonths: 24
+  },
+  {
+    _id: "CS003",
+    salesRepId: "SR002",
+    accountId: "ACC001",
+    amount: 50000,
+    saleDate: new Date("2024-10-20T09:00:00.000Z"),
+    productCategory: "hardware",
+    dealType: "new",
+    contractTermMonths: 12
+  },
+  {
+    _id: "CS004",
+    salesRepId: "SR002",
+    accountId: "ACC003",
+    amount: 200000,
+    saleDate: new Date("2024-11-10T11:00:00.000Z"),
+    productCategory: "software",
+    dealType: "renewal",
+    contractTermMonths: 36
+  },
+  {
+    _id: "CS005",
+    salesRepId: "SR003",
+    accountId: "ACC004",
+    amount: 80000,
+    saleDate: new Date("2024-10-25T16:00:00.000Z"),
+    productCategory: "support",
+    dealType: "upsell",
+    contractTermMonths: 12
+  },
+  {
+    _id: "CS006",
+    salesRepId: "SR001",
+    accountId: "ACC005",
+    amount: 300000,
+    saleDate: new Date("2024-12-01T10:00:00.000Z"),
+    productCategory: "software",
+    dealType: "new",
+    contractTermMonths: 24
+  }
+]);
+
+print('  Inserted ' + db.commission_sales.countDocuments() + ' commission_sales documents');
+
+db.commission_sales.createIndex({salesRepId: 1, saleDate: 1});
+db.commission_sales.createIndex({accountId: 1});
+
+// ============================================================
+// Sales Reps Collection (for sales commission pipeline tests)
+// ============================================================
+print('Loading sales_reps collection...');
+db.sales_reps.drop();
+
+db.sales_reps.insertMany([
+  {
+    _id: "SR001",
+    name: {first: "Sarah", last: "Johnson"},
+    email: "sarah.johnson@company.com",
+    region: "AMER-WEST",
+    territory: "California",
+    tier: "principal",
+    hireDate: new Date("2020-03-15T00:00:00.000Z"),
+    quota: {quarterly: 400000, annual: 1600000},
+    managerId: null
+  },
+  {
+    _id: "SR002",
+    name: {first: "Mike", last: "Chen"},
+    email: "mike.chen@company.com",
+    region: "AMER-EAST",
+    territory: "New York",
+    tier: "senior",
+    hireDate: new Date("2021-06-01T00:00:00.000Z"),
+    quota: {quarterly: 300000, annual: 1200000},
+    managerId: "SR001"
+  },
+  {
+    _id: "SR003",
+    name: {first: "Emily", last: "Brown"},
+    email: "emily.brown@company.com",
+    region: "EMEA",
+    territory: "UK",
+    tier: "associate",
+    hireDate: new Date("2023-01-10T00:00:00.000Z"),
+    quota: {quarterly: 200000, annual: 800000},
+    managerId: "SR001"
+  }
+]);
+
+print('  Inserted ' + db.sales_reps.countDocuments() + ' sales_reps documents');
+
+db.sales_reps.createIndex({region: 1});
+
+// ============================================================
+// Accounts Collection (for sales commission pipeline tests)
+// ============================================================
+print('Loading commission_accounts collection...');
+db.commission_accounts.drop();
+
+db.commission_accounts.insertMany([
+  {
+    _id: "ACC001",
+    name: "TechCorp Inc",
+    accountType: "enterprise",
+    industrySector: "technology",
+    industryVertical: "cloud",
+    arr: 500000,
+    employeeCount: 5000,
+    headquarters: {country: "USA", state: "CA", city: "San Francisco"}
+  },
+  {
+    _id: "ACC002",
+    name: "FinanceFirst Bank",
+    accountType: "enterprise",
+    industrySector: "financial_services",
+    industryVertical: "banking",
+    arr: 750000,
+    employeeCount: 10000,
+    headquarters: {country: "USA", state: "NY", city: "New York"}
+  },
+  {
+    _id: "ACC003",
+    name: "HealthPlus Medical",
+    accountType: "commercial",
+    industrySector: "healthcare",
+    industryVertical: "hospitals",
+    arr: 250000,
+    employeeCount: 2000,
+    headquarters: {country: "USA", state: "TX", city: "Houston"}
+  },
+  {
+    _id: "ACC004",
+    name: "RetailMax Stores",
+    accountType: "commercial",
+    industrySector: "retail",
+    industryVertical: "e-commerce",
+    arr: 150000,
+    employeeCount: 500,
+    headquarters: {country: "UK", state: null, city: "London"}
+  },
+  {
+    _id: "ACC005",
+    name: "MegaSoft Solutions",
+    accountType: "enterprise",
+    industrySector: "technology",
+    industryVertical: "software",
+    arr: 1000000,
+    employeeCount: 8000,
+    headquarters: {country: "USA", state: "WA", city: "Seattle"}
+  }
+]);
+
+print('  Inserted ' + db.commission_accounts.countDocuments() + ' commission_accounts documents');
+
+db.commission_accounts.createIndex({accountType: 1, industrySector: 1});
+
+// ============================================================
+// Commission Schedule Collection (for sales commission pipeline tests)
+// ============================================================
+print('Loading commission_schedule collection...');
+db.commission_schedule.drop();
+
+db.commission_schedule.insertMany([
+  {
+    _id: "SCHED001",
+    accountType: "enterprise",
+    effectiveDate: new Date("2024-01-01T00:00:00.000Z"),
+    expirationDate: null,
+    tiers: [
+      {tierName: "base", minVolume: 0, maxVolume: 250000, baseRate: 0.06, accelerator: 1.0},
+      {tierName: "achiever", minVolume: 250000, maxVolume: 500000, baseRate: 0.08, accelerator: 1.25},
+      {tierName: "performer", minVolume: 500000, maxVolume: 1000000, baseRate: 0.10, accelerator: 1.5},
+      {tierName: "elite", minVolume: 1000000, maxVolume: 999999999, baseRate: 0.12, accelerator: 2.0}
+    ],
+    productMultipliers: {software: 1.0, hardware: 0.6, services: 1.2, support: 0.5},
+    dealTypeMultipliers: {new: 1.0, renewal: 0.5, expansion: 0.8, upsell: 0.9}
+  },
+  {
+    _id: "SCHED002",
+    accountType: "commercial",
+    effectiveDate: new Date("2024-01-01T00:00:00.000Z"),
+    expirationDate: null,
+    tiers: [
+      {tierName: "base", minVolume: 0, maxVolume: 100000, baseRate: 0.07, accelerator: 1.0},
+      {tierName: "achiever", minVolume: 100000, maxVolume: 250000, baseRate: 0.09, accelerator: 1.25},
+      {tierName: "performer", minVolume: 250000, maxVolume: 500000, baseRate: 0.11, accelerator: 1.5},
+      {tierName: "elite", minVolume: 500000, maxVolume: 999999999, baseRate: 0.13, accelerator: 2.0}
+    ],
+    productMultipliers: {software: 1.0, hardware: 0.6, services: 1.2, support: 0.5},
+    dealTypeMultipliers: {new: 1.0, renewal: 0.5, expansion: 0.8, upsell: 0.9}
+  }
+]);
+
+print('  Inserted ' + db.commission_schedule.countDocuments() + ' commission_schedule documents');
+
+db.commission_schedule.createIndex({accountType: 1, effectiveDate: -1});
+
+// ============================================================
+// Summary
+// ============================================================
+print('');
 print('============================================================');
 print('  MongoDB Test Data Load Complete');
 print('============================================================');
@@ -399,4 +627,8 @@ print('    - events: ' + db.events.countDocuments() + ' documents');
 print('    - inventory: ' + db.inventory.countDocuments() + ' documents');
 print('    - org_chart: ' + db.org_chart.countDocuments() + ' documents');
 print('    - orders: ' + db.orders.countDocuments() + ' documents');
+print('    - commission_sales: ' + db.commission_sales.countDocuments() + ' documents');
+print('    - sales_reps: ' + db.sales_reps.countDocuments() + ' documents');
+print('    - commission_accounts: ' + db.commission_accounts.countDocuments() + ' documents');
+print('    - commission_schedule: ' + db.commission_schedule.countDocuments() + ' documents');
 print('============================================================');

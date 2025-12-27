@@ -127,11 +127,63 @@ class ObjectExpressionTest {
     assertThat(expr.getOp()).isEqualTo(ObjectOp.ARRAY_TO_OBJECT);
   }
 
+  // $getField tests
+
+  @Test
+  void shouldRenderGetFieldWithLiteralFieldName() {
+    // MongoDB: {$getField: {field: "name", input: "$customer"}}
+    // Oracle: JSON_VALUE(customer, '$.name')
+    var expr =
+        ObjectExpression.getField(
+            LiteralExpression.of("name"), FieldPathExpression.of("customer"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_VALUE");
+    assertThat(sql).contains("customer");
+    assertThat(sql).contains("name");
+  }
+
+  @Test
+  void shouldRenderGetFieldWithDynamicFieldName() {
+    // MongoDB: {$getField: {field: "$productCategory", input: "$schedule.productMultipliers"}}
+    // Oracle: needs to dynamically access field based on productCategory value
+    var expr =
+        ObjectExpression.getField(
+            FieldPathExpression.of("productCategory"),
+            FieldPathExpression.of("schedule.productMultipliers"));
+
+    expr.render(context);
+
+    String sql = context.toSql();
+    // Should reference both the field name source and the input object
+    assertThat(sql).contains("productCategory");
+    assertThat(sql).contains("schedule");
+    assertThat(sql).contains("productMultipliers");
+  }
+
+  @Test
+  void shouldReturnGetFieldOp() {
+    var expr =
+        ObjectExpression.getField(
+            LiteralExpression.of("field"), FieldPathExpression.of("obj"));
+    assertThat(expr.getOp()).isEqualTo(ObjectOp.GET_FIELD);
+  }
+
   // toString tests
 
   @Test
   void shouldProvideReadableToString() {
     var expr = ObjectExpression.mergeObjects(List.of(FieldPathExpression.of("obj")));
     assertThat(expr.toString()).contains("$mergeObjects");
+  }
+
+  @Test
+  void shouldProvideReadableToStringForGetField() {
+    var expr =
+        ObjectExpression.getField(
+            LiteralExpression.of("name"), FieldPathExpression.of("customer"));
+    assertThat(expr.toString()).contains("$getField");
   }
 }

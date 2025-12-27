@@ -986,8 +986,486 @@ public final class ArrayExpression implements Expression {
       return;
     }
 
+    // Detect tier selection pattern: {$cond: [condition, "$$this", "$$value"]}
+    // This pattern finds the first array element matching a condition
+    if (inExpr instanceof ConditionalExpression condExpr
+        && condExpr.getType() == ConditionalExpression.ConditionalType.COND) {
+      Expression thenExpr = condExpr.getThenExpr();
+      Expression elseExpr = condExpr.getElseExpr();
+
+      // Check for pattern: $cond[condition, $$this, $$value]
+      if (isThisReference(thenExpr) && isValueReference(elseExpr)) {
+        renderFindFirstMatchingPattern(ctx, path, condExpr.getCondition());
+        return;
+      }
+    }
+
+    // Detect object construction pattern with conditional sums:
+    // {$reduce: {input: ..., initialValue: {a: 0, b: 0}, in: {a: {$add: [...]}, ...}}}
+    if (inExpr instanceof InlineObjectExpression objExpr) {
+      if (renderReduceObjectConstruction(ctx, path, objExpr)) {
+        return;
+      }
+    }
+
+    // Detect $setUnion flatten pattern: {$reduce: {in: {$setUnion: ["$$value", "$$this"]}}}
+    if (inExpr instanceof ArrayExpression arrayInExpr
+        && arrayInExpr.getOp() == ArrayOp.SET_UNION) {
+      List<Expression> args = arrayInExpr.getAdditionalArgs();
+      if (args != null && args.size() >= 2
+          && isValueReference(args.get(0)) && isThisReference(args.get(1))) {
+        // Flatten nested arrays with deduplication
+        renderSetUnionFlatten(ctx, path);
+        return;
+      }
+    }
+
     // For other patterns, render a descriptive placeholder
     ctx.sql("/* $reduce with custom expression not supported */ NULL");
+  }
+
+  /**
+   * Checks if an expression is a $$this reference.
+   */
+  private boolean isThisReference(Expression expr) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      return "$this".equals(exprPath) || "$$this".equals(exprPath);
+    }
+    return false;
+  }
+
+  /**
+   * Checks if an expression is a $$value reference.
+   */
+  private boolean isValueReference(Expression expr) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      return "$value".equals(exprPath) || "$$value".equals(exprPath);
+    }
+    return false;
+  }
+
+  /**
+   * Renders the "find first matching" pattern for $reduce.
+   * Pattern: {$reduce: {in: {$cond: [condition, $$this, $$value]}}}
+   * Translates to: (SELECT tier_data FROM JSON_TABLE(...) WHERE condition FETCH FIRST 1 ROW ONLY)
+   */
+  private void renderFindFirstMatchingPattern(
+      SqlGenerationContext ctx, String arrayPath, Expression condition) {
+    // Collect all $$this.field references used in the condition
+    java.util.Set<String> thisFields = new java.util.LinkedHashSet<>();
+    collectThisFieldReferencesFromCondition(condition, thisFields);
+
+    // Collect outer document field references (non-$$this fields)
+    java.util.Set<String> outerFields = new java.util.LinkedHashSet<>();
+    collectOuterFieldReferences(condition, outerFields);
+
+    ctx.sql("(SELECT jt.tier_data FROM JSON_TABLE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
+    ctx.sql(arrayPath);
+    ctx.sql("[*]' COLUMNS (");
+
+    // Generate columns for $$this fields
+    boolean first = true;
+    for (String field : thisFields) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      ctx.sql("jt_");
+      ctx.sql(field);
+      ctx.sql(" NUMBER PATH '$.");
+      ctx.sql(field);
+      ctx.sql("'");
+      first = false;
+    }
+
+    // Add the full element as JSON for return
+    if (!first) {
+      ctx.sql(", ");
+    }
+    ctx.sql("tier_data JSON PATH '$'");
+    ctx.sql(")) jt WHERE ");
+
+    // Render the condition with proper field references
+    renderReduceCondition(ctx, condition, outerFields);
+    ctx.sql(" FETCH FIRST 1 ROW ONLY)");
+  }
+
+  /**
+   * Collects $$this.field references from a condition expression.
+   */
+  private void collectThisFieldReferencesFromCondition(
+      Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        fields.add(exprPath.substring(6));
+      }
+    } else if (expr instanceof LogicalExpression logical) {
+      for (Expression operand : logical.getOperands()) {
+        collectThisFieldReferencesFromCondition(operand, fields);
+      }
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectThisFieldReferencesFromCondition(comp.getLeft(), fields);
+      collectThisFieldReferencesFromCondition(comp.getRight(), fields);
+    }
+  }
+
+  /**
+   * Collects outer document field references (non-$$this, non-$$value fields).
+   */
+  private void collectOuterFieldReferences(Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && !exprPath.startsWith("$this") && !exprPath.startsWith("$value")) {
+        fields.add(exprPath);
+      }
+    } else if (expr instanceof LogicalExpression logical) {
+      for (Expression operand : logical.getOperands()) {
+        collectOuterFieldReferences(operand, fields);
+      }
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectOuterFieldReferences(comp.getLeft(), fields);
+      collectOuterFieldReferences(comp.getRight(), fields);
+    }
+  }
+
+  /**
+   * Renders a condition expression for use in $reduce WHERE clause.
+   * Translates $$this.field to jt_field and outer fields to q."DATA".field.
+   */
+  private void renderReduceCondition(
+      SqlGenerationContext ctx, Expression condition, java.util.Set<String> outerFields) {
+    if (condition instanceof LogicalExpression logical) {
+      LogicalOp op = logical.getOp();
+      List<Expression> operands = logical.getOperands();
+
+      if (op == LogicalOp.AND) {
+        ctx.sql("(");
+        for (int i = 0; i < operands.size(); i++) {
+          if (i > 0) {
+            ctx.sql(" AND ");
+          }
+          renderReduceCondition(ctx, operands.get(i), outerFields);
+        }
+        ctx.sql(")");
+      } else if (op == LogicalOp.OR) {
+        ctx.sql("(");
+        for (int i = 0; i < operands.size(); i++) {
+          if (i > 0) {
+            ctx.sql(" OR ");
+          }
+          renderReduceCondition(ctx, operands.get(i), outerFields);
+        }
+        ctx.sql(")");
+      }
+    } else if (condition instanceof ComparisonExpression comp) {
+      renderReduceComparisonOperand(ctx, comp.getLeft(), outerFields);
+      ctx.sql(" ");
+      ctx.sql(getSqlComparisonOp(comp.getOp()));
+      ctx.sql(" ");
+      renderReduceComparisonOperand(ctx, comp.getRight(), outerFields);
+    }
+  }
+
+  /**
+   * Renders a comparison operand for $reduce condition.
+   */
+  private void renderReduceComparisonOperand(
+      SqlGenerationContext ctx, Expression expr, java.util.Set<String> outerFields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        // $$this.field -> jt_field column reference
+        ctx.sql("jt.jt_");
+        ctx.sql(exprPath.substring(6));
+      } else if (exprPath != null && outerFields.contains(exprPath)) {
+        // Outer document field -> q."DATA".field
+        ctx.sql("q.\"DATA\".");
+        ctx.sql(exprPath);
+      } else {
+        // Other field reference
+        ctx.sql("q.\"DATA\".");
+        ctx.sql(exprPath != null ? exprPath : "");
+      }
+    } else if (expr instanceof LiteralExpression lit) {
+      Object value = lit.getValue();
+      if (value instanceof String) {
+        ctx.sql("'");
+        ctx.sql(((String) value).replace("'", "''"));
+        ctx.sql("'");
+      } else if (value instanceof Number) {
+        ctx.sql(String.valueOf(value));
+      } else if (value == null) {
+        ctx.sql("NULL");
+      } else {
+        ctx.sql(String.valueOf(value));
+      }
+    }
+  }
+
+  /**
+   * Gets the SQL comparison operator for a ComparisonOp.
+   */
+  private String getSqlComparisonOp(ComparisonOp op) {
+    return switch (op) {
+      case EQ -> "=";
+      case NE -> "!=";
+      case GT -> ">";
+      case GTE -> ">=";
+      case LT -> "<";
+      case LTE -> "<=";
+      default -> "=";
+    };
+  }
+
+  /**
+   * Renders the object construction pattern for $reduce.
+   * Pattern: {in: {field1: {$add: [$$value.field1, ...]}, field2: ...}}
+   * Returns true if successfully rendered.
+   */
+  private boolean renderReduceObjectConstruction(
+      SqlGenerationContext ctx, String arrayPath, InlineObjectExpression objExpr) {
+    java.util.Map<String, Expression> fields = objExpr.getFields();
+
+    // Check if all fields follow the pattern {$add: ["$$value.field", conditional]}
+    java.util.List<String> fieldNames = new java.util.ArrayList<>(fields.keySet());
+    java.util.List<Expression> conditions = new java.util.ArrayList<>();
+
+    for (String fieldName : fieldNames) {
+      Expression fieldExpr = fields.get(fieldName);
+      if (!(fieldExpr instanceof ArithmeticExpression arith)
+          || arith.getOp() != ArithmeticOp.ADD) {
+        return false;
+      }
+
+      List<Expression> operands = arith.getOperands();
+      if (operands.size() != 2) {
+        return false;
+      }
+
+      // Check for $$value.fieldName pattern
+      Expression valueRef = operands.get(0);
+      if (!(valueRef instanceof FieldPathExpression fp)
+          || !("$value." + fieldName).equals(fp.getPath())) {
+        return false;
+      }
+
+      conditions.add(operands.get(1));
+    }
+
+    // All fields match the pattern - generate aggregate subquery
+    ctx.sql("JSON_OBJECT(");
+    for (int i = 0; i < fieldNames.size(); i++) {
+      if (i > 0) {
+        ctx.sql(", ");
+      }
+      final String fieldName = fieldNames.get(i);
+      final Expression condExpr = conditions.get(i);
+
+      ctx.sql("'");
+      ctx.sql(fieldName);
+      ctx.sql("' VALUE (SELECT NVL(SUM(");
+
+      // Render the conditional sum expression
+      renderReduceConditionalSum(ctx, condExpr, arrayPath);
+
+      ctx.sql("), 0) FROM JSON_TABLE(");
+      renderDataColumn(ctx);
+      ctx.sql(", '$.");
+      ctx.sql(arrayPath);
+      ctx.sql("[*]' COLUMNS (");
+      // Add columns needed for the condition
+      renderReduceJsonTableColumns(ctx, condExpr);
+      ctx.sql(")))");
+    }
+    ctx.sql(")");
+    return true;
+  }
+
+  /**
+   * Renders a conditional sum expression for $reduce object construction.
+   */
+  private void renderReduceConditionalSum(
+      SqlGenerationContext ctx, Expression expr, String arrayPath) {
+    if (expr instanceof ConditionalExpression condExpr
+        && condExpr.getType() == ConditionalExpression.ConditionalType.COND) {
+      // {$cond: [condition, thenValue, elseValue]}
+      ctx.sql("CASE WHEN ");
+      renderReduceConditionSimple(ctx, condExpr.getCondition());
+      ctx.sql(" THEN ");
+      renderReduceValue(ctx, condExpr.getThenExpr());
+      ctx.sql(" ELSE ");
+      renderReduceValue(ctx, condExpr.getElseExpr());
+      ctx.sql(" END");
+    } else if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        ctx.sql("jt_");
+        ctx.sql(exprPath.substring(6));
+      }
+    } else if (expr instanceof LiteralExpression lit) {
+      ctx.sql(String.valueOf(lit.getValue()));
+    }
+  }
+
+  /**
+   * Renders a simple condition for $reduce CASE WHEN.
+   */
+  private void renderReduceConditionSimple(SqlGenerationContext ctx, Expression condition) {
+    if (condition instanceof ComparisonExpression comp) {
+      renderReduceValueSimple(ctx, comp.getLeft());
+      ctx.sql(" ");
+      ctx.sql(getSqlComparisonOp(comp.getOp()));
+      ctx.sql(" ");
+      renderReduceValueSimple(ctx, comp.getRight());
+    } else if (condition instanceof LogicalExpression) {
+      renderReduceCondition(ctx, condition, java.util.Collections.emptySet());
+    }
+  }
+
+  /**
+   * Renders a simple value reference.
+   */
+  private void renderReduceValueSimple(SqlGenerationContext ctx, Expression expr) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        ctx.sql("jt_");
+        ctx.sql(exprPath.substring(6));
+      }
+    } else if (expr instanceof LiteralExpression lit) {
+      Object value = lit.getValue();
+      if (value instanceof String) {
+        ctx.sql("'");
+        ctx.sql(((String) value).replace("'", "''"));
+        ctx.sql("'");
+      } else {
+        ctx.sql(String.valueOf(value));
+      }
+    }
+  }
+
+  /**
+   * Renders a value expression for $reduce.
+   */
+  private void renderReduceValue(SqlGenerationContext ctx, Expression expr) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        ctx.sql("jt_");
+        ctx.sql(exprPath.substring(6));
+      }
+    } else if (expr instanceof LiteralExpression lit) {
+      ctx.sql(String.valueOf(lit.getValue()));
+    }
+  }
+
+  /**
+   * Renders JSON_TABLE columns needed for a $reduce conditional expression.
+   * Tracks which fields are used in sum context to use NUMBER type.
+   */
+  private void renderReduceJsonTableColumns(SqlGenerationContext ctx, Expression expr) {
+    java.util.Set<String> fields = new java.util.LinkedHashSet<>();
+    java.util.Set<String> numericFields = new java.util.LinkedHashSet<>();
+    collectThisFieldReferencesFromExpression(expr, fields);
+    collectNumericThisFieldReferences(expr, numericFields);
+
+    boolean first = true;
+    for (String field : fields) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      ctx.sql("jt_");
+      ctx.sql(field);
+      // Use NUMBER for fields that will be summed, VARCHAR2 for others
+      if (numericFields.contains(field)) {
+        ctx.sql(" NUMBER PATH '$.");
+      } else {
+        ctx.sql(" VARCHAR2(4000) PATH '$.");
+      }
+      ctx.sql(field);
+      ctx.sql("'");
+      first = false;
+    }
+  }
+
+  /**
+   * Collects $$this.field references that are used in numeric contexts (sum, add, etc.).
+   */
+  private void collectNumericThisFieldReferences(Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof ConditionalExpression cond) {
+      // The then/else of a $cond in numeric context are likely numeric
+      Expression thenExpr = cond.getThenExpr();
+      Expression elseExpr = cond.getElseExpr();
+      // If else is a numeric literal, then the then is also numeric
+      if (elseExpr instanceof LiteralExpression lit && lit.getValue() instanceof Number) {
+        if (thenExpr instanceof FieldPathExpression fp) {
+          String path = fp.getPath();
+          if (path != null && path.startsWith("$this.")) {
+            fields.add(path.substring(6));
+          }
+        }
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      for (Expression operand : arith.getOperands()) {
+        collectNumericThisFieldReferences(operand, fields);
+        // Also collect direct $$this.field references in arithmetic context
+        if (operand instanceof FieldPathExpression fp) {
+          String path = fp.getPath();
+          if (path != null && path.startsWith("$this.")) {
+            fields.add(path.substring(6));
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Collects $$this.field references from any expression.
+   */
+  private void collectThisFieldReferencesFromExpression(
+      Expression expr, java.util.Set<String> fields) {
+    if (expr instanceof FieldPathExpression fp) {
+      String exprPath = fp.getPath();
+      if (exprPath != null && exprPath.startsWith("$this.")) {
+        fields.add(exprPath.substring(6));
+      }
+    } else if (expr instanceof ConditionalExpression cond) {
+      collectThisFieldReferencesFromExpression(cond.getCondition(), fields);
+      collectThisFieldReferencesFromExpression(cond.getThenExpr(), fields);
+      collectThisFieldReferencesFromExpression(cond.getElseExpr(), fields);
+    } else if (expr instanceof ComparisonExpression comp) {
+      collectThisFieldReferencesFromExpression(comp.getLeft(), fields);
+      collectThisFieldReferencesFromExpression(comp.getRight(), fields);
+    } else if (expr instanceof LogicalExpression logical) {
+      for (Expression operand : logical.getOperands()) {
+        collectThisFieldReferencesFromExpression(operand, fields);
+      }
+    } else if (expr instanceof ArithmeticExpression arith) {
+      for (Expression operand : arith.getOperands()) {
+        collectThisFieldReferencesFromExpression(operand, fields);
+      }
+    }
+  }
+
+  /**
+   * Renders the $setUnion flatten pattern for $reduce.
+   * Pattern: {$reduce: {in: {$setUnion: ["$$value", "$$this"]}}}
+   * Flattens nested arrays with deduplication.
+   * Note: Oracle doesn't allow DISTINCT with JSON_ARRAYAGG, so we use a nested subquery.
+   */
+  private void renderSetUnionFlatten(SqlGenerationContext ctx, String arrayPath) {
+    // Use nested subquery with DISTINCT, then aggregate unique values
+    // JSON_ARRAYAGG doesn't support DISTINCT, so we must use subquery approach
+    ctx.sql("(SELECT JSON_ARRAYAGG(val RETURNING JSON) FROM (");
+    ctx.sql("SELECT DISTINCT val FROM JSON_TABLE(");
+    renderDataColumn(ctx);
+    ctx.sql(", '$.");
+    ctx.sql(arrayPath);
+    ctx.sql("[*][*]' COLUMNS (val JSON PATH '$'))))");
   }
 
   /**

@@ -536,14 +536,14 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
     String sql = context.toSql();
 
-    // Should produce CTE with json_transform SET using PATH syntax for .size()
-    // PATH '$.field.size()' is type-preserving within json_transform context
+    // Should produce CTE with json_transform SET using JSON_VALUE for array size
+    // The .size() function is Oracle's native way to get array length
     assertThat(sql)
         .contains("\"Q2\"")
         .contains("json_transform")
         .contains("SET")
         .contains("'$.\"itemCount\"'")
-        .contains("PATH '$.items.size()'")
+        .contains("'$.items.size()'")
         .doesNotContain("= NULL");
   }
 

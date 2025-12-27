@@ -51,4 +51,28 @@ class TranslationOptionsTest {
 
     assertThat(options.dataColumnName()).isEqualTo("json_doc");
   }
+
+  @Test
+  void shouldDefaultProceduralToFalse() {
+    var options = TranslationOptions.defaults();
+
+    assertThat(options.procedural()).isFalse();
+    assertThat(options.autoProcedural()).isFalse();
+  }
+
+  @Test
+  void shouldAllowExplicitProceduralMode() {
+    var options = TranslationOptions.builder().procedural(true).build();
+
+    assertThat(options.procedural()).isTrue();
+  }
+
+  @Test
+  void shouldAllowAutoProceduralMode() {
+    var options = TranslationOptions.builder().autoProcedural(true).build();
+
+    assertThat(options.autoProcedural()).isTrue();
+    // procedural() returns false because it's not explicitly set
+    assertThat(options.procedural()).isFalse();
+  }
 }

@@ -12,16 +12,16 @@ This library provides a MongoDB-style `aggregate()` API while generating Oracle 
 
 ## Current Status
 
-**Phase 4 Complete** - All operators implemented with 79% instruction coverage and 191 passing cross-database validation tests (182 strict matches). Now supports Oracle 23ai native JSON type for improved performance and type fidelity, with Oracle explain plan generation and functional indexing for query optimization.
+**Phase 4 Complete** - All operators implemented with 83% instruction coverage and 204 passing cross-database validation tests. Now supports Oracle 23ai native JSON type for improved performance and type fidelity, with Oracle explain plan generation, functional indexing for query optimization, and automatic procedural mode for complex queries.
 
 | Metric | Value |
 |--------|-------|
-| Unit Tests | 1,665 |
-| Cross-DB Validation | 191 |
+| Unit Tests | 1,709 |
+| Cross-DB Validation | 204 |
 | Strict Matches | 182 |
 | Large-Scale Tests | 10 |
-| Instruction Coverage | 79% |
-| Branch Coverage | 67% |
+| Instruction Coverage | 83% |
+| Branch Coverage | 69% |
 
 ## Supported Operators
 
@@ -120,7 +120,11 @@ The translator includes a CLI for quick pipeline translation. See the [CLI Guide
 | `--inline` | `-i` | Inline bind variables into SQL |
 | `--no-hints` | | Disable Oracle optimizer hints |
 | `--strict` | | Fail on unsupported operators |
+| `--procedural` | | Force procedural SQL with temp tables |
+| `--auto-procedural` | | Auto-detect complex queries (default: enabled) |
+| `--no-auto-procedural` | | Disable automatic procedural mode detection |
 | `--data-column <name>` | | JSON data column name (default: data) |
+| `--execute <file>` | `-x` | Execute SQL against Oracle using connection file |
 | `--output <file>` | `-o` | Write output to file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show help message |
@@ -198,7 +202,7 @@ System.out.println(result.sql());
 ./gradlew :core:test
 ```
 
-Runs 1,665 unit tests covering all operators, parsers, and pipeline scenarios.
+Runs 1,709 unit tests covering all operators, parsers, and pipeline scenarios.
 
 ### Integration Tests
 

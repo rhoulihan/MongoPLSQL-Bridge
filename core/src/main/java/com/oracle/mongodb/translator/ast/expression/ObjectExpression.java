@@ -63,6 +63,19 @@ public final class ObjectExpression implements Expression {
     return new ObjectExpression(ObjectOp.ARRAY_TO_OBJECT, array, null);
   }
 
+  /**
+   * Creates a $getField expression.
+   *
+   * <p>MongoDB: {$getField: {field: "name", input: "$customer"}} or dynamic field: {$getField:
+   * {field: "$fieldName", input: "$obj"}}
+   *
+   * @param field the field name expression (can be literal string or field path)
+   * @param input the object to get the field from
+   */
+  public static ObjectExpression getField(Expression field, Expression input) {
+    return new ObjectExpression(ObjectOp.GET_FIELD, input, List.of(field));
+  }
+
   /** Returns the object operator. */
   public ObjectOp getOp() {
     return op;
@@ -84,6 +97,7 @@ public final class ObjectExpression implements Expression {
       case MERGE_OBJECTS -> renderMergeObjects(ctx);
       case OBJECT_TO_ARRAY -> renderObjectToArray(ctx);
       case ARRAY_TO_OBJECT -> renderArrayToObject(ctx);
+      case GET_FIELD -> renderGetField(ctx);
       default -> throw new UnsupportedOperationException("Unknown ObjectOp: " + op);
     }
   }
@@ -204,6 +218,79 @@ public final class ObjectExpression implements Expression {
 
     ctx.sql("[*]' COLUMNS (key_col VARCHAR2(4000) PATH '$.k', ");
     ctx.sql("val_col VARCHAR2(4000) FORMAT JSON PATH '$.v')))");
+  }
+
+  /**
+   * Renders $getField operator. MongoDB: {$getField: {field: "name", input: "$customer"}} or
+   * {$getField: {field: "$fieldName", input: "$obj"}}
+   *
+   * <p>Oracle translation:
+   *
+   * <ul>
+   *   <li>Literal field name: JSON_VALUE(input, '$.fieldName')
+   *   <li>Dynamic field name: JSON_VALUE(input, '$.' || fieldExpr) or CASE-based approach
+   * </ul>
+   */
+  private void renderGetField(SqlGenerationContext ctx) {
+    if (additionalArgs == null || additionalArgs.isEmpty()) {
+      ctx.sql("NULL");
+      return;
+    }
+
+    Expression fieldExpr = additionalArgs.get(0);
+
+    if (fieldExpr instanceof LiteralExpression lit && lit.getValue() instanceof String fieldName) {
+      // Static field name - use simple JSON_VALUE
+      ctx.sql("JSON_VALUE(");
+      if (inputExpression instanceof FieldPathExpression fieldPath) {
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
+        ctx.sql(fieldPath.getPath());
+        ctx.sql(".");
+        ctx.sql(fieldName);
+        ctx.sql("')");
+      } else {
+        ctx.visit(inputExpression);
+        ctx.sql(", '$.");
+        ctx.sql(fieldName);
+        ctx.sql("')");
+      }
+    } else if (fieldExpr instanceof FieldPathExpression dynamicField) {
+      // Dynamic field name - need to use CASE or dynamic path construction
+      // For Oracle, we use: JSON_VALUE(input, '$.' || dynamicFieldValue)
+      // But that requires string concatenation which may not work in all contexts
+      // Alternative: Use CASE statements for known values, or JSON_TABLE with dynamic path
+
+      // Simplest approach: Build dynamic path with concatenation
+      ctx.sql("JSON_VALUE(");
+      if (inputExpression instanceof FieldPathExpression inputPath) {
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
+        ctx.sql(inputPath.getPath());
+        ctx.sql("' || '.' || ");
+        // Get the field name value
+        ctx.sql("JSON_VALUE(");
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
+        ctx.sql(dynamicField.getPath());
+        ctx.sql("'))");
+      } else {
+        ctx.visit(inputExpression);
+        ctx.sql(", '$.' || ");
+        ctx.sql("JSON_VALUE(");
+        renderDataColumn(ctx);
+        ctx.sql(", '$.");
+        ctx.sql(dynamicField.getPath());
+        ctx.sql("'))");
+      }
+    } else {
+      // Fallback for other expression types
+      ctx.sql("JSON_VALUE(");
+      ctx.visit(inputExpression);
+      ctx.sql(", '$.' || ");
+      ctx.visit(fieldExpr);
+      ctx.sql(")");
+    }
   }
 
   @Override

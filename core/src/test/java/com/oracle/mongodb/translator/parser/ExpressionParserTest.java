@@ -915,6 +915,17 @@ class ExpressionParserTest {
   }
 
   @Test
+  void shouldParseReduceExpressionWithNullInitialValue() {
+    // MongoDB allows null as a valid initialValue for $reduce
+    var doc =
+        Document.parse(
+            "{\"$reduce\": {\"input\": \"$items\", \"initialValue\": null, \"in\": \"$$this\"}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isNotNull();
+    assertThat(expr).isInstanceOf(ArrayExpression.class);
+  }
+
+  @Test
   void shouldThrowForInvalidSliceArgs() {
     var doc = Document.parse("{\"$slice\": [\"$items\"]}");
     assertThatThrownBy(() -> parser.parseValue(doc))
@@ -1140,6 +1151,17 @@ class ExpressionParserTest {
     Expression expr = parser.parseValue(doc);
     expr.render(context);
     assertThat(context.toSql()).contains("UNION").contains("JSON_ARRAYAGG");
+  }
+
+  @Test
+  void shouldParseSetUnionWithSingleExpression() {
+    // MongoDB allows $setUnion with a single expression that evaluates to an array
+    // This is used to deduplicate values: {$setUnion: {$map: {...}}}
+    var doc = Document.parse(
+        "{\"$setUnion\": {\"$map\": {\"input\": \"$items\", \"in\": \"$$this\"}}}");
+    Expression expr = parser.parseValue(doc);
+    assertThat(expr).isNotNull();
+    assertThat(expr).isInstanceOf(ArrayExpression.class);
   }
 
   @Test
@@ -1770,5 +1792,43 @@ class ExpressionParserTest {
     assertThat(sql).contains("YEAR");
     assertThat(sql).contains("MONTH");
     assertThat(sql).contains("DAY");
+  }
+
+  // $getField tests
+
+  @Test
+  void shouldParseGetFieldWithLiteralField() {
+    // {$getField: {field: "name", input: "$customer"}}
+    var doc = Document.parse("{\"$getField\": {\"field\": \"name\", \"input\": \"$customer\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_VALUE");
+    assertThat(sql).contains("customer");
+    assertThat(sql).contains("name");
+  }
+
+  @Test
+  void shouldParseGetFieldWithDynamicField() {
+    // {$getField: {field: "$category", input: "$multipliers"}}
+    var doc =
+        Document.parse("{\"$getField\": {\"field\": \"$category\", \"input\": \"$multipliers\"}}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_VALUE");
+    assertThat(sql).contains("multipliers");
+    assertThat(sql).contains("category");
+  }
+
+  @Test
+  void shouldParseGetFieldShorthand() {
+    // {$getField: "fieldName"} - shorthand form
+    var doc = Document.parse("{\"$getField\": \"myField\"}");
+    Expression expr = parser.parseValue(doc);
+    expr.render(context);
+    String sql = context.toSql();
+    assertThat(sql).contains("JSON_VALUE");
+    assertThat(sql).contains("myField");
   }
 }

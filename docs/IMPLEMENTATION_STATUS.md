@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-25
+**Last Updated:** 2025-12-27
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -158,6 +158,8 @@ generator/
 ├── SqlGenerationContext.java ✅
 ├── DefaultSqlGenerationContext.java ✅
 ├── PipelineRenderer.java ✅
+├── CteBasedPipelineRenderer.java ✅
+├── ProceduralSqlConverter.java ✅
 └── dialect/
     ├── OracleDialect.java ✅
     └── Oracle26aiDialect.java ✅
@@ -256,7 +258,9 @@ optimizer/
 
 generator/
 ├── DefaultSqlGenerationContextTest.java ✅
-└── PipelineRendererTest.java ✅
+├── PipelineRendererTest.java ✅
+├── CteBasedPipelineRendererTest.java ✅
+└── ProceduralSqlConverterTest.java ✅
 
 api/
 ├── AggregationTranslatorTest.java ✅
@@ -292,12 +296,12 @@ generator/dialect/
 
 ## Test Coverage
 
-**Unit Tests:** 1,622 test methods across 76+ test files
+**Unit Tests:** 1,709 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 191 tests (182 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 204 tests (182 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
-All tests passing: ✅ Yes (191/191)
+All tests passing: ✅ Yes (204/204)
 
 ### Unit Test Breakdown by Package
 
@@ -306,27 +310,29 @@ All tests passing: ✅ Yes (191/191)
 | `api` | 46 | Public API tests |
 | `ast.expression` | 329 | Expression operators (comparison, logical, arithmetic, etc.) |
 | `ast.stage` | 281 | Pipeline stage tests ($match, $group, $lookup, etc.) |
-| `generator` | 154 | SQL generation and rendering tests |
+| `generator` | 200 | SQL generation, CTE rendering, procedural conversion tests |
 | `optimizer` | 39 | Pipeline optimization tests |
 | `parser` | 398 | BSON to AST parsing tests |
+| `cli` | 20 | Command-line interface tests |
 | `exception` | 7 | Error handling tests |
 | `util` | 16 | Utility function tests |
-| **Total** | **1,622** | |
+| **Total** | **1,709** | |
 
 ### Code Coverage (JaCoCo)
 
 | Package | Instruction Coverage | Branch Coverage |
 |---------|---------------------|-----------------|
-| **Overall** | **89%** | **77%** |
+| **Overall** | **83%** | **69%** |
 | `api` | 97% | 100% |
-| `ast.expression` | 94% | 78% |
-| `ast.stage` | 97% | 91% |
-| `generator` | 93% | 82% |
-| `parser` | 90% | 85% |
-| `optimizer` | 92% | 86% |
+| `ast.expression` | 86% | 68% |
+| `ast.stage` | 87% | 73% |
+| `generator` | 78% | 64% |
+| `parser` | 90% | 83% |
+| `optimizer` | 95% | 91% |
 | `exception` | 100% | 100% |
 | `util` | 96% | 91% |
 | `generator.dialect` | 100% | n/a |
+| `cli` | 66% | 51% |
 
 ### Cross-Database Validation Test Categories
 
@@ -608,6 +614,13 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
   - **Missing field vs null (2 tests)**: MongoDB omits null fields, Oracle includes explicit `null` - Fixed via null equivalence
   - **Array ordering (6 tests)**: `$push`/`$addToSet` don't guarantee order in either database - Expected behavior
   - **Semantic differences (2 tests)**: Different results in `$graphLookup`/pipeline `$lookup` - Under investigation
+
+**Improvements Applied (2025-12-27):**
+- **Procedural SQL Mode**: Added `ProceduralSqlConverter` for converting CTE-based SQL to procedural SQL with temporary tables. This addresses Oracle ORA-03113 session crashes that occur with complex queries having many CTEs (15+).
+- **Automatic Complexity Detection**: Implemented `shouldUseProcedural()` that counts CTEs and recommends procedural mode when threshold (15 CTEs) is exceeded.
+- **IS JSON Constraint for Dot Notation**: Added automatic `ALTER TABLE ... ADD CONSTRAINT ... CHECK ("DATA" IS JSON)` after each CREATE TABLE in procedural mode, enabling Oracle dot notation access (`q."DATA".field`) on materialized temporary tables.
+- **CLI Enhancements**: Added `--procedural` flag to force procedural mode, `--auto-procedural` (enabled by default) for automatic detection, and `--no-auto-procedural` to disable.
+- **Execute Mode**: Added `--execute <connection-file>` option to run generated SQL directly against Oracle database.
 
 ## Next Steps
 

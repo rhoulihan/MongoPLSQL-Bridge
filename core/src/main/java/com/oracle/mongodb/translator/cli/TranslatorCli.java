@@ -10,6 +10,7 @@ import com.oracle.mongodb.translator.api.AggregationTranslator;
 import com.oracle.mongodb.translator.api.OracleConfiguration;
 import com.oracle.mongodb.translator.api.TranslationOptions;
 import com.oracle.mongodb.translator.api.TranslationResult;
+import com.oracle.mongodb.translator.generator.ProceduralSqlConverter;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -127,7 +128,16 @@ public final class TranslatorCli {
         }
 
         TranslationResult result = translatePipeline(pipeline, options);
-        output.append(result.sql());
+
+        // Determine if procedural mode should be used
+        boolean useProceduralMode = options.procedural
+            || (options.autoProcedural
+                && ProceduralSqlConverter.shouldUseProcedural(result.sql()));
+
+        String sql = useProceduralMode
+            ? ProceduralSqlConverter.convert(result.sql())
+            : result.sql();
+        output.append(sql);
 
         if (!result.bindVariables().isEmpty() && !options.inlineBindVariables) {
           output.append("\n\n-- Bind variables:\n");
@@ -150,11 +160,11 @@ public final class TranslatorCli {
         // Execute against Oracle if --execute was specified
         if (connectionConfig != null) {
           out.println("-- Generated SQL:");
-          out.println(result.sql());
+          out.println(sql);
           out.println();
           out.println("-- Execution Results:");
           try {
-            executeAndDisplayResults(result.sql(), connectionConfig);
+            executeAndDisplayResults(sql, connectionConfig);
           } catch (SQLException e) {
             err.println("Oracle Error: " + e.getMessage());
             err.println("Error Code: " + e.getErrorCode());
@@ -191,6 +201,9 @@ public final class TranslatorCli {
         case "--strict" -> options.strictMode = true;
         case "--cte" -> options.cteMode = true; // Already default, kept for backward compatibility
         case "--no-cte", "--legacy" -> options.cteMode = false;
+        case "--procedural" -> options.procedural = true; // Force procedural mode
+        case "--auto-procedural" -> options.autoProcedural = true; // Auto-detect complex queries
+        case "--no-auto-procedural" -> options.autoProcedural = false; // Disable auto-detection
         case "--collection", "-c" -> {
           if (i + 1 >= args.length) {
             throw new IllegalArgumentException("--collection requires a value");
@@ -427,6 +440,10 @@ public final class TranslatorCli {
     out.println("  --strict                 Fail on unsupported operators");
     out.println("  --cte                    Use CTE-based SQL generation (default)");
     out.println("  --no-cte, --legacy       Use legacy SQL generation (deprecated)");
+    out.println("  --procedural             Force procedural SQL with temp tables");
+    out.println("  --auto-procedural        Auto-detect complex queries (default: enabled)");
+    out.println("                           Uses procedural mode when CTEs >= 15");
+    out.println("  --no-auto-procedural     Disable auto-detection of complex queries");
     out.println("  --data-column <name>     JSON data column name (default: data)");
     out.println("  -x, --execute <file>     Execute SQL against Oracle using connection file");
     out.println("  -o, --output <file>      Write output to file instead of stdout");
@@ -453,6 +470,8 @@ public final class TranslatorCli {
     boolean includeHints = true;
     boolean strictMode;
     boolean cteMode = true; // CTE-based rendering is now the default
+    boolean procedural; // Generate procedural SQL with temp tables
+    boolean autoProcedural = true; // Auto-detect complex queries (default: enabled)
     String collection;
     String dataColumnName;
     String inputFile;

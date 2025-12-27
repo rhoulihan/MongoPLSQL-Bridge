@@ -951,13 +951,16 @@ public final class ExpressionParser {
     if (!(operand instanceof Document doc)) {
       throw new IllegalArgumentException("$reduce requires a document");
     }
-    Object input = doc.get("input");
-    Object initialValue = doc.get("initialValue");
-    Object inExpr = doc.get("in");
-    if (input == null || initialValue == null || inExpr == null) {
+    // Use containsKey() to allow null as a valid initialValue
+    if (!doc.containsKey("input")
+        || !doc.containsKey("initialValue")
+        || !doc.containsKey("in")) {
       throw new IllegalArgumentException(
           "$reduce requires 'input', 'initialValue', and 'in' fields");
     }
+    Object input = doc.get("input");
+    Object initialValue = doc.get("initialValue");
+    Object inExpr = doc.get("in");
     return ArrayExpression.reduce(
         parseValue(input), parseValue(initialValue), parseValue(inExpr));
   }
@@ -1037,16 +1040,21 @@ public final class ExpressionParser {
   }
 
   private Expression parseSetUnion(Object operand) {
-    if (!(operand instanceof List)) {
-      throw new IllegalArgumentException("$setUnion requires an array of arrays");
+    // MongoDB allows $setUnion with:
+    // 1. An array of expressions: {$setUnion: ["$arr1", "$arr2"]}
+    // 2. A single expression that evaluates to an array: {$setUnion: {$map: {...}}}
+    if (operand instanceof List) {
+      @SuppressWarnings("unchecked")
+      List<Object> args = (List<Object>) operand;
+      List<Expression> arrays = new ArrayList<>();
+      for (Object arg : args) {
+        arrays.add(parseValue(arg));
+      }
+      return ArrayExpression.setUnion(arrays);
+    } else {
+      // Single expression case - wrap in a list for setUnion
+      return ArrayExpression.setUnion(List.of(parseValue(operand)));
     }
-    @SuppressWarnings("unchecked")
-    List<Object> args = (List<Object>) operand;
-    List<Expression> arrays = new ArrayList<>();
-    for (Object arg : args) {
-      arrays.add(parseValue(arg));
-    }
-    return ArrayExpression.setUnion(arrays);
   }
 
   private Expression parseSetIntersection(Object operand) {
@@ -1163,7 +1171,40 @@ public final class ExpressionParser {
       case MERGE_OBJECTS -> parseMergeObjects(operand);
       case OBJECT_TO_ARRAY -> ObjectExpression.objectToArray(parseValue(operand));
       case ARRAY_TO_OBJECT -> ObjectExpression.arrayToObject(parseValue(operand));
+      case GET_FIELD -> parseGetField(operand);
     };
+  }
+
+  @SuppressWarnings("unchecked")
+  private Expression parseGetField(Object operand) {
+    // Two forms:
+    // 1. {$getField: {field: <expression>, input: <expression>}}
+    // 2. {$getField: "<string>"} - shorthand for field from $$CURRENT
+    if (operand instanceof String fieldName) {
+      // Shorthand: get field from $$CURRENT (current document)
+      return ObjectExpression.getField(
+          LiteralExpression.of(fieldName), FieldPathExpression.of("$$CURRENT"));
+    }
+
+    if (!(operand instanceof Document)) {
+      throw new IllegalArgumentException("$getField requires a document or string");
+    }
+
+    Document doc = (Document) operand;
+    if (!doc.containsKey("field")) {
+      throw new IllegalArgumentException("$getField requires 'field' parameter");
+    }
+
+    Expression fieldExpr = parseValue(doc.get("field"));
+    Expression inputExpr;
+    if (doc.containsKey("input")) {
+      inputExpr = parseValue(doc.get("input"));
+    } else {
+      // Default to $$CURRENT if input is not specified
+      inputExpr = FieldPathExpression.of("$$CURRENT");
+    }
+
+    return ObjectExpression.getField(fieldExpr, inputExpr);
   }
 
   private Expression parseMergeObjects(Object operand) {

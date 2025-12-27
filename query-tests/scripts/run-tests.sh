@@ -190,6 +190,54 @@ wrap_sql_as_json_array() {
     echo "SELECT JSON_ARRAYAGG(JSON_OBJECT(*) RETURNING CLOB) AS json_result FROM (${clean_sql})"
 }
 
+# Function to execute SQL via temp file inside Oracle container
+# This bypasses SQL*Plus's 4999 character line limit by:
+# 1. Writing SQL to a temp file
+# 2. Breaking long lines at CTE boundaries ("), ") to stay under 4999 chars per line
+# Args: $1 = SQL to execute, $2 = additional sqlplus settings (optional)
+run_oracle_sql_via_file() {
+    local sql="$1"
+    local extra_settings="${2:-}"
+    local host_temp_file
+    local container_temp_file="/tmp/query_$$.sql"
+
+    # Break long SQL into multiple lines at CTE boundaries
+    # This ensures each line stays under SQL*Plus's 4999 char limit
+    local sql_formatted
+    sql_formatted=$(echo "$sql" | sed 's/), "/),\n"/g')
+
+    # Create temp file on host
+    host_temp_file=$(mktemp /tmp/oracle-query-XXXXXX.sql)
+
+    # Write SQL content to host temp file
+    cat > "$host_temp_file" << EOSQL
+SET DEFINE OFF
+SET PAGESIZE 0
+SET LINESIZE 32767
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET HEADING OFF
+SET LONG 10000000
+SET LONGCHUNKSIZE 10000000
+${extra_settings}
+${sql_formatted};
+EXIT;
+EOSQL
+
+    # Copy to container
+    docker cp "$host_temp_file" "mongo-translator-oracle:${container_temp_file}" 2>/dev/null
+    # Fix permissions as root (docker cp creates files owned by root)
+    docker exec -u 0 mongo-translator-oracle chmod 644 "${container_temp_file}" 2>/dev/null
+    # Execute as oracle user
+    docker exec mongo-translator-oracle sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 @"${container_temp_file}" 2>/dev/null
+    # Cleanup as root
+    docker exec -u 0 mongo-translator-oracle rm -f "${container_temp_file}" 2>/dev/null
+
+    # Cleanup host temp file
+    rm -f "$host_temp_file"
+}
+
 # Function to run Oracle query (raw output)
 run_oracle_query() {
     local sql="$1"
@@ -234,19 +282,8 @@ run_oracle_query_json() {
     fi
 
     local result
-    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
-SET DEFINE OFF
-SET PAGESIZE 0
-SET LINESIZE 32767
-SET TRIMSPOOL ON
-SET TRIMOUT ON
-SET FEEDBACK OFF
-SET HEADING OFF
-SET LONG 10000000
-SET LONGCHUNKSIZE 10000000
-${json_sql};
-EXIT;
-EOSQL" 2>/dev/null)
+    # Use file-based execution for long SQL (bypasses 4999 char line limit)
+    result=$(run_oracle_sql_via_file "$json_sql")
 
     # Result is already a JSON array from JSON_ARRAYAGG
     # Just clean up and return it (or empty array if null/empty)
@@ -282,19 +319,8 @@ run_oracle_query_ejson() {
     fi
 
     local result
-    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
-SET DEFINE OFF
-SET PAGESIZE 0
-SET LINESIZE 32767
-SET TRIMSPOOL ON
-SET TRIMOUT ON
-SET FEEDBACK OFF
-SET HEADING OFF
-SET LONG 10000000
-SET LONGCHUNKSIZE 10000000
-${ejson_sql};
-EXIT;
-EOSQL" 2>/dev/null)
+    # Use file-based execution for long SQL (bypasses 4999 char line limit)
+    result=$(run_oracle_sql_via_file "$ejson_sql")
 
     local cleaned
     cleaned=$(echo "$result" | tr -d '\n\r' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
@@ -308,18 +334,10 @@ EOSQL" 2>/dev/null)
 # Function to run Oracle count query (counts actual rows)
 run_oracle_count() {
     local sql="$1"
+    local count_sql="SELECT COUNT(*) FROM (${sql%;})"
 
-    docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
-SET DEFINE OFF
-SET PAGESIZE 0
-SET LINESIZE 100
-SET TRIMSPOOL ON
-SET TRIMOUT ON
-SET FEEDBACK OFF
-SET HEADING OFF
-SELECT COUNT(*) FROM (${sql});
-EXIT;
-EOSQL" 2>/dev/null | grep -v "^$" | head -1 | tr -d ' \t'
+    # Use file-based execution for long SQL (bypasses 4999 char line limit)
+    run_oracle_sql_via_file "$count_sql" | grep -v "^$" | head -1 | tr -d ' \t'
 }
 
 # Function to generate Oracle EXPLAIN PLAN for a query
@@ -331,29 +349,19 @@ run_oracle_explain_plan() {
     # Clean up the SQL - remove trailing semicolon if present
     local clean_sql="${sql%;}"
 
-    local result
-    result=$(docker exec mongo-translator-oracle bash -c "sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 << 'EOSQL'
-SET DEFINE OFF
-SET PAGESIZE 1000
-SET LINESIZE 200
-SET TRIMSPOOL ON
-SET TRIMOUT ON
-SET FEEDBACK OFF
-SET HEADING ON
-
--- Generate explain plan with unique statement ID
-EXPLAIN PLAN SET STATEMENT_ID = '${plan_id}' FOR
+    # Build the explain plan SQL with display and cleanup
+    local explain_sql="EXPLAIN PLAN SET STATEMENT_ID = '${plan_id}' FOR
 ${clean_sql};
 
--- Display the plan with full details
 SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY('PLAN_TABLE', '${plan_id}', 'ALL'));
 
--- Clean up plan table entry
 DELETE FROM PLAN_TABLE WHERE STATEMENT_ID = '${plan_id}';
-COMMIT;
+COMMIT"
 
-EXIT;
-EOSQL" 2>/dev/null)
+    local result
+    # Use file-based execution for long SQL (bypasses 4999 char line limit)
+    result=$(run_oracle_sql_via_file "$explain_sql" "SET PAGESIZE 1000
+SET HEADING ON")
 
     # Return the plan output, preserving formatting
     echo "$result"
