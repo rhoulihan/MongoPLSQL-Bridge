@@ -238,6 +238,47 @@ EOSQL
     rm -f "$host_temp_file"
 }
 
+# Function to execute procedural SQL with PL/SQL blocks
+# Procedural SQL contains BEGIN...END blocks separated by / (PL/SQL terminators)
+# This function handles the / separators correctly for SQL*Plus
+run_oracle_procedural_sql() {
+    local sql="$1"
+    local host_temp_file
+    local container_temp_file="/tmp/procedural_$$.sql"
+
+    # Create temp file on host
+    host_temp_file=$(mktemp /tmp/oracle-procedural-XXXXXX.sql)
+
+    # Write SQL content to host temp file
+    # Procedural SQL already has proper formatting with / separators
+    cat > "$host_temp_file" << EOSQL
+SET DEFINE OFF
+SET PAGESIZE 0
+SET LINESIZE 32767
+SET TRIMSPOOL ON
+SET TRIMOUT ON
+SET FEEDBACK OFF
+SET SERVEROUTPUT OFF
+SET HEADING OFF
+SET LONG 10000000
+SET LONGCHUNKSIZE 10000000
+${sql}
+EXIT;
+EOSQL
+
+    # Copy to container
+    docker cp "$host_temp_file" "mongo-translator-oracle:${container_temp_file}" 2>/dev/null
+    # Fix permissions as root (docker cp creates files owned by root)
+    docker exec -u 0 mongo-translator-oracle chmod 644 "${container_temp_file}" 2>/dev/null
+    # Execute as oracle user
+    docker exec mongo-translator-oracle sqlplus -s translator/translator123@//localhost:1521/FREEPDB1 @"${container_temp_file}" 2>/dev/null
+    # Cleanup as root
+    docker exec -u 0 mongo-translator-oracle rm -f "${container_temp_file}" 2>/dev/null
+
+    # Cleanup host temp file
+    rm -f "$host_temp_file"
+}
+
 # Function to run Oracle query (raw output)
 run_oracle_query() {
     local sql="$1"
@@ -262,28 +303,35 @@ EOSQL" 2>/dev/null
 run_oracle_query_json() {
     local sql="$1"
     local json_sql
-
-    # Check if SQL already outputs JSON_ARRAYAGG (type-preserving format from translator)
-    # If so, use it directly; otherwise wrap with JSON_OBJECT(*) (loses types)
-    # Note: SQL may start with WITH (CTEs) followed by SELECT JSON_ARRAYAGG
-    # We check for:
-    #   1. SQL starting with SELECT JSON_ARRAYAGG (outer SELECT is JSON_ARRAYAGG)
-    #   2. CTE pattern: WITH ... ) SELECT JSON_ARRAYAGG (outer SELECT after CTE is JSON_ARRAYAGG)
-    # We must NOT match SQL that has SELECT JSON_ARRAYAGG only in subqueries (like FACET)
-    if [[ "$sql" =~ ^[[:space:]]*SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
-        # Simple SELECT JSON_ARRAYAGG - use directly
-        json_sql="${sql%;}"
-    elif [[ "$sql" =~ ^[[:space:]]*WITH[[:space:]].*\)[[:space:]]+SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
-        # CTE followed by outer SELECT JSON_ARRAYAGG - use directly
-        json_sql="${sql%;}"
-    else
-        # Legacy SQL - wrap with JSON_OBJECT(*) (may lose type information)
-        json_sql=$(wrap_sql_as_json_array "$sql")
-    fi
-
     local result
-    # Use file-based execution for long SQL (bypasses 4999 char line limit)
-    result=$(run_oracle_sql_via_file "$json_sql")
+
+    # Check if this is procedural SQL (auto-generated for complex pipelines)
+    # Procedural SQL starts with "-- Procedural execution" comment
+    if [[ "$sql" =~ ^[[:space:]]*--[[:space:]]*Procedural[[:space:]]+execution ]]; then
+        # Execute procedural SQL with PL/SQL block handling
+        result=$(run_oracle_procedural_sql "$sql")
+    else
+        # Check if SQL already outputs JSON_ARRAYAGG (type-preserving format from translator)
+        # If so, use it directly; otherwise wrap with JSON_OBJECT(*) (loses types)
+        # Note: SQL may start with WITH (CTEs) followed by SELECT JSON_ARRAYAGG
+        # We check for:
+        #   1. SQL starting with SELECT JSON_ARRAYAGG (outer SELECT is JSON_ARRAYAGG)
+        #   2. CTE pattern: WITH ... ) SELECT JSON_ARRAYAGG (outer SELECT after CTE is JSON_ARRAYAGG)
+        # We must NOT match SQL that has SELECT JSON_ARRAYAGG only in subqueries (like FACET)
+        if [[ "$sql" =~ ^[[:space:]]*SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
+            # Simple SELECT JSON_ARRAYAGG - use directly
+            json_sql="${sql%;}"
+        elif [[ "$sql" =~ ^[[:space:]]*WITH[[:space:]].*\)[[:space:]]+SELECT[[:space:]]+JSON_ARRAYAGG ]]; then
+            # CTE followed by outer SELECT JSON_ARRAYAGG - use directly
+            json_sql="${sql%;}"
+        else
+            # Legacy SQL - wrap with JSON_OBJECT(*) (may lose type information)
+            json_sql=$(wrap_sql_as_json_array "$sql")
+        fi
+
+        # Use file-based execution for long SQL (bypasses 4999 char line limit)
+        result=$(run_oracle_sql_via_file "$json_sql")
+    fi
 
     # Result is already a JSON array from JSON_ARRAYAGG
     # Just clean up and return it (or empty array if null/empty)
@@ -397,8 +445,15 @@ generate_oracle_sql() {
         sleep 1
     fi
 
-    # Extract just the SQL (before any comments)
-    echo "$result" | grep -v "^--" | grep -v "^$" | head -1
+    # Check if this is procedural SQL (starts with "-- Procedural execution")
+    # If so, return the full output; otherwise extract just the SQL statement
+    if [[ "$result" =~ ^[[:space:]]*--[[:space:]]*Procedural[[:space:]]+execution ]]; then
+        # Return full procedural SQL including comments
+        echo "$result"
+    else
+        # Extract just the SQL (before any comments)
+        echo "$result" | grep -v "^--" | grep -v "^$" | head -1
+    fi
 }
 
 # Function to normalize and compare results
