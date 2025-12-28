@@ -126,6 +126,9 @@ public final class ProceduralSqlConverter {
       // Add column aliases if the CTE defines columns and the body doesn't have them
       body = addColumnAliases(body, cte.columns);
 
+      // Convert JSON_EXISTS PASSING clause to inline values (CTAS doesn't support PASSING)
+      body = inlineJsonExistsPassingValues(body);
+
       result.append(body).append(";\n");
 
       // Add IS JSON constraint for DATA column to enable dot notation access
@@ -348,6 +351,75 @@ public final class ProceduralSqlConverter {
     }
 
     return lastSelectPos >= 0 ? sql.substring(lastSelectPos).trim() : null;
+  }
+
+  /**
+   * Inlines JSON_EXISTS PASSING clause values directly into the JSON path expression.
+   * Oracle's CTAS doesn't support the PASSING clause with bind variables.
+   *
+   * <p>Converts patterns like:
+   * <pre>
+   * JSON_EXISTS("DATA", '$?(@.status.stringOnly() == $B0)' PASSING 'value' AS "B0" TYPE(strict))
+   * </pre>
+   * to:
+   * <pre>
+   * JSON_EXISTS("DATA", '$?(@.status.stringOnly() == "value")' TYPE(strict))
+   * </pre>
+   */
+  private static String inlineJsonExistsPassingValues(String sql) {
+    if (sql == null || !sql.contains("PASSING")) {
+      return sql;
+    }
+
+    // Pattern to match JSON_EXISTS with PASSING clause
+    // Group 1: path expression before $B0
+    // Group 2: comparison operator and $B0
+    // Group 3: the value (string or number)
+    // Group 4: the rest (TYPE clause etc)
+    Pattern pattern = Pattern.compile(
+        "(JSON_EXISTS\\s*\\([^,]+,\\s*'[^']*?)(\\$B\\d+)([^']*?)'\\s*PASSING\\s+"
+            + "('?[^']*?'?|\\d+(?:\\.\\d+)?)\\s+AS\\s+\"B\\d+\"\\s*(TYPE\\(strict\\))?\\)",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    StringBuilder result = new StringBuilder();
+    int lastEnd = 0;
+    Matcher matcher = pattern.matcher(sql);
+
+    while (matcher.find()) {
+      result.append(sql, lastEnd, matcher.start());
+
+      String prefix = matcher.group(1);      // JSON_EXISTS(..., '$...
+      String pathRest = matcher.group(3);    // rest of path after $B0
+      String value = matcher.group(4);       // the value being passed
+      String typeClause = matcher.group(5);  // TYPE(strict) if present
+
+      // Determine if value is a string (has quotes) or number
+      String inlinedValue;
+      if (value.startsWith("'") && value.endsWith("'")) {
+        // String value - use JSON string format with double quotes
+        String strVal = value.substring(1, value.length() - 1);
+        inlinedValue = "\"" + strVal + "\"";
+      } else {
+        // Numeric value - use as-is
+        inlinedValue = value;
+      }
+
+      // Build the new JSON_EXISTS without PASSING clause
+      result.append(prefix)
+          .append(inlinedValue)
+          .append(pathRest)
+          .append("'");
+
+      if (typeClause != null) {
+        result.append(" ").append(typeClause);
+      }
+      result.append(")");
+
+      lastEnd = matcher.end();
+    }
+
+    result.append(sql.substring(lastEnd));
+    return result.toString();
   }
 
   /** Represents a single CTE definition. */
