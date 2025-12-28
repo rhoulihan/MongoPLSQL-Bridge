@@ -1401,6 +1401,9 @@ public final class CteBasedPipelineRenderer {
     } else if (expr instanceof InlineObjectExpression objExpr) {
       // Inline object expression for $push: {key1: $field1, key2: $field2}
       renderInlineObjectAsJsonObject(ctx, objExpr);
+    } else if (expr instanceof StringExpression stringExpr) {
+      // String expressions like $concat, $toLower, $toUpper
+      renderStringExpression(ctx, stringExpr);
     } else {
       // Fallback for other expressions - try rendering them
       ctx.sql("NULL");
@@ -3045,8 +3048,8 @@ public final class CteBasedPipelineRenderer {
    */
   private void renderStringArgument(SqlGenerationContext ctx, Expression expr) {
     if (expr instanceof FieldPathExpression fieldPath) {
-      // Use JSON_VALUE to get raw string value without quotes
-      ctx.sql("JSON_VALUE(\"DATA\", '$." + fieldPath.getPath() + "')");
+      // Use JSON_VALUE with table alias to get raw string value without quotes
+      ctx.sql("JSON_VALUE(q.\"DATA\", '$." + fieldPath.getPath() + "')");
     } else if (expr instanceof LiteralExpression lit) {
       Object value = lit.getValue();
       if (value instanceof String) {
