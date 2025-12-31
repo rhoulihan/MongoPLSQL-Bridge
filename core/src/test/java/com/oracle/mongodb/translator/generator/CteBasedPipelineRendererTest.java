@@ -1383,4 +1383,92 @@ class CteBasedPipelineRendererTest {
         .describedAs("Should use dot notation in WHERE clause for REDACT")
         .containsPattern("WHERE q\\.\"DATA\"\\.level >=");
   }
+
+  // ==========================================================================
+  // Phase 4: FORMAT JSON for MIN/MAX/FIRST/LAST accumulators
+  // ==========================================================================
+
+  @Test
+  void shouldAddFormatJsonForFirstAccumulator() {
+    // $first accumulator must use CASE expression to handle both objects and scalars
+    // MongoDB: [{$group: {_id: "$category", firstItem: {$first: "$details"}}}]
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("firstItem",
+        new AccumulatorExpression(AccumulatorOp.FIRST, FieldPathExpression.of("details")));
+
+    var groupStage = new GroupStage(FieldPathExpression.of("category"), accumulators);
+    Pipeline pipeline = Pipeline.of("items", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    assertThat(sql)
+        .describedAs("$first accumulator should use CASE for JSON type detection")
+        .contains("CASE WHEN SUBSTR(MIN(q.\"DATA\".details), 1, 1) IN ('{', '[')")
+        .contains("END FORMAT JSON");
+  }
+
+  @Test
+  void shouldAddFormatJsonForLastAccumulator() {
+    // $last accumulator must use CASE expression to handle both objects and scalars
+    // MongoDB: [{$group: {_id: "$category", lastItem: {$last: "$details"}}}]
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("lastItem",
+        new AccumulatorExpression(AccumulatorOp.LAST, FieldPathExpression.of("details")));
+
+    var groupStage = new GroupStage(FieldPathExpression.of("category"), accumulators);
+    Pipeline pipeline = Pipeline.of("items", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    assertThat(sql)
+        .describedAs("$last accumulator should use CASE for JSON type detection")
+        .contains("CASE WHEN SUBSTR(MAX(q.\"DATA\".details), 1, 1) IN ('{', '[')")
+        .contains("END FORMAT JSON");
+  }
+
+  @Test
+  void shouldAddFormatJsonForMinAccumulator() {
+    // $min accumulator must use CASE expression to handle both objects and scalars
+    // MongoDB: [{$group: {_id: "$category", minPrice: {$min: "$price"}}}]
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("minPrice",
+        new AccumulatorExpression(AccumulatorOp.MIN, FieldPathExpression.of("price")));
+
+    var groupStage = new GroupStage(FieldPathExpression.of("category"), accumulators);
+    Pipeline pipeline = Pipeline.of("products", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    assertThat(sql)
+        .describedAs("$min accumulator should use CASE for JSON type detection")
+        .contains("CASE WHEN SUBSTR(MIN(q.\"DATA\".price), 1, 1) IN ('{', '[')")
+        .contains("END FORMAT JSON");
+  }
+
+  @Test
+  void shouldAddFormatJsonForMaxAccumulator() {
+    // $max accumulator must use CASE expression to handle both objects and scalars
+    // MongoDB: [{$group: {_id: "$category", maxPrice: {$max: "$price"}}}]
+    var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
+    accumulators.put("maxPrice",
+        new AccumulatorExpression(AccumulatorOp.MAX, FieldPathExpression.of("price")));
+
+    var groupStage = new GroupStage(FieldPathExpression.of("category"), accumulators);
+    Pipeline pipeline = Pipeline.of("products", groupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    assertThat(sql)
+        .describedAs("$max accumulator should use CASE for JSON type detection")
+        .contains("CASE WHEN SUBSTR(MAX(q.\"DATA\".price), 1, 1) IN ('{', '[')")
+        .contains("END FORMAT JSON");
+  }
 }
