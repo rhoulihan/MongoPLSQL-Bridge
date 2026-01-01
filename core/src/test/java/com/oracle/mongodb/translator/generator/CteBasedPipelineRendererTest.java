@@ -1385,12 +1385,12 @@ class CteBasedPipelineRendererTest {
   }
 
   // ==========================================================================
-  // Phase 4: FORMAT JSON for MIN/MAX/FIRST/LAST accumulators
+  // Phase 4: Dot notation for MIN/MAX/FIRST/LAST accumulators
   // ==========================================================================
 
   @Test
-  void shouldAddFormatJsonForFirstAccumulator() {
-    // $first accumulator must use CASE expression to handle both objects and scalars
+  void shouldUseDotNotationForFirstAccumulator() {
+    // $first accumulator uses MIN with dot notation for type preservation
     // MongoDB: [{$group: {_id: "$category", firstItem: {$first: "$details"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("firstItem",
@@ -1402,16 +1402,15 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    // Should use MIN with dot notation
     assertThat(sql)
-        .describedAs("$first accumulator should use CASE for JSON type detection")
-        .contains("CASE WHEN SUBSTR(MIN(q.\"DATA\".details), 1, 1) IN ('{', '[')")
-        .contains("END FORMAT JSON");
+        .describedAs("$first accumulator should use MIN with dot notation")
+        .contains("MIN(q.\"DATA\".details)");
   }
 
   @Test
-  void shouldAddFormatJsonForLastAccumulator() {
-    // $last accumulator must use CASE expression to handle both objects and scalars
+  void shouldUseDotNotationForLastAccumulator() {
+    // $last accumulator uses MAX with dot notation for type preservation
     // MongoDB: [{$group: {_id: "$category", lastItem: {$last: "$details"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("lastItem",
@@ -1423,16 +1422,15 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    // Should use MAX with dot notation
     assertThat(sql)
-        .describedAs("$last accumulator should use CASE for JSON type detection")
-        .contains("CASE WHEN SUBSTR(MAX(q.\"DATA\".details), 1, 1) IN ('{', '[')")
-        .contains("END FORMAT JSON");
+        .describedAs("$last accumulator should use MAX with dot notation")
+        .contains("MAX(q.\"DATA\".details)");
   }
 
   @Test
-  void shouldAddFormatJsonForMinAccumulator() {
-    // $min accumulator must use CASE expression to handle both objects and scalars
+  void shouldUseDotNotationForMinAccumulator() {
+    // $min accumulator uses MIN with dot notation for type preservation
     // MongoDB: [{$group: {_id: "$category", minPrice: {$min: "$price"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("minPrice",
@@ -1444,16 +1442,15 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    // Should use MIN with dot notation
     assertThat(sql)
-        .describedAs("$min accumulator should use CASE for JSON type detection")
-        .contains("CASE WHEN SUBSTR(MIN(q.\"DATA\".price), 1, 1) IN ('{', '[')")
-        .contains("END FORMAT JSON");
+        .describedAs("$min accumulator should use MIN with dot notation")
+        .contains("MIN(q.\"DATA\".price)");
   }
 
   @Test
-  void shouldAddFormatJsonForMaxAccumulator() {
-    // $max accumulator must use CASE expression to handle both objects and scalars
+  void shouldUseDotNotationForMaxAccumulator() {
+    // $max accumulator uses MAX with dot notation for type preservation
     // MongoDB: [{$group: {_id: "$category", maxPrice: {$max: "$price"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("maxPrice",
@@ -1465,10 +1462,9 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use CASE with SUBSTR to detect JSON objects/arrays vs scalars
+    // Should use MAX with dot notation
     assertThat(sql)
-        .describedAs("$max accumulator should use CASE for JSON type detection")
-        .contains("CASE WHEN SUBSTR(MAX(q.\"DATA\".price), 1, 1) IN ('{', '[')")
-        .contains("END FORMAT JSON");
+        .describedAs("$max accumulator should use MAX with dot notation")
+        .contains("MAX(q.\"DATA\".price)");
   }
 }

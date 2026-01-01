@@ -1333,23 +1333,14 @@ public final class CteBasedPipelineRenderer {
 
     if (accumOp == AccumulatorOp.FIRST || accumOp == AccumulatorOp.LAST) {
       // Use MIN/MAX with KEEP (DENSE_RANK FIRST/LAST ORDER BY ...) for proper ordering
-      // Use CASE to handle both JSON objects/arrays and scalar values correctly
+      // Use dot notation for type preservation
       String func = accumOp == AccumulatorOp.FIRST ? "MIN" : "MAX";
       String rankDir = accumOp == AccumulatorOp.FIRST ? "FIRST" : "LAST";
-      // Build the aggregate expression string for reuse
-      ctx.sql("CASE WHEN SUBSTR(" + func + "(");
-      renderAccumulatorArg(ctx, accum.getArgument());
+      ctx.sql(func + "(");
+      renderDotNotationAccumulatorArg(ctx, accum.getArgument());
       ctx.sql(") KEEP (DENSE_RANK " + rankDir + " ORDER BY ");
       renderSortKeysForKeep(ctx, sortStage);
-      ctx.sql("), 1, 1) IN ('{', '[') THEN " + func + "(");
-      renderAccumulatorArg(ctx, accum.getArgument());
-      ctx.sql(") KEEP (DENSE_RANK " + rankDir + " ORDER BY ");
-      renderSortKeysForKeep(ctx, sortStage);
-      ctx.sql(") ELSE '\"' || " + func + "(");
-      renderAccumulatorArg(ctx, accum.getArgument());
-      ctx.sql(") KEEP (DENSE_RANK " + rankDir + " ORDER BY ");
-      renderSortKeysForKeep(ctx, sortStage);
-      ctx.sql(") || '\"' END FORMAT JSON");
+      ctx.sql(")");
     } else {
       // For other accumulators, use regular rendering
       renderAccumulator(ctx, accum);
@@ -2107,19 +2098,12 @@ public final class CteBasedPipelineRenderer {
       }
       case MIN, MAX, FIRST, LAST -> {
         // Use MIN/MAX for FIRST/LAST approximation
-        // Use CASE to handle both JSON objects/arrays and scalar values correctly:
-        // - If value starts with { or [, it's a JSON object/array - use directly
-        // - Otherwise it's a scalar (string/number/boolean) - wrap in quotes
-        // Both cases use FORMAT JSON to embed properly in JSON_OBJECT
+        // Use dot notation for type preservation (works for numbers, strings, dates, objects)
         String func = (accumOp == AccumulatorOp.MIN || accumOp == AccumulatorOp.FIRST)
             ? "MIN" : "MAX";
-        ctx.sql("CASE WHEN SUBSTR(" + func + "(");
+        ctx.sql(func + "(");
         renderDotNotationAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql("), 1, 1) IN ('{', '[') THEN " + func + "(");
-        renderDotNotationAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(") ELSE '\"' || " + func + "(");
-        renderDotNotationAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(") || '\"' END FORMAT JSON");
+        ctx.sql(")");
       }
       case PUSH -> {
         // $push: collect all values into array
@@ -2217,16 +2201,11 @@ public final class CteBasedPipelineRenderer {
       }
       case MIN, MAX, FIRST, LAST -> {
         // MIN/MAX - access DATA column directly
-        // Use CASE to handle both JSON objects/arrays and scalar values correctly
         String func = (accumOp == AccumulatorOp.MIN || accumOp == AccumulatorOp.FIRST)
             ? "MIN" : "MAX";
-        ctx.sql("CASE WHEN SUBSTR(" + func + "(");
+        ctx.sql(func + "(");
         renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql("), 1, 1) IN ('{', '[') THEN " + func + "(");
-        renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(") ELSE '\"' || " + func + "(");
-        renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(") || '\"' END FORMAT JSON");
+        ctx.sql(")");
       }
       case PUSH -> {
         ctx.sql("JSON_ARRAYAGG(");
