@@ -124,9 +124,16 @@ run_mongodb_query() {
     # Escape single quotes in pipeline for shell embedding
     local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
 
-    docker exec mongo-translator-mongodb mongosh --quiet testdb \
-        -u admin -p admin123 --authenticationDatabase admin \
-        --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
+    # Check if pipeline starts with $documents stage - use db.aggregate() instead of db.collection.aggregate()
+    if echo "$pipeline" | grep -q '"\$documents"'; then
+        docker exec mongo-translator-mongodb mongosh --quiet testdb \
+            -u admin -p admin123 --authenticationDatabase admin \
+            --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
+    else
+        docker exec mongo-translator-mongodb mongosh --quiet testdb \
+            -u admin -p admin123 --authenticationDatabase admin \
+            --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
+    fi
 }
 
 # Function to run MongoDB query with EJSON output (Extended JSON for type comparison)
@@ -138,9 +145,16 @@ run_mongodb_query_ejson() {
     # Escape single quotes in pipeline for shell embedding
     local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
 
-    docker exec mongo-translator-mongodb mongosh --quiet testdb \
-        -u admin -p admin123 --authenticationDatabase admin \
-        --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray())" 2>/dev/null
+    # Check if pipeline starts with $documents stage - use db.aggregate() instead of db.collection.aggregate()
+    if echo "$pipeline" | grep -q '"\$documents"'; then
+        docker exec mongo-translator-mongodb mongosh --quiet testdb \
+            -u admin -p admin123 --authenticationDatabase admin \
+            --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.aggregate(p).toArray())" 2>/dev/null
+    else
+        docker exec mongo-translator-mongodb mongosh --quiet testdb \
+            -u admin -p admin123 --authenticationDatabase admin \
+            --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray())" 2>/dev/null
+    fi
 }
 
 # Function to convert MongoDB EJSON to Oracle's EJSON format
@@ -413,6 +427,76 @@ SET HEADING ON")
 
     # Return the plan output, preserving formatting
     echo "$result"
+}
+
+# =============================================================================
+# MongoDB API (ORDS) Functions
+# =============================================================================
+
+# MongoDB API configuration
+MONGODB_API_PORT="${MONGODB_API_PORT:-27018}"
+MONGODB_API_URI="mongodb://translator:translator123@localhost:${MONGODB_API_PORT}/translator?authMechanism=PLAIN&authSource=\$external&tls=true&tlsAllowInvalidCertificates=true&retryWrites=false&loadBalanced=true"
+MONGODB_API_ENABLED=false
+
+# Operators NOT supported by Oracle MongoDB API
+MONGODB_API_UNSUPPORTED_STAGES=('$graphLookup' '$setWindowFields' '$bucketAuto' '$redact')
+
+# Function to check if MongoDB API (ORDS) is available
+check_mongodb_api() {
+    # Check if ORDS container is running
+    if ! docker ps --format '{{.Names}}' | grep -q 'mongo-translator-ords'; then
+        return 1
+    fi
+
+    # Check if ORDS REST API is responding
+    if ! curl -sf http://localhost:8080/ords/ > /dev/null 2>&1; then
+        return 1
+    fi
+
+    # Check if MongoDB API port is listening
+    if ! nc -z localhost ${MONGODB_API_PORT} 2>/dev/null; then
+        return 1
+    fi
+
+    return 0
+}
+
+# Function to check if pipeline is supported by MongoDB API
+# Returns 0 (true) if supported, 1 (false) if unsupported
+is_supported_by_mongodb_api() {
+    local pipeline="$1"
+
+    for stage in "${MONGODB_API_UNSUPPORTED_STAGES[@]}"; do
+        if echo "$pipeline" | grep -q "\"$stage\""; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# Function to run query via MongoDB API (ORDS)
+run_mongodb_api_query() {
+    local collection="$1"
+    local pipeline="$2"
+
+    # Escape single quotes in pipeline for shell embedding
+    local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
+
+    mongosh "${MONGODB_API_URI}" --quiet \
+        --eval "var p = EJSON.parse('${escaped_pipeline}'); EJSON.stringify(db.${collection}.aggregate(p).toArray(), {relaxed: true})" 2>/dev/null
+}
+
+# Function to run explain via MongoDB API (ORDS)
+run_mongodb_api_explain() {
+    local collection="$1"
+    local pipeline="$2"
+
+    # Escape single quotes in pipeline for shell embedding
+    local escaped_pipeline="${pipeline//\'/\'\"\'\"\'}"
+
+    mongosh "${MONGODB_API_URI}" --quiet \
+        --eval "var p = EJSON.parse('${escaped_pipeline}'); JSON.stringify(db.${collection}.explain().aggregate(p), null, 2)" 2>/dev/null
 }
 
 # Function to generate Oracle SQL using the translator

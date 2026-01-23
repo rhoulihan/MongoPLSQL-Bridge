@@ -26,6 +26,7 @@ import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
 import com.oracle.mongodb.translator.ast.stage.BucketStage;
 import com.oracle.mongodb.translator.ast.stage.CountStage;
+import com.oracle.mongodb.translator.ast.stage.DocumentsStage;
 import com.oracle.mongodb.translator.ast.stage.FacetStage;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
 import com.oracle.mongodb.translator.ast.stage.LimitStage;
@@ -40,6 +41,8 @@ import com.oracle.mongodb.translator.ast.stage.SortStage;
 import com.oracle.mongodb.translator.ast.stage.Stage;
 import com.oracle.mongodb.translator.ast.stage.UnionWithStage;
 import com.oracle.mongodb.translator.ast.stage.UnwindStage;
+import java.util.List;
+import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -206,8 +209,8 @@ class CteBasedPipelineRendererTest {
   // =========================================================================
 
   @Test
-  void shouldRenderSimpleProjectionWithJsonTransformKeep() {
-    // Simple inclusion projection should use json_transform KEEP
+  void shouldRenderSimpleProjectionWithJsonObject() {
+    // Simple inclusion projection uses JSON_OBJECT with JSON_QUERY for each field
     var projections =
         new java.util.LinkedHashMap<String, ProjectStage.ProjectionField>();
     projections.put("_id",
@@ -223,8 +226,8 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     assertThat(context.toSql())
-        .contains("json_transform")
-        .contains("KEEP")
+        .contains("JSON_OBJECT")
+        .contains("'_id' VALUE JSON_QUERY")
         .contains("'$.\"_id\"'")
         .contains("'$.\"orderId\"'")
         .contains("'$.\"status\"'");
@@ -256,6 +259,7 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     // Should produce 3 CTEs: Q1 (base), Q2 (match), Q3 (project)
+    // Projection uses JSON_OBJECT with JSON_QUERY for each field
     String expectedPattern =
         "WITH \"Q1\" (\"ID\", \"DATA\") AS ("
             + "SELECT \"ID\", \"DATA\" FROM \"ORDERS\""
@@ -264,7 +268,8 @@ class CteBasedPipelineRendererTest {
             + "WHERE JSON_EXISTS(\"DATA\", '$?(@.status.stringOnly() == $B0)' "
             + "PASSING :1 AS \"B0\" TYPE(strict))"
             + "), \"Q3\" (\"DATA\") AS ("
-            + "SELECT json_transform(\"DATA\", KEEP '$.\"_id\"', '$.\"orderId\"') "
+            + "SELECT JSON_OBJECT('_id' VALUE JSON_QUERY(\"DATA\", '$.\"_id\"'), "
+            + "'orderId' VALUE JSON_QUERY(\"DATA\", '$.\"orderId\"') RETURNING JSON) "
             + "FROM \"Q2\" q"
             + ") SELECT JSON_ARRAYAGG(\"DATA\" RETURNING CLOB) FROM \"Q3\"";
 
@@ -391,12 +396,12 @@ class CteBasedPipelineRendererTest {
 
     renderer.render(pipeline, context);
 
-    // Should use JSON_QUERY to preserve original types when building compound _id
-    // JSON_QUERY naturally preserves JSON types and handles non-scalars
+    // Should use dot notation to preserve original types when building compound _id
+    // Dot notation preserves JSON types and enables proper GROUP BY matching
     String sql = context.toSql();
     assertThat(sql)
-        .contains("JSON_OBJECT('year' VALUE JSON_QUERY(\"DATA\", '$.year')")
-        .contains("'quarter' VALUE JSON_QUERY(\"DATA\", '$.quarter')");
+        .contains("JSON_OBJECT('year' VALUE q.\"DATA\".year")
+        .contains("'quarter' VALUE q.\"DATA\".quarter");
   }
 
   // =========================================================================
@@ -1390,7 +1395,7 @@ class CteBasedPipelineRendererTest {
 
   @Test
   void shouldUseDotNotationForFirstAccumulator() {
-    // $first accumulator uses MIN with dot notation for type preservation
+    // $first accumulator uses MIN with dot notation for JSON type preservation
     // MongoDB: [{$group: {_id: "$category", firstItem: {$first: "$details"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("firstItem",
@@ -1402,7 +1407,7 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use MIN with dot notation
+    // Should use MIN with dot notation - JSON_OBJECT handles the type directly
     assertThat(sql)
         .describedAs("$first accumulator should use MIN with dot notation")
         .contains("MIN(q.\"DATA\".details)");
@@ -1410,7 +1415,7 @@ class CteBasedPipelineRendererTest {
 
   @Test
   void shouldUseDotNotationForLastAccumulator() {
-    // $last accumulator uses MAX with dot notation for type preservation
+    // $last accumulator uses MAX with dot notation for JSON type preservation
     // MongoDB: [{$group: {_id: "$category", lastItem: {$last: "$details"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("lastItem",
@@ -1422,7 +1427,7 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use MAX with dot notation
+    // Should use MAX with dot notation - JSON_OBJECT handles the type directly
     assertThat(sql)
         .describedAs("$last accumulator should use MAX with dot notation")
         .contains("MAX(q.\"DATA\".details)");
@@ -1430,7 +1435,7 @@ class CteBasedPipelineRendererTest {
 
   @Test
   void shouldUseDotNotationForMinAccumulator() {
-    // $min accumulator uses MIN with dot notation for type preservation
+    // $min accumulator uses MIN with dot notation for JSON type preservation
     // MongoDB: [{$group: {_id: "$category", minPrice: {$min: "$price"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("minPrice",
@@ -1442,7 +1447,7 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use MIN with dot notation
+    // Should use MIN with dot notation - JSON_OBJECT handles the type directly
     assertThat(sql)
         .describedAs("$min accumulator should use MIN with dot notation")
         .contains("MIN(q.\"DATA\".price)");
@@ -1450,7 +1455,7 @@ class CteBasedPipelineRendererTest {
 
   @Test
   void shouldUseDotNotationForMaxAccumulator() {
-    // $max accumulator uses MAX with dot notation for type preservation
+    // $max accumulator uses MAX with dot notation for JSON type preservation
     // MongoDB: [{$group: {_id: "$category", maxPrice: {$max: "$price"}}}]
     var accumulators = new java.util.LinkedHashMap<String, AccumulatorExpression>();
     accumulators.put("maxPrice",
@@ -1462,9 +1467,196 @@ class CteBasedPipelineRendererTest {
     renderer.render(pipeline, context);
 
     String sql = context.toSql();
-    // Should use MAX with dot notation
+    // Should use MAX with dot notation - JSON_OBJECT handles the type directly
     assertThat(sql)
         .describedAs("$max accumulator should use MAX with dot notation")
         .contains("MAX(q.\"DATA\".price)");
+  }
+
+  // ========== $documents stage tests ==========
+
+  @Test
+  void shouldRenderDocumentsStageAsCteBase() {
+    // $documents stage generates inline documents, replacing the base table CTE
+    // MongoDB: [{$documents: [{x: "Andrew"}, {x: "Dan"}]}]
+    var docsStage = new DocumentsStage(List.of(
+        new Document("x", "Andrew"),
+        new Document("x", "Dan")
+    ));
+
+    // Create pipeline with empty collection name since $documents provides the data
+    Pipeline pipeline = Pipeline.of("", docsStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should generate UNION ALL of SELECT FROM DUAL
+    assertThat(sql).contains("FROM DUAL");
+    assertThat(sql).contains("UNION ALL");
+    assertThat(sql).contains("Andrew");
+    assertThat(sql).contains("Dan");
+  }
+
+  @Test
+  void shouldRenderDocumentsFollowedByGraphLookup() {
+    // Josh's test case: $documents -> $graphLookup
+    // MongoDB: [
+    //   {$documents: [{x: "Andrew"}, {x: "Dan"}]},
+    //   {$graphLookup: {from: "employees", startWith: "$x", ...}}
+    // ]
+    var docsStage = new DocumentsStage(List.of(
+        new Document("x", "Andrew"),
+        new Document("x", "Dan"),
+        new Document("x", List.of("Dev", "Eliot"))
+    ));
+
+    // GraphLookup stage - traversing up the reportsTo hierarchy
+    var graphLookupStage = new com.oracle.mongodb.translator.ast.stage.GraphLookupStage(
+        "employees",     // from
+        "x",             // startWith
+        "reportsTo",     // connectFromField
+        "name",          // connectToField
+        "reportingHierarchy",  // as
+        null,            // maxDepth (unlimited)
+        null             // depthField
+    );
+
+    Pipeline pipeline = Pipeline.of("", docsStage, graphLookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // First CTE should be the documents
+    assertThat(sql).contains("FROM DUAL");
+    assertThat(sql).contains("Andrew");
+    // Should have graphLookup CTE
+    assertThat(sql).containsIgnoringCase("EMPLOYEES");
+  }
+
+  @Test
+  void shouldRenderDocumentWithArrayValue() {
+    // Document with array value - Josh's third test document
+    var docsStage = new DocumentsStage(List.of(
+        new Document("x", List.of("Dev", "Eliot"))
+    ));
+
+    Pipeline pipeline = Pipeline.of("", docsStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    assertThat(sql).contains("Dev");
+    assertThat(sql).contains("Eliot");
+    assertThat(sql).contains("FROM DUAL");
+  }
+
+  @Test
+  void shouldRenderDocumentsWithMatchStage() {
+    // $documents -> $match
+    var docsStage = new DocumentsStage(List.of(
+        new Document("name", "Alice").append("active", true),
+        new Document("name", "Bob").append("active", false),
+        new Document("name", "Carol").append("active", true)
+    ));
+
+    var matchStage = new MatchStage(
+        new ComparisonExpression(
+            ComparisonOp.EQ,
+            FieldPathExpression.of("active"),
+            LiteralExpression.of(true)
+        )
+    );
+
+    Pipeline pipeline = Pipeline.of("", docsStage, matchStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Q1 should be the documents
+    assertThat(sql).contains("FROM DUAL");
+    // Q2 should filter based on active
+    assertThat(sql).containsIgnoringCase("WHERE");
+    assertThat(sql).contains("active");
+  }
+
+  // ========== $graphLookup recursion tests ==========
+
+  @Test
+  void shouldUseRecursiveCteForUnlimitedGraphLookup() {
+    // $graphLookup with no maxDepth should use recursive CTE for unlimited traversal
+    // MongoDB: [{$graphLookup: {from: "employees", startWith: "$x", ...}}]  (no maxDepth)
+    var graphLookupStage = new com.oracle.mongodb.translator.ast.stage.GraphLookupStage(
+        "employees",     // from
+        "x",             // startWith
+        "reportsTo",     // connectFromField
+        "name",          // connectToField
+        "reportingChain",  // as
+        null,            // maxDepth: null = unlimited
+        null             // depthField
+    );
+
+    Pipeline pipeline = Pipeline.of("start_docs", graphLookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should use recursive CTE with UNION ALL for unlimited recursion
+    assertThat(sql)
+        .describedAs("Unlimited $graphLookup should use recursive CTE")
+        .containsIgnoringCase("UNION ALL");
+    // Should have graph_paths CTE for traversal
+    assertThat(sql).containsIgnoringCase("graph_paths");
+  }
+
+  @Test
+  void shouldUseSingleLevelForMaxDepthZero() {
+    // $graphLookup with maxDepth: 0 should NOT use recursive CTE
+    var graphLookupStage = new com.oracle.mongodb.translator.ast.stage.GraphLookupStage(
+        "employees",     // from
+        "x",             // startWith
+        "reportsTo",     // connectFromField
+        "name",          // connectToField
+        "reportingChain",  // as
+        0,               // maxDepth: 0 = single level only
+        null             // depthField
+    );
+
+    Pipeline pipeline = Pipeline.of("start_docs", graphLookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should NOT have recursive UNION ALL
+    // The non-recursive path does a simple correlated subquery
+    assertThat(sql)
+        .describedAs("maxDepth=0 should not use recursive CTE")
+        .doesNotContain("graph_paths");
+  }
+
+  @Test
+  void shouldHandleArrayStartWithInGraphLookup() {
+    // When startWith field contains an array, $graphLookup should start from ALL elements
+    // MongoDB: [{$graphLookup: {from: "employees", startWith: "$x", ...}}]
+    // Where x could be ["Dev", "Eliot"] - should start traversal from both Dev AND Eliot
+    var graphLookupStage = new com.oracle.mongodb.translator.ast.stage.GraphLookupStage(
+        "employees",     // from
+        "x",             // startWith (could be scalar or array)
+        "reportsTo",     // connectFromField
+        "name",          // connectToField
+        "reportingChain",  // as
+        null,            // maxDepth: unlimited
+        null             // depthField
+    );
+
+    Pipeline pipeline = Pipeline.of("start_docs", graphLookupStage);
+
+    renderer.render(pipeline, context);
+
+    String sql = context.toSql();
+    // Should handle both scalar and array startWith values
+    // For arrays, need to use JSON_TABLE or JSON_EXISTS to match any element
+    assertThat(sql)
+        .describedAs("Should handle array startWith with JSON_TABLE or similar")
+        .containsIgnoringCase("JSON_TABLE");
   }
 }

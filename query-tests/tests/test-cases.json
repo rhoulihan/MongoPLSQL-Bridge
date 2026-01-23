@@ -4837,6 +4837,40 @@
       "sort_by": "_id"
     },
     {
+      "id": "GRAPHLOOKUP003",
+      "name": "$graphLookup - external starting values (Josh's test)",
+      "category": "graphLookup",
+      "operator": "$graphLookup",
+      "description": "Tests $graphLookup with $documents stage providing starting values. Uses MongoDB founders hierarchy: Dev -> Eliot -> Ron/Andrew -> Asya/Dan. This is Josh Spiegel's exact test case.",
+      "collection": "mongodb_founders",
+      "mongodb_pipeline": [
+        {
+          "$documents": [
+            {"x": "Andrew"},
+            {"x": "Dan"},
+            {"x": ["Dev", "Eliot"]}
+          ]
+        },
+        {
+          "$graphLookup": {
+            "from": "mongodb_founders",
+            "startWith": "$x",
+            "connectFromField": "reportsTo",
+            "connectToField": "name",
+            "as": "reportingHierarchy"
+          }
+        },
+        {
+          "$project": {
+            "x": 1,
+            "hierarchyCount": { "$size": "$reportingHierarchy" }
+          }
+        }
+      ],
+      "expected_count": 3,
+      "sort_by": "x"
+    },
+    {
       "id": "ARR015",
       "name": "$filter on field path array",
       "category": "array",

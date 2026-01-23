@@ -562,6 +562,55 @@ PROMPT   Inserted 2 commission_schedule records
 
 CREATE INDEX idx_sched_type ON commission_schedule(JSON_VALUE(data, '$.accountType'));
 
+-- ============================================================
+-- Create MongoDB Founders Table (for $graphLookup tests - from MongoDB official docs)
+-- ============================================================
+PROMPT Loading mongodb_founders table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE mongodb_founders CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE mongodb_founders (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO mongodb_founders (id, data) VALUES ('1', '{"_id": 1, "name": "Dev"}');
+INSERT INTO mongodb_founders (id, data) VALUES ('2', '{"_id": 2, "name": "Eliot", "reportsTo": "Dev"}');
+INSERT INTO mongodb_founders (id, data) VALUES ('3', '{"_id": 3, "name": "Ron", "reportsTo": "Eliot"}');
+INSERT INTO mongodb_founders (id, data) VALUES ('4', '{"_id": 4, "name": "Andrew", "reportsTo": "Eliot"}');
+INSERT INTO mongodb_founders (id, data) VALUES ('5', '{"_id": 5, "name": "Asya", "reportsTo": "Ron"}');
+INSERT INTO mongodb_founders (id, data) VALUES ('6', '{"_id": 6, "name": "Dan", "reportsTo": "Andrew"}');
+
+PROMPT   Inserted 6 mongodb_founders records
+
+CREATE INDEX idx_founders_name ON mongodb_founders(JSON_VALUE(data, '$.name'));
+
+-- ============================================================
+-- Create Graph Start Table (starting point documents for $graphLookup tests)
+-- ============================================================
+PROMPT Loading graph_start table...
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE graph_start CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE graph_start (
+    id VARCHAR2(50) PRIMARY KEY,
+    data JSON
+);
+
+INSERT INTO graph_start (id, data) VALUES ('1', '{"_id": 1, "x": "Andrew"}');
+INSERT INTO graph_start (id, data) VALUES ('2', '{"_id": 2, "x": "Dan"}');
+INSERT INTO graph_start (id, data) VALUES ('3', '{"_id": 3, "x": ["Dev", "Eliot"]}');
+
+PROMPT   Inserted 3 graph_start records
+
 COMMIT;
 
 -- ============================================================
@@ -595,8 +644,145 @@ SELECT 'sales_reps', COUNT(*) FROM sales_reps
 UNION ALL
 SELECT 'commission_accounts', COUNT(*) FROM commission_accounts
 UNION ALL
-SELECT 'commission_schedule', COUNT(*) FROM commission_schedule;
+SELECT 'commission_schedule', COUNT(*) FROM commission_schedule
+UNION ALL
+SELECT 'mongodb_founders', COUNT(*) FROM mongodb_founders
+UNION ALL
+SELECT 'graph_start', COUNT(*) FROM graph_start;
 
 PROMPT ============================================================
 
 EXIT;
+
+-- =====================================================
+-- Additional collections for comprehensive test coverage
+-- =====================================================
+
+-- orders_detailed collection (10 documents)
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE ORDERS_DETAILED CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+CREATE TABLE ORDERS_DETAILED (
+  id VARCHAR2(100) PRIMARY KEY,
+  data JSON
+);
+
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD001', '{"_id":"ORD001","orderNumber":"ON-2024-00001","customerId":"C001","orderDate":{"$date":"2024-01-15T10:30:00.000Z"},"status":"delivered","shippingAddress":{"street":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA"},"lineItems":[{"sku":"SKU-001","productName":"Wireless Headphones","category":"electronics","quantity":2,"unitPrice":79.99,"discount":10,"variants":{"color":"black"}},{"sku":"SKU-002","productName":"USB-C Cable","category":"accessories","quantity":3,"unitPrice":12.99,"discount":0,"variants":{"color":"white"}}],"payment":{"method":"credit_card","last4":"4242","amount":182.95,"currency":"USD"},"fulfillment":{"warehouse":"WH-EAST","shippedDate":{"$date":"2024-01-16T14:00:00.000Z"},"carrier":"UPS","trackingNumber":"1Z999AA10123456784"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD002', '{"_id":"ORD002","orderNumber":"ON-2024-00002","customerId":"C002","orderDate":{"$date":"2024-01-18T14:45:00.000Z"},"status":"delivered","shippingAddress":{"street":"456 Oak Ave","city":"Los Angeles","state":"CA","zip":"90001","country":"USA"},"lineItems":[{"sku":"SKU-004","productName":"Mechanical Keyboard","category":"electronics","quantity":1,"unitPrice":129.99,"discount":15,"variants":{"color":"silver"}}],"payment":{"method":"paypal","last4":null,"amount":110.49,"currency":"USD"},"fulfillment":{"warehouse":"WH-WEST","shippedDate":{"$date":"2024-01-19T09:30:00.000Z"},"carrier":"FedEx","trackingNumber":"794644790149"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD003', '{"_id":"ORD003","orderNumber":"ON-2024-00003","customerId":"C001","orderDate":{"$date":"2024-02-05T09:15:00.000Z"},"status":"shipped","shippingAddress":{"street":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA"},"lineItems":[{"sku":"SKU-003","productName":"Laptop Stand","category":"accessories","quantity":1,"unitPrice":45.0,"discount":0,"variants":{"color":"black"}},{"sku":"SKU-005","productName":"Mouse Pad","category":"accessories","quantity":2,"unitPrice":15.99,"discount":5,"variants":{"color":"blue"}}],"payment":{"method":"credit_card","last4":"1234","amount":75.38,"currency":"USD"},"fulfillment":{"warehouse":"WH-EAST","shippedDate":{"$date":"2024-02-07T11:00:00.000Z"},"carrier":"UPS","trackingNumber":"1Z999AA10234567891"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD004', '{"_id":"ORD004","orderNumber":"ON-2024-00004","customerId":"C003","orderDate":{"$date":"2024-02-10T16:20:00.000Z"},"status":"pending","shippingAddress":{"street":"789 Pine Rd","city":"Chicago","state":"IL","zip":"60601","country":"USA"},"lineItems":[{"sku":"SKU-006","productName":"Monitor Light","category":"electronics","quantity":1,"unitPrice":59.99,"discount":0,"variants":{"color":"black"}},{"sku":"SKU-007","productName":"Desk Organizer","category":"office","quantity":1,"unitPrice":24.99,"discount":0,"variants":{"color":"white"}}],"payment":{"method":"debit_card","last4":"5678","amount":84.98,"currency":"USD"},"fulfillment":null}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD005', '{"_id":"ORD005","orderNumber":"ON-2024-00005","customerId":"C004","orderDate":{"$date":"2024-02-15T11:30:00.000Z"},"status":"cancelled","shippingAddress":{"street":"321 Elm St","city":"Houston","state":"TX","zip":"77001","country":"USA"},"lineItems":[{"sku":"SKU-008","productName":"Webcam","category":"electronics","quantity":1,"unitPrice":89.99,"discount":0,"variants":{"color":"black"}}],"payment":{"method":"credit_card","last4":"9012","amount":0,"currency":"USD"},"fulfillment":null}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD006', '{"_id":"ORD006","orderNumber":"ON-2024-00006","customerId":"C002","orderDate":{"$date":"2024-03-01T08:00:00.000Z"},"status":"delivered","shippingAddress":{"street":"456 Oak Ave","city":"Los Angeles","state":"CA","zip":"90001","country":"USA"},"lineItems":[{"sku":"SKU-001","productName":"Wireless Headphones","category":"electronics","quantity":1,"unitPrice":79.99,"discount":20,"variants":{"color":"white"}},{"sku":"SKU-003","productName":"Laptop Stand","category":"accessories","quantity":2,"unitPrice":45.0,"discount":10,"variants":{"color":"silver"}}],"payment":{"method":"credit_card","last4":"3456","amount":144.99,"currency":"USD"},"fulfillment":{"warehouse":"WH-WEST","shippedDate":{"$date":"2024-03-02T10:15:00.000Z"},"carrier":"USPS","trackingNumber":"9400111899223100001234"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD007', '{"_id":"ORD007","orderNumber":"ON-2024-00007","customerId":"C005","orderDate":{"$date":"2024-03-10T13:45:00.000Z"},"status":"delivered","shippingAddress":{"street":"555 Maple Dr","city":"Phoenix","state":"AZ","zip":"85001","country":"USA"},"lineItems":[{"sku":"SKU-002","productName":"USB-C Cable","category":"accessories","quantity":5,"unitPrice":12.99,"discount":0,"variants":{"color":"black"}}],"payment":{"method":"paypal","last4":null,"amount":64.95,"currency":"USD"},"fulfillment":{"warehouse":"WH-CENTRAL","shippedDate":{"$date":"2024-03-11T08:30:00.000Z"},"carrier":"DHL","trackingNumber":"1234567890"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD008', '{"_id":"ORD008","orderNumber":"ON-2024-00008","customerId":"C006","orderDate":{"$date":"2024-03-20T15:00:00.000Z"},"status":"processing","shippingAddress":{"street":"777 Beach Blvd","city":"Miami","state":"FL","zip":"33101","country":"USA"},"lineItems":[{"sku":"SKU-004","productName":"Mechanical Keyboard","category":"electronics","quantity":2,"unitPrice":129.99,"discount":5,"variants":{"color":"black"}},{"sku":"SKU-005","productName":"Mouse Pad","category":"accessories","quantity":2,"unitPrice":15.99,"discount":0,"variants":{"color":"red"}}],"payment":{"method":"credit_card","last4":"7890","amount":278.96,"currency":"USD"},"fulfillment":null}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD009', '{"_id":"ORD009","orderNumber":"ON-2024-00009","customerId":"C007","orderDate":{"$date":"2024-04-01T10:00:00.000Z"},"status":"delivered","shippingAddress":{"street":"888 Rain St","city":"Seattle","state":"WA","zip":"98101","country":"USA"},"lineItems":[{"sku":"SKU-006","productName":"Monitor Light","category":"electronics","quantity":1,"unitPrice":59.99,"discount":10,"variants":{"color":"white"}}],"payment":{"method":"debit_card","last4":"2345","amount":53.99,"currency":"USD"},"fulfillment":{"warehouse":"WH-WEST","shippedDate":{"$date":"2024-04-02T14:00:00.000Z"},"carrier":"UPS","trackingNumber":"1Z999AA10345678901"}}');
+INSERT INTO ORDERS_DETAILED (id, data) VALUES ('ORD010', '{"_id":"ORD010","orderNumber":"ON-2024-00010","customerId":"C001","orderDate":{"$date":"2024-04-15T12:30:00.000Z"},"status":"delivered","shippingAddress":{"street":"123 Main St","city":"New York","state":"NY","zip":"10001","country":"USA"},"lineItems":[{"sku":"SKU-008","productName":"Webcam","category":"electronics","quantity":1,"unitPrice":89.99,"discount":0,"variants":{"color":"black"}},{"sku":"SKU-007","productName":"Desk Organizer","category":"office","quantity":1,"unitPrice":24.99,"discount":0,"variants":{"color":"black"}}],"payment":{"method":"credit_card","last4":"4242","amount":114.98,"currency":"USD"},"fulfillment":{"warehouse":"WH-EAST","shippedDate":{"$date":"2024-04-16T09:00:00.000Z"},"carrier":"FedEx","trackingNumber":"794644790250"}}');
+
+-- purchase_orders collection (15 documents)
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE PURCHASE_ORDERS CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+CREATE TABLE PURCHASE_ORDERS (
+  id VARCHAR2(100) PRIMARY KEY,
+  data JSON
+);
+
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO001', '{"_id":"PO001","locationNumber":"LOC001","docRefNumber":"DOC-2024-001","customerPONumber":"PO-A001","orderedDate":{"$date":"2024-03-15T10:00:00.000Z"},"amount":1500.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO002', '{"_id":"PO002","locationNumber":"LOC001","docRefNumber":"DOC-2024-002","customerPONumber":"PO-A002","orderedDate":{"$date":"2024-04-10T14:30:00.000Z"},"amount":2500.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO003', '{"_id":"PO003","locationNumber":"LOC001","docRefNumber":"DOC-2024-003","customerPONumber":"PO-A003","orderedDate":{"$date":"2024-05-20T09:15:00.000Z"},"amount":750.0,"status":"pending"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO004', '{"_id":"PO004","locationNumber":"LOC001","docRefNumber":"DOC-2024-004","customerPONumber":"PO-A004","orderedDate":{"$date":"2024-06-05T11:45:00.000Z"},"amount":3200.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO005', '{"_id":"PO005","locationNumber":"LOC001","docRefNumber":"DOC-2024-005","customerPONumber":"PO-A005","orderedDate":{"$date":"2024-07-12T16:00:00.000Z"},"amount":890.0,"status":"pending"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO006', '{"_id":"PO006","locationNumber":"LOC001","docRefNumber":"DOC-2024-001","customerPONumber":"PO-A001","orderedDate":{"$date":"2024-03-15T10:00:00.000Z"},"amount":500.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO007', '{"_id":"PO007","locationNumber":"LOC002","docRefNumber":"DOC-2024-006","customerPONumber":"PO-B001","orderedDate":{"$date":"2024-04-22T13:00:00.000Z"},"amount":4100.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO008', '{"_id":"PO008","locationNumber":"LOC001","docRefNumber":"DOC-2024-007","customerPONumber":"PO-A006","orderedDate":{"$date":"2024-08-01T08:30:00.000Z"},"amount":1750.0,"status":"shipped"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO009', '{"_id":"PO009","locationNumber":"LOC001","docRefNumber":"DOC-2024-008","customerPONumber":"PO-A007","orderedDate":{"$date":"2024-09-18T15:20:00.000Z"},"amount":620.0,"status":"pending"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO010', '{"_id":"PO010","locationNumber":"LOC001","docRefNumber":"DOC-2024-009","customerPONumber":"PO-A008","orderedDate":{"$date":"2024-10-25T10:45:00.000Z"},"amount":2100.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO011', '{"_id":"PO011","locationNumber":"LOC003","docRefNumber":"DOC-2024-010","customerPONumber":"PO-C001","orderedDate":{"$date":"2024-11-05T12:00:00.000Z"},"amount":5500.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO012', '{"_id":"PO012","locationNumber":"LOC001","docRefNumber":"DOC-2024-010","customerPONumber":"PO-A009","orderedDate":{"$date":"2024-11-20T09:00:00.000Z"},"amount":980.0,"status":"pending"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO013', '{"_id":"PO013","locationNumber":"LOC001","docRefNumber":"DOC-2024-011","customerPONumber":"PO-A010","orderedDate":{"$date":"2025-01-08T14:15:00.000Z"},"amount":3400.0,"status":"completed"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO014', '{"_id":"PO014","locationNumber":"LOC001","docRefNumber":"DOC-2024-012","customerPONumber":"PO-A011","orderedDate":{"$date":"2025-02-14T11:30:00.000Z"},"amount":1200.0,"status":"shipped"}');
+INSERT INTO PURCHASE_ORDERS (id, data) VALUES ('PO015', '{"_id":"PO015","locationNumber":"LOC002","docRefNumber":"DOC-2024-013","customerPONumber":"PO-B002","orderedDate":{"$date":"2025-03-01T16:45:00.000Z"},"amount":7800.0,"status":"completed"}');
+
+-- page_views collection (15 documents)
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE PAGE_VIEWS CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+CREATE TABLE PAGE_VIEWS (
+  id VARCHAR2(100) PRIMARY KEY,
+  data JSON
+);
+
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV001', '{"_id":"PV001","sessionId":"sess_001","userId":"user_001","timestamp":{"$date":"2024-01-15T10:30:00.000Z"},"page":"/","referrer":null,"device":{"type":"desktop","os":"Windows","browser":"Chrome"},"duration":45,"events":[{"type":"scroll","depth":75}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV002', '{"_id":"PV002","sessionId":"sess_001","userId":"user_001","timestamp":{"$date":"2024-01-15T10:31:00.000Z"},"page":"/products","referrer":"/","device":{"type":"desktop","os":"Windows","browser":"Chrome"},"duration":120,"events":[{"type":"scroll","depth":90},{"type":"click","element":"product-card"}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV003', '{"_id":"PV003","sessionId":"sess_001","userId":"user_001","timestamp":{"$date":"2024-01-15T10:35:00.000Z"},"page":"/products/headphones","referrer":"/products","device":{"type":"desktop","os":"Windows","browser":"Chrome"},"duration":180,"events":[{"type":"scroll","depth":100},{"type":"click","element":"add-to-cart"}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV004', '{"_id":"PV004","sessionId":"sess_001","userId":"user_001","timestamp":{"$date":"2024-01-15T10:40:00.000Z"},"page":"/cart","referrer":"/products/headphones","device":{"type":"desktop","os":"Windows","browser":"Chrome"},"duration":60,"events":[{"type":"click","element":"checkout-btn"}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV005', '{"_id":"PV005","sessionId":"sess_001","userId":"user_001","timestamp":{"$date":"2024-01-15T10:42:00.000Z"},"page":"/checkout","referrer":"/cart","device":{"type":"desktop","os":"Windows","browser":"Chrome"},"duration":300,"events":[{"type":"click","element":"place-order"}],"isConversion":true}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV006', '{"_id":"PV006","sessionId":"sess_002","userId":"user_002","timestamp":{"$date":"2024-01-15T14:00:00.000Z"},"page":"/","referrer":null,"device":{"type":"mobile","os":"iOS","browser":"Safari"},"duration":30,"events":[],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV007', '{"_id":"PV007","sessionId":"sess_002","userId":"user_002","timestamp":{"$date":"2024-01-15T14:01:00.000Z"},"page":"/products","referrer":"/","device":{"type":"mobile","os":"iOS","browser":"Safari"},"duration":90,"events":[{"type":"scroll","depth":50}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV008', '{"_id":"PV008","sessionId":"sess_003","userId":null,"timestamp":{"$date":"2024-01-16T09:00:00.000Z"},"page":"/search","referrer":null,"device":{"type":"desktop","os":"macOS","browser":"Safari"},"duration":45,"events":[{"type":"click","element":"search-box"}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV009', '{"_id":"PV009","sessionId":"sess_003","userId":null,"timestamp":{"$date":"2024-01-16T09:02:00.000Z"},"page":"/products/keyboards","referrer":"/search","device":{"type":"desktop","os":"macOS","browser":"Safari"},"duration":150,"events":[{"type":"scroll","depth":80}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV010', '{"_id":"PV010","sessionId":"sess_004","userId":"user_003","timestamp":{"$date":"2024-01-17T11:30:00.000Z"},"page":"/account","referrer":null,"device":{"type":"tablet","os":"iPadOS","browser":"Safari"},"duration":60,"events":[],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV011', '{"_id":"PV011","sessionId":"sess_005","userId":"user_001","timestamp":{"$date":"2024-01-18T16:00:00.000Z"},"page":"/","referrer":null,"device":{"type":"mobile","os":"Android","browser":"Chrome"},"duration":25,"events":[{"type":"scroll","depth":30}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV012', '{"_id":"PV012","sessionId":"sess_005","userId":"user_001","timestamp":{"$date":"2024-01-18T16:02:00.000Z"},"page":"/products/accessories","referrer":"/","device":{"type":"mobile","os":"Android","browser":"Chrome"},"duration":100,"events":[{"type":"scroll","depth":60},{"type":"click","element":"filter-btn"}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV013', '{"_id":"PV013","sessionId":"sess_006","userId":"user_004","timestamp":{"$date":"2024-01-20T10:15:00.000Z"},"page":"/checkout","referrer":"/cart","device":{"type":"desktop","os":"Windows","browser":"Firefox"},"duration":240,"events":[{"type":"click","element":"place-order"}],"isConversion":true}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV014', '{"_id":"PV014","sessionId":"sess_007","userId":null,"timestamp":{"$date":"2024-01-22T08:30:00.000Z"},"page":"/about","referrer":null,"device":{"type":"desktop","os":"Linux","browser":"Firefox"},"duration":90,"events":[{"type":"scroll","depth":100}],"isConversion":false}');
+INSERT INTO PAGE_VIEWS (id, data) VALUES ('PV015', '{"_id":"PV015","sessionId":"sess_008","userId":"user_005","timestamp":{"$date":"2024-01-25T19:00:00.000Z"},"page":"/products","referrer":"/","device":{"type":"mobile","os":"iOS","browser":"Safari"},"duration":200,"events":[{"type":"scroll","depth":95},{"type":"click","element":"product-card"}],"isConversion":false}');
+
+-- support_tickets collection (10 documents)
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE SUPPORT_TICKETS CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+CREATE TABLE SUPPORT_TICKETS (
+  id VARCHAR2(100) PRIMARY KEY,
+  data JSON
+);
+
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT001', '{"_id":"TKT001","ticketNumber":"CS-2024-00001","customerId":"C001","createdAt":{"$date":"2024-01-15T10:30:00.000Z"},"resolvedAt":{"$date":"2024-01-15T14:45:00.000Z"},"status":"resolved","priority":"high","category":"billing","subcategory":"refund_request","assignedTo":"agent_001","escalations":[{"level":1,"timestamp":{"$date":"2024-01-15T11:00:00.000Z"},"reason":"no_response"}],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-15T10:30:00.000Z"},"text":"Need refund for order"},{"from":"agent","timestamp":{"$date":"2024-01-15T10:45:00.000Z"},"text":"Processing your request"}],"satisfaction":{"score":4,"feedback":"Quick resolution"}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT002', '{"_id":"TKT002","ticketNumber":"CS-2024-00002","customerId":"C002","createdAt":{"$date":"2024-01-16T09:00:00.000Z"},"resolvedAt":{"$date":"2024-01-16T11:30:00.000Z"},"status":"resolved","priority":"medium","category":"technical","subcategory":"bug_report","assignedTo":"agent_002","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-16T09:00:00.000Z"},"text":"Website not loading"},{"from":"agent","timestamp":{"$date":"2024-01-16T09:15:00.000Z"},"text":"We are investigating"}],"satisfaction":{"score":5,"feedback":"Very helpful"}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT003', '{"_id":"TKT003","ticketNumber":"CS-2024-00003","customerId":"C003","createdAt":{"$date":"2024-01-17T14:00:00.000Z"},"resolvedAt":null,"status":"open","priority":"low","category":"shipping","subcategory":"delayed","assignedTo":"agent_003","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-17T14:00:00.000Z"},"text":"Where is my order?"}],"satisfaction":null}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT004', '{"_id":"TKT004","ticketNumber":"CS-2024-00004","customerId":"C001","createdAt":{"$date":"2024-01-18T08:30:00.000Z"},"resolvedAt":{"$date":"2024-01-19T16:00:00.000Z"},"status":"resolved","priority":"urgent","category":"billing","subcategory":"payment_failed","assignedTo":"agent_001","escalations":[{"level":1,"timestamp":{"$date":"2024-01-18T09:30:00.000Z"},"reason":"sla_breach"},{"level":2,"timestamp":{"$date":"2024-01-18T14:00:00.000Z"},"reason":"customer_request"}],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-18T08:30:00.000Z"},"text":"Payment keeps failing"},{"from":"agent","timestamp":{"$date":"2024-01-18T08:45:00.000Z"},"text":"Let me check your account"},{"from":"agent","timestamp":{"$date":"2024-01-19T16:00:00.000Z"},"text":"Issue resolved"}],"satisfaction":{"score":3,"feedback":"Took too long"}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT005', '{"_id":"TKT005","ticketNumber":"CS-2024-00005","customerId":"C004","createdAt":{"$date":"2024-01-20T11:00:00.000Z"},"resolvedAt":{"$date":"2024-01-20T12:00:00.000Z"},"status":"resolved","priority":"medium","category":"account","subcategory":"password_reset","assignedTo":"agent_004","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-20T11:00:00.000Z"},"text":"Cannot reset password"},{"from":"agent","timestamp":{"$date":"2024-01-20T11:10:00.000Z"},"text":"Sending reset link"}],"satisfaction":{"score":5,"feedback":"Great support"}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT006', '{"_id":"TKT006","ticketNumber":"CS-2024-00006","customerId":"C005","createdAt":{"$date":"2024-01-22T15:30:00.000Z"},"resolvedAt":null,"status":"in_progress","priority":"high","category":"shipping","subcategory":"damaged","assignedTo":"agent_002","escalations":[{"level":1,"timestamp":{"$date":"2024-01-22T17:00:00.000Z"},"reason":"no_response"}],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-22T15:30:00.000Z"},"text":"Item arrived damaged"},{"from":"agent","timestamp":{"$date":"2024-01-22T15:45:00.000Z"},"text":"Please send photos"}],"satisfaction":null}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT007', '{"_id":"TKT007","ticketNumber":"CS-2024-00007","customerId":"C006","createdAt":{"$date":"2024-01-25T09:00:00.000Z"},"resolvedAt":{"$date":"2024-01-25T10:30:00.000Z"},"status":"closed","priority":"low","category":"technical","subcategory":"feature_request","assignedTo":"agent_005","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-25T09:00:00.000Z"},"text":"Can you add dark mode?"}],"satisfaction":{"score":4,"feedback":null}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT008', '{"_id":"TKT008","ticketNumber":"CS-2024-00008","customerId":"C002","createdAt":{"$date":"2024-01-28T16:45:00.000Z"},"resolvedAt":{"$date":"2024-01-29T09:00:00.000Z"},"status":"resolved","priority":"medium","category":"shipping","subcategory":"wrong_item","assignedTo":"agent_003","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-01-28T16:45:00.000Z"},"text":"Received wrong item"},{"from":"agent","timestamp":{"$date":"2024-01-28T17:00:00.000Z"},"text":"Sending replacement"}],"satisfaction":{"score":4,"feedback":"Quick resolution"}}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT009', '{"_id":"TKT009","ticketNumber":"CS-2024-00009","customerId":"C007","createdAt":{"$date":"2024-02-01T10:00:00.000Z"},"resolvedAt":null,"status":"waiting_customer","priority":"medium","category":"account","subcategory":"profile_update","assignedTo":"agent_004","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-02-01T10:00:00.000Z"},"text":"Cannot update address"},{"from":"agent","timestamp":{"$date":"2024-02-01T10:15:00.000Z"},"text":"Please verify your identity"}],"satisfaction":null}');
+INSERT INTO SUPPORT_TICKETS (id, data) VALUES ('TKT010', '{"_id":"TKT010","ticketNumber":"CS-2024-00010","customerId":"C003","createdAt":{"$date":"2024-02-05T13:30:00.000Z"},"resolvedAt":{"$date":"2024-02-05T14:00:00.000Z"},"status":"resolved","priority":"urgent","category":"billing","subcategory":"refund_request","assignedTo":"agent_001","escalations":[],"messages":[{"from":"customer","timestamp":{"$date":"2024-02-05T13:30:00.000Z"},"text":"Cancel and refund my order"},{"from":"agent","timestamp":{"$date":"2024-02-05T13:35:00.000Z"},"text":"Refund processed"}],"satisfaction":{"score":5,"feedback":"Excellent service"}}');
+
+COMMIT;
+-- =====================================================
+-- Helper function for dynamic JSON field access
+-- Used by $getField operator when field name comes from another path
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION get_dynamic_json_field(
+    p_doc JSON,
+    p_object_path VARCHAR2,
+    p_key_path VARCHAR2
+) RETURN JSON
+IS
+    v_key_value VARCHAR2(4000);
+    v_full_path VARCHAR2(4000);
+    v_result JSON;
+BEGIN
+    -- First, get the key value from the document
+    EXECUTE IMMEDIATE
+        'SELECT JSON_VALUE(:1, ''' || p_key_path || ''') FROM DUAL'
+        INTO v_key_value
+        USING p_doc;
+
+    -- If key is null, return null
+    IF v_key_value IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    -- Build the full path by appending the key to the object path
+    v_full_path := p_object_path || '.' || v_key_value;
+
+    -- Get the value at the full path
+    EXECUTE IMMEDIATE
+        'SELECT JSON_QUERY(:1, ''' || v_full_path || ''' RETURNING JSON WITH WRAPPER) FROM DUAL'
+        INTO v_result
+        USING p_doc;
+
+    RETURN v_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN NULL;
+END get_dynamic_json_field;
+/

@@ -37,6 +37,7 @@ import com.oracle.mongodb.translator.ast.stage.AddFieldsStage;
 import com.oracle.mongodb.translator.ast.stage.BucketAutoStage;
 import com.oracle.mongodb.translator.ast.stage.BucketStage;
 import com.oracle.mongodb.translator.ast.stage.CountStage;
+import com.oracle.mongodb.translator.ast.stage.DocumentsStage;
 import com.oracle.mongodb.translator.ast.stage.FacetStage;
 import com.oracle.mongodb.translator.ast.stage.GraphLookupStage;
 import com.oracle.mongodb.translator.ast.stage.GroupStage;
@@ -136,12 +137,19 @@ public final class CteBasedPipelineRenderer {
     // Build list of CTEs
     List<CteDefinition> ctes = new ArrayList<>();
 
-    // Q1 is always the base table
-    ctes.add(new CteDefinition("Q1", CteType.BASE, null));
+    // Check if first stage is $documents - if so, it replaces the base table
+    int startStageIdx = 0;
+    if (!stages.isEmpty() && stages.get(0) instanceof DocumentsStage documentsStage) {
+      ctes.add(new CteDefinition("Q1", CteType.DOCUMENTS, documentsStage));
+      startStageIdx = 1;  // Skip the documents stage in the loop
+    } else {
+      // Q1 is the base table
+      ctes.add(new CteDefinition("Q1", CteType.BASE, null));
+    }
 
     // Process each stage - use index-based loop to allow look-ahead for sort+pagination
     int cteIndex = 2;
-    for (int stageIdx = 0; stageIdx < stages.size(); stageIdx++) {
+    for (int stageIdx = startStageIdx; stageIdx < stages.size(); stageIdx++) {
       Stage stage = stages.get(stageIdx);
 
       if (stage instanceof MatchStage matchStage) {
@@ -245,9 +253,12 @@ public final class CteBasedPipelineRenderer {
         ctes.add(new CteDefinition("Q" + cteIndex, CteType.REPLACEROOT, replaceRootStage));
         cteIndex++;
       } else if (stage instanceof GraphLookupStage graphLookupStage) {
-        // Check if this is a recursive graphLookup (maxDepth > 0)
+        // Check if this is a recursive graphLookup
+        // - maxDepth == null means unlimited recursion
+        // - maxDepth > 0 means limited recursion
+        // - maxDepth == 0 means single-level (no recursion, just direct match)
         Integer maxDepth = graphLookupStage.getMaxDepth();
-        if (maxDepth != null && maxDepth > 0) {
+        if (maxDepth == null || maxDepth > 0) {
           // Recursive graphLookup - need 3 CTEs: paths, aggregation, and join
           String asField = graphLookupStage.getAs();
           String pathsCte = "graph_paths_" + asField;
@@ -263,7 +274,7 @@ public final class CteBasedPipelineRenderer {
           ctes.add(new CteDefinition("Q" + cteIndex, CteType.GRAPHLOOKUP_JOIN, context));
           cteIndex++;
         } else {
-          // Non-recursive graphLookup (maxDepth=0 or null) - single-level lookup
+          // Non-recursive graphLookup (maxDepth=0) - single-level lookup only
           ctes.add(new CteDefinition("Q" + cteIndex, CteType.GRAPHLOOKUP, graphLookupStage));
           cteIndex++;
         }
@@ -302,6 +313,24 @@ public final class CteBasedPipelineRenderer {
         String upperTableName = tableName.toUpperCase(java.util.Locale.ROOT);
         ctx.sql("\"Q1\" (\"ID\", \"DATA\") AS (");
         ctx.sql("SELECT \"ID\", \"DATA\" FROM \"" + upperTableName + "\"");
+        ctx.sql(")");
+      }
+      case DOCUMENTS -> {
+        // $documents stage generates inline documents from literals
+        DocumentsStage documentsStage = (DocumentsStage) cte.payload;
+        ctx.sql("\"Q1\" (\"DATA\") AS (");
+        boolean first = true;
+        for (org.bson.Document doc : documentsStage.getDocuments()) {
+          if (!first) {
+            ctx.sql(" UNION ALL ");
+          }
+          ctx.sql("SELECT JSON('");
+          // Escape single quotes in JSON by doubling them
+          String json = doc.toJson().replace("'", "''");
+          ctx.sql(json);
+          ctx.sql("') AS \"DATA\" FROM DUAL");
+          first = false;
+        }
         ctx.sql(")");
       }
       case MATCH -> {
@@ -382,7 +411,7 @@ public final class CteBasedPipelineRenderer {
         ctx.sql("\"" + cte.name + "\" (\"DATA\") AS (");
         ctx.sql("SELECT JSON_OBJECT('");
         ctx.sql(countStage.getFieldName());
-        ctx.sql("' VALUE COUNT(*)) AS \"DATA\" FROM \"" + previousCte + "\" q");
+        ctx.sql("' VALUE COUNT(*) RETURNING JSON) AS \"DATA\" FROM \"" + previousCte + "\" q");
         ctx.sql(")");
       }
       case SAMPLE -> {
@@ -488,7 +517,7 @@ public final class CteBasedPipelineRenderer {
           renderAccumulator(ctx, entry.getValue());
         }
         // Use inline view wrapper to enable dot notation for type preservation
-        ctx.sql(") AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q ");
+        ctx.sql(" RETURNING JSON) AS \"DATA\" FROM (SELECT * FROM \"" + previousCte + "\") q ");
         ctx.sql("GROUP BY ");
         renderBucketCaseExpression(ctx, bucketStage);
         ctx.sql(")");
@@ -506,7 +535,7 @@ public final class CteBasedPipelineRenderer {
           ctx.sql(", '" + entry.getKey() + "' VALUE ");
           renderBucketAutoAccumulator(ctx, entry.getValue());
         }
-        ctx.sql(") AS \"DATA\" FROM (");
+        ctx.sql(" RETURNING JSON) AS \"DATA\" FROM (");
         final int buckets = bucketAutoStage.getBuckets();
         ctx.sql("SELECT NTILE(" + buckets + ") OVER (ORDER BY ");
         // Use dot notation for type-preserving numeric ordering
@@ -548,7 +577,7 @@ public final class CteBasedPipelineRenderer {
           ctx.sql("\"), JSON_ARRAY(RETURNING JSON))");
           first = false;
         }
-        ctx.sql(") AS \"DATA\" FROM DUAL");
+        ctx.sql(" RETURNING JSON) AS \"DATA\" FROM DUAL");
         ctx.sql(")");
 
         // Track facet names for post-facet projections that reference facet arrays
@@ -644,15 +673,23 @@ public final class CteBasedPipelineRenderer {
         ctx.sql("\"" + cte.name + "\" (start_id, id, connect_from_val, data, graph_depth) AS (");
 
         // Base case: each row in the source starts its own traversal
-        // Use dot notation for type-preserving field access
-        // Wrap source CTE in inline view to enable dot notation
-        ctx.sql("SELECT s.\"DATA\"." + quoteDotNotationPath(startWith) + " AS start_id, ");
+        // Use JSON_TABLE to handle both scalar and array startWith values
+        // If startWith is an array like ["Dev", "Eliot"], traverse from ALL elements
+        // If startWith is a scalar like "Andrew", wrap it in an array for uniform handling
+        String quotedStartWith = quoteDotNotationPath(startWith);
+        ctx.sql("SELECT s.\"DATA\"." + quotedStartWith + " AS start_id, ");
         ctx.sql("g.\"DATA\".\"_id\" AS id, ");
         ctx.sql("g.\"DATA\"." + quoteDotNotationPath(connectFromField) + " AS connect_from_val, ");
         ctx.sql("g.\"DATA\" AS data, 0 AS graph_depth ");
-        ctx.sql("FROM \"" + fromTable + "\" g, (SELECT * FROM \"" + context.sourceCte() + "\") s ");
-        ctx.sql("WHERE g.\"DATA\"." + quoteDotNotationPath(connectToField) + " = ");
-        ctx.sql("s.\"DATA\"." + quoteDotNotationPath(startWith));
+        ctx.sql("FROM \"" + fromTable + "\" g, ");
+        ctx.sql("(SELECT * FROM \"" + context.sourceCte() + "\") s, ");
+        // JSON_TABLE to unnest array or wrap scalar in array for uniform handling
+        ctx.sql("JSON_TABLE(");
+        ctx.sql("CASE WHEN s.\"DATA\"." + quotedStartWith + " IS JSON ARRAY ");
+        ctx.sql("THEN s.\"DATA\"." + quotedStartWith + " ");
+        ctx.sql("ELSE JSON_ARRAY(s.\"DATA\"." + quotedStartWith + " RETURNING JSON) END, ");
+        ctx.sql("'$[*]' COLUMNS (start_val PATH '$')) sw ");
+        ctx.sql("WHERE g.\"DATA\"." + quoteDotNotationPath(connectToField) + " = sw.start_val");
 
         // Add restrictSearchWithMatch filter if present
         var restrictMatch = glStage.getRestrictSearchWithMatch();
@@ -686,8 +723,9 @@ public final class CteBasedPipelineRenderer {
         // Use dot notation for base table, and extracted column for recursive ref
         ctx.sql("c.\"DATA\"." + quoteDotNotationPath(connectToField) + " = p.connect_from_val");
 
-        // Add depth limit
-        ctx.sql(" WHERE p.graph_depth < " + glStage.getMaxDepth());
+        // Add depth limit (use 100 as default for unlimited recursion to prevent infinite loops)
+        int effectiveMaxDepth = (glStage.getMaxDepth() != null) ? glStage.getMaxDepth() : 100;
+        ctx.sql(" WHERE p.graph_depth < " + effectiveMaxDepth);
 
         // Add restrictSearchWithMatch filter to recursive case
         if (restrictMatch != null && !restrictMatch.isEmpty()) {
@@ -711,6 +749,7 @@ public final class CteBasedPipelineRenderer {
       }
       case GRAPHLOOKUP_AGG -> {
         // Aggregation CTE for recursive $graphLookup
+        // MongoDB deduplicates discovered documents by _id, so we need to do the same
         RecursiveGraphLookupContext context = cte.recursiveGraphLookup();
         GraphLookupStage glStage = context.stage();
         String depthField = glStage.getDepthField();
@@ -724,7 +763,12 @@ public final class CteBasedPipelineRenderer {
           ctx.sql("data");
         }
         ctx.sql(" RETURNING CLOB) AS \"" + glStage.getAs() + "\" ");
-        ctx.sql("FROM \"" + context.pathsCte() + "\" GROUP BY start_id");
+        // Use subquery with ROW_NUMBER to deduplicate by id within each start_id group
+        // This mimics MongoDB's behavior of returning unique documents
+        ctx.sql("FROM (SELECT start_id, id, data, graph_depth, ");
+        ctx.sql("ROW_NUMBER() OVER (PARTITION BY start_id, id ORDER BY graph_depth) AS rn ");
+        ctx.sql("FROM \"" + context.pathsCte() + "\") dedup WHERE rn = 1 ");
+        ctx.sql("GROUP BY start_id");
         ctx.sql(")");
       }
       case GRAPHLOOKUP_JOIN -> {
@@ -1144,7 +1188,7 @@ public final class CteBasedPipelineRenderer {
         }
         first = false;
       }
-      ctx.sql(")");
+      ctx.sql(" RETURNING JSON)");
     } else {
       // Unknown argument type
       ctx.sql("NULL");
@@ -1287,7 +1331,7 @@ public final class CteBasedPipelineRenderer {
       first = false;
     }
 
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -1320,7 +1364,7 @@ public final class CteBasedPipelineRenderer {
       first = false;
     }
 
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -1333,18 +1377,28 @@ public final class CteBasedPipelineRenderer {
 
     if (accumOp == AccumulatorOp.FIRST || accumOp == AccumulatorOp.LAST) {
       // Use MIN/MAX with KEEP (DENSE_RANK FIRST/LAST ORDER BY ...) for proper ordering
-      // Use dot notation for type preservation
+      // Use FORMAT JSON to preserve JSON type for objects/arrays
       String func = accumOp == AccumulatorOp.FIRST ? "MIN" : "MAX";
       String rankDir = accumOp == AccumulatorOp.FIRST ? "FIRST" : "LAST";
-      ctx.sql(func + "(");
-      renderDotNotationAccumulatorArg(ctx, accum.getArgument());
-      ctx.sql(") KEEP (DENSE_RANK " + rankDir + " ORDER BY ");
-      renderSortKeysForKeep(ctx, sortStage);
-      ctx.sql(")");
+      renderMinMaxKeepWithFormatJson(ctx, func, rankDir, accum.getArgument(), sortStage);
     } else {
       // For other accumulators, use regular rendering
       renderAccumulator(ctx, accum);
     }
+  }
+
+  /**
+   * Renders MIN/MAX KEEP using dot notation which preserves JSON type.
+   * Dot notation returns the native type (number, string, etc.) which JSON_OBJECT
+   * accepts directly without needing FORMAT JSON wrapper.
+   */
+  private void renderMinMaxKeepWithFormatJson(
+      SqlGenerationContext ctx, String func, String rankDir, Expression arg, SortStage sort) {
+    ctx.sql(func + "(");
+    renderDotNotationAccumulatorArg(ctx, arg);
+    ctx.sql(") KEEP (DENSE_RANK " + rankDir + " ORDER BY ");
+    renderSortKeysForKeep(ctx, sort);
+    ctx.sql(")");
   }
 
   /**
@@ -1415,7 +1469,6 @@ public final class CteBasedPipelineRenderer {
    * Renders a field access expression for WHERE clause comparison contexts.
    * Uses dot notation to preserve native JSON types (numbers remain numbers, booleans remain
    * booleans).
-   * Do NOT use this for GROUP BY contexts - Oracle doesn't support dot notation in GROUP BY.
    * Uses table alias q."DATA" for CTE context compatibility.
    */
   private void renderFieldAccessForWhere(SqlGenerationContext ctx, Expression expr) {
@@ -1457,9 +1510,9 @@ public final class CteBasedPipelineRenderer {
    */
   private void renderFieldAccessWithFormatJson(SqlGenerationContext ctx, Expression expr) {
     if (expr instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
-      // Use JSON_QUERY to preserve original JSON types and handle non-scalars
-      ctx.sql("JSON_QUERY(\"DATA\", '$." + path + "')");
+      // Use dot notation which works for both scalars and objects
+      // This preserves native JSON types and enables proper GROUP BY matching
+      ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fieldPath.getPath()));
     } else if (expr instanceof DateExpression dateExpr) {
       // Date expressions return numbers, render normally
       renderDateExpressionCte(ctx, dateExpr);
@@ -1518,7 +1571,7 @@ public final class CteBasedPipelineRenderer {
       renderExpressionValue(ctx, entry.getValue());
       first = false;
     }
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -1596,7 +1649,7 @@ public final class CteBasedPipelineRenderer {
     List<Expression> args = objExpr.getAdditionalArgs();
 
     if (args == null || args.isEmpty()) {
-      ctx.sql("JSON_OBJECT()");
+      ctx.sql("JSON_OBJECT(RETURNING JSON)");
       return;
     }
 
@@ -1983,7 +2036,7 @@ public final class CteBasedPipelineRenderer {
       renderFieldAccessWithFormatJson(ctx, entry.getValue());
       first = false;
     }
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -2004,7 +2057,7 @@ public final class CteBasedPipelineRenderer {
       renderExpressionValue(ctx, entry.getValue());
       first = false;
     }
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -2035,10 +2088,14 @@ public final class CteBasedPipelineRenderer {
     timestampExpr.append("TO_TIMESTAMP(");
 
     if (argument instanceof FieldPathExpression fieldPath) {
-      // Use "DATA" column directly in CTE mode
-      timestampExpr.append("JSON_VALUE(\"DATA\", '$.");
-      timestampExpr.append(fieldPath.getPath());
-      timestampExpr.append("')");
+      // Handle MongoDB Extended JSON dates: {"$date": "2024-03-15T10:00:00.000Z"}
+      // Use COALESCE to try Extended JSON path first, then direct path for plain strings
+      String path = fieldPath.getPath();
+      timestampExpr.append("COALESCE(");
+      timestampExpr.append("JSON_VALUE(\"DATA\", '$.").append(path).append(".\"$date\"')");
+      timestampExpr.append(", ");
+      timestampExpr.append("JSON_VALUE(\"DATA\", '$.").append(path).append("')");
+      timestampExpr.append(")");
     } else {
       // For other expressions, render normally
       timestampExpr.append("NULL");
@@ -2098,12 +2155,11 @@ public final class CteBasedPipelineRenderer {
       }
       case MIN, MAX, FIRST, LAST -> {
         // Use MIN/MAX for FIRST/LAST approximation
-        // Use dot notation for type preservation (works for numbers, strings, dates, objects)
+        // Use FORMAT JSON to preserve JSON type for objects/arrays
+        // For scalar values, wrap in quotes to make valid JSON strings
         String func = (accumOp == AccumulatorOp.MIN || accumOp == AccumulatorOp.FIRST)
             ? "MIN" : "MAX";
-        ctx.sql(func + "(");
-        renderDotNotationAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(")");
+        renderMinMaxWithFormatJson(ctx, func, accum.getArgument());
       }
       case PUSH -> {
         // $push: collect all values into array
@@ -2114,15 +2170,38 @@ public final class CteBasedPipelineRenderer {
       case ADD_TO_SET -> {
         // $addToSet: collect unique values only
         // Oracle doesn't support JSON_ARRAYAGG(DISTINCT), so use LISTAGG DISTINCT
-        // and convert to JSON array: JSON_QUERY('["' || LISTAGG(DISTINCT v, '","') || '"]')
-        ctx.sql("JSON_QUERY('[\"' || LISTAGG(DISTINCT ");
-        renderStringArgument(ctx, accum.getArgument());
-        ctx.sql(", '\",\"') WITHIN GROUP (ORDER BY ");
-        renderStringArgument(ctx, accum.getArgument());
-        ctx.sql(") || '\"]', '$' RETURNING JSON)");
+        Expression arg = accum.getArgument();
+        if (arg instanceof InlineObjectExpression) {
+          // For object arguments: '[' || LISTAGG(DISTINCT obj, ',') || ']'
+          // No quote-wrapping since the objects are already JSON
+          ctx.sql("JSON_QUERY('[' || LISTAGG(DISTINCT ");
+          renderInlineObjectAsJsonObject(ctx, (InlineObjectExpression) arg);
+          ctx.sql(", ',') WITHIN GROUP (ORDER BY ");
+          renderInlineObjectAsJsonObject(ctx, (InlineObjectExpression) arg);
+          ctx.sql(") || ']', '$' RETURNING JSON)");
+        } else {
+          // For scalar arguments: '["' || LISTAGG(DISTINCT v, '","') || '"]'
+          ctx.sql("JSON_QUERY('[\"' || LISTAGG(DISTINCT ");
+          renderStringArgument(ctx, arg);
+          ctx.sql(", '\",\"') WITHIN GROUP (ORDER BY ");
+          renderStringArgument(ctx, arg);
+          ctx.sql(") || '\"]', '$' RETURNING JSON)");
+        }
       }
       default -> ctx.sql("NULL");
     }
+  }
+
+  /**
+   * Renders MIN/MAX using dot notation which preserves JSON type.
+   * Dot notation returns the native type (number, string, etc.) which JSON_OBJECT
+   * accepts directly without needing FORMAT JSON wrapper.
+   */
+  private void renderMinMaxWithFormatJson(
+      SqlGenerationContext ctx, String func, Expression arg) {
+    ctx.sql(func + "(");
+    renderDotNotationAccumulatorArg(ctx, arg);
+    ctx.sql(")");
   }
 
   /**
@@ -2200,12 +2279,18 @@ public final class CteBasedPipelineRenderer {
         ctx.sql(")");
       }
       case MIN, MAX, FIRST, LAST -> {
-        // MIN/MAX - access DATA column directly
+        // MIN/MAX - access DATA column directly via JSON_VALUE (returns VARCHAR2)
+        // Use CASE to detect objects vs scalars - both branches return VARCHAR2
+        // for FORMAT JSON compatibility (JSON_VALUE output is already VARCHAR2)
         String func = (accumOp == AccumulatorOp.MIN || accumOp == AccumulatorOp.FIRST)
             ? "MIN" : "MAX";
-        ctx.sql(func + "(");
+        ctx.sql("CASE WHEN SUBSTR(" + func + "(");
         renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
-        ctx.sql(")");
+        ctx.sql("), 1, 1) IN ('{', '[') THEN " + func + "(");
+        renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
+        ctx.sql(") ELSE '\"' || " + func + "(");
+        renderBucketAutoAccumulatorArg(ctx, accum.getArgument());
+        ctx.sql(") || '\"' END FORMAT JSON");
       }
       case PUSH -> {
         ctx.sql("JSON_ARRAYAGG(");
@@ -2449,14 +2534,14 @@ public final class CteBasedPipelineRenderer {
 
   /**
    * Renders a field access for GROUP BY clause.
-   * Uses JSON_QUERY to match the SELECT expressions in compound _id.
+   * Uses dot notation to match the SELECT expressions in compound _id.
    * Oracle requires GROUP BY expressions to match SELECT expressions exactly.
    */
   private void renderFieldAccessForGroupBy(SqlGenerationContext ctx, Expression expr) {
     if (expr instanceof FieldPathExpression fieldPath) {
-      String path = fieldPath.getPath();
-      // Use same expression as renderFieldAccessWithFormatJson for GROUP BY matching
-      ctx.sql("JSON_QUERY(\"DATA\", '$." + path + "')");
+      // Use dot notation which works for both scalars and objects
+      // Must match renderFieldAccessWithFormatJson exactly for GROUP BY compatibility
+      ctx.sql("q.\"DATA\"." + quoteDotNotationPath(fieldPath.getPath()));
     } else if (expr instanceof DateExpression dateExpr) {
       // Date expressions return numbers
       renderDateExpressionCte(ctx, dateExpr);
@@ -2599,14 +2684,17 @@ public final class CteBasedPipelineRenderer {
   }
 
   /**
-   * Renders a json_transform projection with KEEP and SET operations.
-   * - Simple inclusions (field: 1 or field: true) use KEEP
-   * - Computed fields (field: expression) use SET
+   * Renders a JSON_OBJECT projection for $project stages.
+   * Uses JSON_OBJECT instead of json_transform KEEP to avoid ORA-40843
+   * (Multiple KEEP operations not supported in Oracle 26ai).
+   *
+   * <p>- Simple inclusions (field: 1 or field: true) use JSON_QUERY to preserve type
+   * - Computed fields (field: expression) render the expression value
    */
   private void renderJsonTransformProjection(SqlGenerationContext ctx, ProjectStage projectStage) {
     var projections = projectStage.getProjections();
 
-    // Separate into KEEP fields (simple inclusions) and SET fields (computed)
+    // Separate into simple inclusions and computed fields
     var keepFields = new java.util.ArrayList<String>();
     var setFields = new java.util.LinkedHashMap<String, Expression>();
 
@@ -2631,41 +2719,40 @@ public final class CteBasedPipelineRenderer {
       }
     }
 
-    ctx.sql("json_transform(\"DATA\"");
+    // Use JSON_OBJECT to construct the output document
+    // This avoids the ORA-40843 error with multiple KEEP operations
+    ctx.sql("JSON_OBJECT(");
 
-    // Render SET fields first (they add/modify fields)
-    // Set context flag so expressions can use PATH syntax for type preservation
+    boolean first = true;
+
+    // Render simple inclusions using JSON_QUERY without wrapper
+    // This preserves the original JSON type (string, number, boolean, object, array)
+    for (String fieldName : keepFields) {
+      if (!first) {
+        ctx.sql(", ");
+      }
+      ctx.sql("'" + fieldName + "' VALUE JSON_QUERY(\"DATA\", '$.\"" + fieldName + "\"')");
+      first = false;
+    }
+
+    // Render computed fields
     inJsonTransformSet = true;
     try {
       for (var entry : setFields.entrySet()) {
         String fieldName = entry.getKey();
         Expression expr = entry.getValue();
-        ctx.sql(", SET '$.\"" + fieldName + "\"' = ");
+        if (!first) {
+          ctx.sql(", ");
+        }
+        ctx.sql("'" + fieldName + "' VALUE ");
         renderExpressionValue(ctx, expr);
+        first = false;
       }
     } finally {
       inJsonTransformSet = false;
     }
 
-    // Render KEEP clause at the end to specify which fields to keep
-    // This removes any fields not in the keep list (including original fields before SET)
-    // Combine keepFields (simple inclusions) with setFields keys (computed fields)
-    var allFieldsToKeep = new java.util.ArrayList<>(keepFields);
-    allFieldsToKeep.addAll(setFields.keySet());
-
-    if (!allFieldsToKeep.isEmpty()) {
-      ctx.sql(", KEEP ");
-      boolean first = true;
-      for (String fieldName : allFieldsToKeep) {
-        if (!first) {
-          ctx.sql(", ");
-        }
-        ctx.sql("'$.\"" + fieldName + "\"'");
-        first = false;
-      }
-    }
-
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   /**
@@ -3667,9 +3754,9 @@ public final class CteBasedPipelineRenderer {
     }
 
     if (countStage != null) {
-      // COUNT facet: SELECT JSON_OBJECT('count' VALUE COUNT(*)) AS DATA
-      ctx.sql("SELECT JSON_OBJECT('" + countStage.getFieldName() + "' VALUE COUNT(*)) AS \"DATA\"");
-      ctx.sql(" FROM \"" + previousCte + "\" q");
+      // COUNT facet: SELECT JSON_OBJECT('count' VALUE COUNT(*) RETURNING JSON) AS DATA
+      ctx.sql("SELECT JSON_OBJECT('" + countStage.getFieldName());
+      ctx.sql("' VALUE COUNT(*) RETURNING JSON) AS \"DATA\" FROM \"" + previousCte + "\" q");
       if (matchStage != null) {
         ctx.sql(" WHERE ");
         renderJsonExistsPredicate(ctx, matchStage.getFilter());
@@ -3830,7 +3917,7 @@ public final class CteBasedPipelineRenderer {
       ctx.sql("'" + fieldName + "' VALUE JSON_QUERY(\"DATA\", '$." + fieldName + "')");
       first = false;
     }
-    ctx.sql(")");
+    ctx.sql(" RETURNING JSON)");
   }
 
   private String cleanFieldPath(String fieldPath) {
@@ -3955,6 +4042,7 @@ public final class CteBasedPipelineRenderer {
   /** Types of CTEs in the pipeline. */
   private enum CteType {
     BASE,
+    DOCUMENTS,  // $documents stage - generates inline documents from literals
     MATCH,
     PROJECT,
     GROUP,

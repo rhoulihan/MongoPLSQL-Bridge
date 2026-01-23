@@ -124,6 +124,10 @@ public final class StageParserRegistry {
     // $fill stage - fill null and missing values
     FillStageParser fillParser = new FillStageParser();
     register("$fill", value -> fillParser.parse(value));
+
+    // $documents stage - generate literal documents as pipeline input
+    DocumentsStageParser documentsParser = new DocumentsStageParser();
+    register("$documents", documentsParser::parse);
   }
 
   private SortStage parseSortStage(Object value) {

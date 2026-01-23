@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-01-23
 
 This document tracks the current implementation status of the MongoPLSQL-Bridge project.
 
@@ -81,7 +81,7 @@ This document tracks the current implementation status of the MongoPLSQL-Bridge 
 | IMPL-045 | $graphLookup Stage | ✅ Done | Recursive CTE implementation with restrictSearchWithMatch |
 | IMPL-046 | $setWindowFields Stage | ✅ Done | Full window function support (RANK, DENSE_RANK, ROW_NUMBER, SUM, AVG, etc.) |
 | IMPL-047 | Specification Files | ✅ Done | operators.json, type-mappings.json |
-| IMPL-048 | Integration Test Suite | ✅ Done | 191 cross-validation tests (182 strict matches, native JSON type, explain plans) |
+| IMPL-048 | Integration Test Suite | ✅ Done | 205 cross-validation tests (189 strict matches, native JSON type, explain plans) |
 | IMPL-049 | Type Conversion Operators | ✅ Done | $type, $toInt, $toString, $toDouble, $toBool, $toDate |
 | IMPL-050 | $redact Stage | ✅ Done | Document-level filtering with $$PRUNE/$$KEEP/$$DESCEND |
 | IMPL-051 | $sample Stage | ✅ Done | Random sampling with DBMS_RANDOM.VALUE |
@@ -298,10 +298,10 @@ generator/dialect/
 
 **Unit Tests:** 1,709 test methods across 76+ test files
 **Integration Tests:** Oracle Testcontainers suite
-**Cross-Database Validation:** 204 tests (182 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
+**Cross-Database Validation:** 205 tests (189 strict matches) (MongoDB 8.0 ↔ Oracle 23.6)
 **Large-Scale Tests:** 10 complex pipelines with deeply nested documents (~4GB data)
 
-All tests passing: ✅ Yes (204/204)
+All tests passing: ✅ Yes (205/205)
 
 ### Unit Test Breakdown by Package
 
@@ -362,7 +362,12 @@ All tests passing: ✅ Yes (204/204)
 | $count | 3 | ✅ Pass |
 | $graphLookup | 1 | ✅ Pass |
 | FACET_PAGINATION | 3 | ✅ Pass |
-| **Total** | **191** | **✅ 100%** |
+| ecommerce | 5 | ✅ Pass |
+| complex | 38 | ✅ Pass |
+| window | 10 | ✅ Pass |
+| $documents | 1 | ✅ Pass |
+| commission | 3 | ✅ Pass |
+| **Total** | **205** | **✅ 100%** |
 
 ## Example Translations
 
@@ -621,6 +626,15 @@ The project enforces strict code quality through pre-commit hooks and CI/CD:
 - **IS JSON Constraint for Dot Notation**: Added automatic `ALTER TABLE ... ADD CONSTRAINT ... CHECK ("DATA" IS JSON)` after each CREATE TABLE in procedural mode, enabling Oracle dot notation access (`q."DATA".field`) on materialized temporary tables.
 - **CLI Enhancements**: Added `--procedural` flag to force procedural mode, `--auto-procedural` (enabled by default) for automatic detection, and `--no-auto-procedural` to disable.
 - **Execute Mode**: Added `--execute <connection-file>` option to run generated SQL directly against Oracle database.
+
+**Improvements Applied (2026-01-23):**
+- **MongoDB Extended JSON Date Handling**: Fixed date operators (`$year`, `$month`, `$dayOfMonth`, etc.) to properly handle dates stored in MongoDB Extended JSON format (`{"$date": "2024-03-15T10:00:00.000Z"}`). Uses `COALESCE` to try Extended JSON path first, then fall back to direct path for plain ISO strings.
+- **MIN/MAX Accumulator Fix**: Simplified MIN/MAX/FIRST/LAST accumulator rendering to use dot notation directly without CASE/FORMAT JSON wrapper, fixing ORA-00932 type mismatch errors.
+- **$documents Stage Support**: Added support for `$documents` stage (standalone document generator) by detecting it in test harness and using `db.aggregate()` instead of `db.collection.aggregate()`.
+- **$graphLookup with External Starting Values**: Fixed `$graphLookup` to work with array-valued `startWith` fields and external starting documents via `$documents` stage.
+- **Additional Test Collections**: Added 4 new Oracle test collections (ORDERS_DETAILED, PURCHASE_ORDERS, PAGE_VIEWS, SUPPORT_TICKETS) with comprehensive test data.
+- **Helper PL/SQL Function**: Added `get_dynamic_json_field` function for dynamic JSON field access used by `$getField` operator.
+- **Test Suite Expansion**: Expanded cross-database validation from 182 to 205 tests (189 strict matches), all passing.
 
 ## Next Steps
 

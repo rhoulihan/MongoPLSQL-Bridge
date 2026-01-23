@@ -228,6 +228,7 @@ def load_query_test_results() -> dict:
             data = json.load(f)
             for result in data.get('results', []):
                 # Store all fields including mongodb_results, oracle_results, explain plan, and typeMatch
+                # Also include MongoDB API fields if present
                 results[result['id']] = {
                     'id': result.get('id'),
                     'status': result.get('status'),
@@ -237,7 +238,15 @@ def load_query_test_results() -> dict:
                     'oracle_count': result.get('oracle_count', 'N/A'),
                     'mongodb_results': result.get('mongodb_results'),
                     'oracle_results': result.get('oracle_results'),
-                    'oracle_explain': result.get('oracle_explain', '')  # Oracle execution plan
+                    'oracle_explain': result.get('oracle_explain', ''),  # Oracle execution plan
+                    # MongoDB API fields (from ORDS)
+                    'mongodb_api_enabled': result.get('mongodb_api_enabled', False),
+                    'mongodb_api_status': result.get('mongodb_api_status', ''),
+                    'mongodb_api_count': result.get('mongodb_api_count', 'N/A'),
+                    'mongodb_api_results': result.get('mongodb_api_results'),
+                    'mongodb_api_explain': result.get('mongodb_api_explain', ''),
+                    'mongodb_api_match_type': result.get('mongodb_api_match_type', ''),
+                    'mongodb_api_type_match': result.get('mongodb_api_type_match', '')
                 }
     except Exception as e:
         print(f"Warning: Could not load test results: {e}", file=sys.stderr)
@@ -484,7 +493,16 @@ def process_query_tests(run_queries: bool = False) -> tuple:
 
             "mongodbResults": mongo_results if mongo_results else None,
             "oracleResults": oracle_results if oracle_results else None,
-            "oracleExplain": result.get('oracle_explain', '')  # Oracle execution plan
+            "oracleExplain": result.get('oracle_explain', ''),  # Oracle execution plan
+
+            # MongoDB API (ORDS) fields
+            "mongodbApiEnabled": result.get('mongodb_api_enabled', False),
+            "mongodbApiStatus": result.get('mongodb_api_status', ''),
+            "mongodbApiCount": result.get('mongodb_api_count', 'N/A'),
+            "mongodbApiResults": result.get('mongodb_api_results'),
+            "mongodbApiExplain": result.get('mongodb_api_explain', ''),
+            "mongodbApiMatchType": result.get('mongodb_api_match_type', ''),
+            "mongodbApiTypeMatch": result.get('mongodb_api_type_match', '')
         }
 
         tests.append(test_entry)
