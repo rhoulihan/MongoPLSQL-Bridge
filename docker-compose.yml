@@ -1,7 +1,7 @@
 services:
   # Oracle 23ai Free - for SQL/JSON translation target
   oracle:
-    image: gvenzl/oracle-free:23.6-slim-faststart
+    image: gvenzl/oracle-free:23.26.0-slim-faststart
     container_name: mongo-translator-oracle
     environment:
       ORACLE_PASSWORD: oracle
@@ -21,27 +21,62 @@ services:
     networks:
       - translator-network
 
-  # MongoDB 8.x - for aggregation pipeline source validation
+  # MongoDB 8.x - Single-node replica set for benchmarking (no auth for simplicity)
   mongodb:
     image: mongo:8.0
     container_name: mongo-translator-mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123
-      MONGO_INITDB_DATABASE: testdb
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
       - mongodb-data:/data/db
-      - ./docker/mongodb/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
+      test: ["CMD", "mongosh", "--eval", "try { rs.status().ok } catch(e) { db.adminCommand('ping').ok }"]
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
       start_period: 30s
     networks:
       - translator-network
+
+  # MongoDB replica set initializer - runs once to initialize the replica set
+  mongodb-init:
+    image: mongo:8.0
+    container_name: mongo-translator-init
+    depends_on:
+      mongodb:
+        condition: service_started
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Waiting for MongoDB to be ready..."
+        for i in {1..30}; do
+          if mongosh --host mongodb:27017 --eval "db.adminCommand('ping')" 2>/dev/null; then
+            echo "MongoDB is ready"
+            break
+          fi
+          echo "Attempt $$i: MongoDB not ready yet..."
+          sleep 2
+        done
+        echo "Initializing replica set..."
+        mongosh --host mongodb:27017 --eval '
+          try {
+            const status = rs.status();
+            print("Replica set already initialized: " + status.set);
+          } catch(e) {
+            print("Initializing replica set rs0...");
+            rs.initiate({
+              _id: "rs0",
+              members: [{ _id: 0, host: "localhost:27017" }]
+            });
+            sleep(3000);
+            print("Replica set initialized successfully");
+            print(rs.status());
+          }
+        '
+    networks:
+      - translator-network
+    restart: "no"
 
   # MongoDB Express - Web-based MongoDB admin interface (optional)
   mongo-express:
