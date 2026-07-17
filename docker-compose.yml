@@ -9,6 +9,7 @@ services:
       APP_USER_PASSWORD: translator123
     ports:
       - "1521:1521"
+      - "27018:27018"  # Oracle MongoDB API (ORDS)
     volumes:
       - oracle-data:/opt/oracle/oradata
       - ./docker/oracle/init:/docker-entrypoint-initdb.d

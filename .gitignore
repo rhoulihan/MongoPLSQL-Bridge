@@ -55,6 +55,7 @@ credentials.json
 secrets/
 *.pem
 *.key
+docker/mongodb/config/mongodb-keyfile
 
 # Coverage
 jacoco.exec
